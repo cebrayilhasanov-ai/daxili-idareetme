@@ -696,34 +696,46 @@ export async function createCustomer(input: { entityType?: string; voen?: string
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Müştərinin adını yazın.");
+  const entityType = input.entityType?.trim();
+  if (!entityType) throw new Error("Statusu seçin.");
   const voen = input.voen?.trim() || null;
-  if (voen) {
-    const duplicate = await db().prepare("SELECT id, name FROM customers WHERE voen = ?").bind(voen).first<{ id: number; name: string }>();
-    if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
-  }
+  if (!voen) throw new Error("VÖEN/FİN daxil edin.");
+  const legalAddress = input.legalAddress?.trim();
+  if (!legalAddress) throw new Error("Hüquqi ünvanı yazın.");
+  const manager = input.manager?.trim();
+  if (!manager) throw new Error("Rəhbəri yazın.");
+  const duplicate = await db().prepare("SELECT id, name FROM customers WHERE voen = ?").bind(voen).first<{ id: number; name: string }>();
+  if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
   await db().prepare(`INSERT INTO customers
     (entity_type, voen, name, legal_address, legal_address2, manager, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .bind(input.entityType || null, voen, name, input.legalAddress || null, input.legalAddress2 || null, input.manager || null, new Date().toISOString()).run();
+    .bind(entityType, voen, name, legalAddress, input.legalAddress2 || null, manager, new Date().toISOString()).run();
 }
 
 export async function updateCustomer(input: { id: number; entityType?: string; voen?: string; name?: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM customers WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Müştəri tapılmadı.");
+  const name = input.name?.trim() || (current.name as string);
+  if (!name) throw new Error("Müştərinin adını yazın.");
+  const entityType = input.entityType === undefined ? (current.entity_type as string | null) : input.entityType.trim();
+  if (!entityType) throw new Error("Statusu seçin.");
   const voen = input.voen === undefined ? (current.voen as string | null) : (input.voen.trim() || null);
-  if (voen) {
-    const duplicate = await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND id != ?").bind(voen, input.id).first<{ id: number; name: string }>();
-    if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
-  }
+  if (!voen) throw new Error("VÖEN/FİN daxil edin.");
+  const legalAddress = input.legalAddress === undefined ? (current.legal_address as string | null) : input.legalAddress.trim();
+  if (!legalAddress) throw new Error("Hüquqi ünvanı yazın.");
+  const manager = input.manager === undefined ? (current.manager as string | null) : input.manager.trim();
+  if (!manager) throw new Error("Rəhbəri yazın.");
+  const duplicate = await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND id != ?").bind(voen, input.id).first<{ id: number; name: string }>();
+  if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
   await db().prepare("UPDATE customers SET entity_type = ?, voen = ?, name = ?, legal_address = ?, legal_address2 = ?, manager = ? WHERE id = ?")
     .bind(
-      input.entityType ?? current.entity_type,
+      entityType,
       voen,
-      input.name?.trim() || current.name,
-      input.legalAddress ?? current.legal_address,
+      name,
+      legalAddress,
       input.legalAddress2 ?? current.legal_address2,
-      input.manager ?? current.manager,
+      manager,
       input.id,
     ).run();
 }
