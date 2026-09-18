@@ -112,7 +112,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.34</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.35</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -679,6 +679,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
 function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [items,setItems]=useState<OutgoingDocument[]>([]);
   const [templates,setTemplates]=useState<DocumentTemplate[]>([]);
+  const [customers,setCustomers]=useState<Customer[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [creating,setCreating]=useState(false);
@@ -689,7 +690,7 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [editForm,setEditForm]=useState<Record<string,string>>({});
   const [editFile,setEditFile]=useState<File|null>(null);
   const [editBusy,setEditBusy]=useState(false);
-  const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates(templateBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
+  const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse,customerResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents"),fetch("/api/customers")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates(templateBody.items||[]);const customerBody=await customerResponse.json();if(customerResponse.ok)setCustomers(customerBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const uploadFile=async(file:File)=>{
     if(file.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
@@ -751,7 +752,7 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
     copies:(values,set)=><label className="field" key="copies">Sənədin nüsxəsi<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{copiesOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     documentNumber:(values,set)=><Field key="documentNumber" label="Sənədin Nömrəsi" value={values.documentNumber||""} set={v=>set({...values,documentNumber:v})}/>,
     documentDate:(values,set)=><Field key="documentDate" label="Sənədin tarixi" type="date" value={values.documentDate||""} set={v=>set({...values,documentDate:v})}/>,
-    voen:(values,set)=><Field key="voen" label="Voeni" value={values.voen||""} set={v=>set({...values,voen:v})}/>,
+    voen:(values,set)=><label className="field" key="voen">Voeni<select value={values.voen||""} onChange={e=>{const selected=customers.find(c=>c.voen===e.target.value);set({...values,voen:e.target.value,organizationName:selected?selected.name:values.organizationName})}}><option value="">Seçin</option>{customers.filter(c=>c.voen).map(c=><option key={c.id} value={c.voen as string}>{c.voen} — {c.name}</option>)}</select></label>,
     organizationName:(values,set)=><Field key="organizationName" label="Təşkilatın adı" value={values.organizationName||""} set={v=>set({...values,organizationName:v})}/>,
     phone:(values,set)=><Field key="phone" label="Müştərinin Telefonu" value={values.phone||""} set={v=>set({...values,phone:v})}/>,
     note:(values,set)=><Field key="note" label="Əlavə Qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>,
