@@ -1,0 +1,29 @@
+{
+  "name": "daxili-idareetme",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daxili-idareetme-db",
+      "database_id": "5666130f-6a37-4ebf-92fc-3ff0be33fd70"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "daxili-idareetme-files"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
