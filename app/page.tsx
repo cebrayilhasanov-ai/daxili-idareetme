@@ -112,7 +112,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.33</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.34</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -548,16 +548,14 @@ function CustomersPage(){
     if(!rule)return value;
     return value.split("").filter(ch=>rule.charPattern.test(ch)).join("").slice(0,rule.length);
   };
-  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
-    const rule=voenRule(values.entityType||"");
-    return <>
-    <label className="field statusfield">Statusu<select value={values.entityType||""} onChange={e=>set({...values,entityType:e.target.value,voen:sanitizeVoen(values.voen||"",e.target.value)})}><option value="">Seçin</option>{entityTypeOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
-    <label className="field voenfield">VÖEN/FİN{rule&&<small className="voenhint">{rule.hint}</small>}<Input value={values.voen||""} maxLength={rule?.length} onChange={e=>set({...values,voen:sanitizeVoen(e.target.value,values.entityType||"")})}/></label>
-    <label className="field">Müştərinin adı<Input value={values.name||""} onChange={e=>set({...values,name:e.target.value})}/></label>
-    <label className="field addressfield">Hüquqi ünvan<Input value={values.legalAddress||""} onChange={e=>set({...values,legalAddress:e.target.value})} onBlur={e=>set({...values,legalAddress:properCase(e.target.value)})}/></label>
-    <label className="field">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>
-  </>;
+  const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
+    status:(values,set)=><label className="field statusfield" key="status">Statusu<select value={values.entityType||""} onChange={e=>set({...values,entityType:e.target.value,voen:sanitizeVoen(values.voen||"",e.target.value)})}><option value="">Seçin</option>{entityTypeOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
+    voen:(values,set)=>{const rule=voenRule(values.entityType||"");return <label className="field voenfield" key="voen">VÖEN/FİN{rule&&<small className="voenhint">{rule.hint}</small>}<Input value={values.voen||""} maxLength={rule?.length} onChange={e=>set({...values,voen:sanitizeVoen(e.target.value,values.entityType||"")})}/></label>},
+    name:(values,set)=><label className="field" key="name">Müştərinin adı<Input value={values.name||""} onChange={e=>set({...values,name:e.target.value})}/></label>,
+    address:(values,set)=><label className="field addressfield" key="address">Hüquqi ünvan<Input value={values.legalAddress||""} onChange={e=>set({...values,legalAddress:e.target.value})} onBlur={e=>set({...values,legalAddress:properCase(e.target.value)})}/></label>,
+    manager:(values,set)=><label className="field" key="manager">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>,
   };
+  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.map(key=>fieldRenderers[key](values,set))}</>;
   const filtered=items.filter(item=>customerColumns.every(c=>has(c.search(item),c.key)));
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştəri siyahısı</h2><p>{filtered.length} müştəri göstərilir</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button></div>
@@ -656,11 +654,23 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(documentColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(documentColumns.map(c=>[c.key,c.width]));
+  const createFieldRenderers:Record<string,()=>React.ReactNode>={
+    name:()=><Field key="name" label="Sənədin adı" value={name} set={setName}/>,
+    template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label>,
+    template2:()=><label className="field filefield" key="template2">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label>,
+    template3:()=><label className="field filefield" key="template3">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label>,
+  };
+  const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
+    name:()=><Field key="name" label="Sənədin adı" value={editName} set={setEditName}/>,
+    template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small>Hazırkı: {item.template1_name}</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label>,
+    template2:()=><label className="field filefield" key="template2">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small>Hazırkı: {item.template2_name}</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label>,
+    template3:()=><label className="field filefield" key="template3">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small>Hazırkı: {item.template3_name}</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label>,
+  });
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları (3 versiyada)</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
-    {creating&&<div className="inlinetaskrow documentrow"><Field label="Sənədin adı" value={name} set={setName}/><label className="field filefield">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label><label className="field filefield">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label><label className="field filefield">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
+    {creating&&<div className="inlinetaskrow documentrow">{order.map(key=>createFieldRenderers[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{col.headerContent}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow"><Field label="Sənədin adı" value={editName} set={setEditName}/><label className="field filefield">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small>Hazırkı: {item.template1_name}</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label><label className="field filefield">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small>Hazırkı: {item.template2_name}</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label><label className="field filefield">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small>Hazırkı: {item.template3_name}</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{col.headerContent}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow">{order.map(key=>editFieldRenderers(item)[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ sənəd əlavə edilməyib."/>}</div>}
@@ -729,23 +739,24 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   const sendingMethodOptions=["Kağız-Əldən","Adoc-Vergidən"];
   const copiesOptions=["1","2","3","4","5"];
   const templateFor=(typeName:string)=>templates.find(t=>t.name.trim().toLocaleLowerCase("az-AZ")===typeName.trim().toLocaleLowerCase("az-AZ"));
-  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>
-    <Field label="Çıxış No" value={values.outgoingNo||""} set={v=>set({...values,outgoingNo:v})}/>
-    <Field label="Çıxış tarixi" type="date" value={values.outgoingDate||""} set={v=>set({...values,outgoingDate:v})}/>
-    <Field label="Daxil olma No" value={values.incomingNo||""} set={v=>set({...values,incomingNo:v})}/>
-    <Field label="Daxil olma tarixi" type="date" value={values.incomingDate||""} set={v=>set({...values,incomingDate:v})}/>
-    <Field label="Göndərən şöbə" value={values.sendingDepartment||""} set={v=>set({...values,sendingDepartment:v})}/>
-    <label className="field">Sənədin tipi<Input list="documentTypeOptions" value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/></label>
-    <label className="field">Göndərilmə Şəkli<select value={values.sendingMethod||""} onChange={e=>set({...values,sendingMethod:e.target.value})}><option value="">Seçin</option>{sendingMethodOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
-    <Field label="Sənədi Götürən Şəxs" value={values.deliveredBy||""} set={v=>set({...values,deliveredBy:v})}/>
-    <label className="field">Sənədin nüsxəsi<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{copiesOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
-    <Field label="Sənədin Nömrəsi" value={values.documentNumber||""} set={v=>set({...values,documentNumber:v})}/>
-    <Field label="Sənədin tarixi" type="date" value={values.documentDate||""} set={v=>set({...values,documentDate:v})}/>
-    <Field label="Voeni" value={values.voen||""} set={v=>set({...values,voen:v})}/>
-    <Field label="Təşkilatın adı" value={values.organizationName||""} set={v=>set({...values,organizationName:v})}/>
-    <Field label="Müştərinin Telefonu" value={values.phone||""} set={v=>set({...values,phone:v})}/>
-    <Field label="Əlavə Qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>
-  </>;
+  const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
+    outgoingNo:(values,set)=><Field key="outgoingNo" label="Çıxış No" value={values.outgoingNo||""} set={v=>set({...values,outgoingNo:v})}/>,
+    outgoingDate:(values,set)=><Field key="outgoingDate" label="Çıxış tarixi" type="date" value={values.outgoingDate||""} set={v=>set({...values,outgoingDate:v})}/>,
+    incomingNo:(values,set)=><Field key="incomingNo" label="Daxil olma No" value={values.incomingNo||""} set={v=>set({...values,incomingNo:v})}/>,
+    incomingDate:(values,set)=><Field key="incomingDate" label="Daxil olma tarixi" type="date" value={values.incomingDate||""} set={v=>set({...values,incomingDate:v})}/>,
+    sendingDepartment:(values,set)=><Field key="sendingDepartment" label="Göndərən şöbə" value={values.sendingDepartment||""} set={v=>set({...values,sendingDepartment:v})}/>,
+    documentType:(values,set)=><label className="field" key="documentType">Sənədin tipi<Input list="documentTypeOptions" value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/></label>,
+    sendingMethod:(values,set)=><label className="field" key="sendingMethod">Göndərilmə Şəkli<select value={values.sendingMethod||""} onChange={e=>set({...values,sendingMethod:e.target.value})}><option value="">Seçin</option>{sendingMethodOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
+    deliveredBy:(values,set)=><Field key="deliveredBy" label="Sənədi Götürən Şəxs" value={values.deliveredBy||""} set={v=>set({...values,deliveredBy:v})}/>,
+    copies:(values,set)=><label className="field" key="copies">Sənədin nüsxəsi<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{copiesOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
+    documentNumber:(values,set)=><Field key="documentNumber" label="Sənədin Nömrəsi" value={values.documentNumber||""} set={v=>set({...values,documentNumber:v})}/>,
+    documentDate:(values,set)=><Field key="documentDate" label="Sənədin tarixi" type="date" value={values.documentDate||""} set={v=>set({...values,documentDate:v})}/>,
+    voen:(values,set)=><Field key="voen" label="Voeni" value={values.voen||""} set={v=>set({...values,voen:v})}/>,
+    organizationName:(values,set)=><Field key="organizationName" label="Təşkilatın adı" value={values.organizationName||""} set={v=>set({...values,organizationName:v})}/>,
+    phone:(values,set)=><Field key="phone" label="Müştərinin Telefonu" value={values.phone||""} set={v=>set({...values,phone:v})}/>,
+    note:(values,set)=><Field key="note" label="Əlavə Qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>,
+  };
+  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.filter(key=>fieldRenderers[key]).map(key=>fieldRenderers[key](values,set))}</>;
   const templateAndFileBlock=(values:Record<string,string>,fileValue:File|null,setFileValue:(f:File|null)=>void)=>{
     const matched=values.documentType?templateFor(values.documentType):undefined;
     const templateLinks=matched?[{n:1,key:matched.template1_key,name:matched.template1_name},{n:2,key:matched.template2_key,name:matched.template2_name},{n:3,key:matched.template3_key,name:matched.template3_name}].filter(t=>t.key):[];
