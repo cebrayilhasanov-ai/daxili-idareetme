@@ -289,6 +289,6 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .checklistremove:hover{color:#dc2626}
 .checklistadd{display:flex;gap:8px}
 .checklistadd input{flex:1}
-.checklistempty{color:#94a3b8;font-size:11px}
+.checklistempty{color:#94a3b8;font-size:11px}.checklistitemactions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.checklistdelegate{display:flex;align-items:center;gap:5px}.checklistdelegate select{height:30px;border:1px solid #dbe3ee;border-radius:6px;background:#fff;padding:0 6px;font-size:10px;max-width:130px}.delegatebtn{border:1px solid #0C8599;border-radius:6px;background:#fff;color:#0C8599;padding:4px 8px;font-size:10px;font-weight:700;white-space:nowrap}.delegatebtn:hover{background:#0C8599;color:#fff}.delegatebtn:disabled{opacity:.5;cursor:not-allowed;background:#fff;color:#0C8599}.delegatedtag{grid-column:3;display:flex;align-items:center;padding:4px 9px;border-radius:12px;background:#E3FAFD;color:#0C8599;font-size:9px;font-weight:700;white-space:nowrap}.delegatework{display:grid;gap:8px}.delegatework .checklistdelegate select{max-width:200px}
 @media(max-width:500px){.checklist li label span{white-space:normal;overflow-wrap:anywhere}}
 @media(max-width:600px){.checklistadd{flex-direction:column}}

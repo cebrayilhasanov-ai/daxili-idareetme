@@ -1,4 +1,4 @@
-import { createPersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, togglePersonalWorkChecklistItem } from "@/db/catalog";
+import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 
@@ -44,7 +44,9 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(id).first<{ personal_work_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
-    const items = await togglePersonalWorkChecklistItem({ id, done: Boolean(body.done) });
+    const items = body.delegateEmployeeId
+      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, employeeId: Number(body.delegateEmployeeId) })
+      : await togglePersonalWorkChecklistItem({ id, done: Boolean(body.done) });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım yenilənmədi." }, { status: 500 }); }
 }

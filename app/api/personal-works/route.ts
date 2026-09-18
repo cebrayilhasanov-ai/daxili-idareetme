@@ -1,4 +1,4 @@
-import { createPersonalWork, deletePersonalWork, getPersonalWorks, updatePersonalWorkStatus } from "@/db/catalog";
+import { createPersonalWork, delegatePersonalWork, deletePersonalWork, getPersonalWorks, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 
 function authError(error: unknown) {
@@ -40,7 +40,11 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request);
     const body = await request.json();
-    await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, status: String(body.status || "") });
+    if (body.delegateEmployeeId) {
+      await delegatePersonalWork({ id: Number(body.id), userId: user.id, employeeId: Number(body.delegateEmployeeId) });
+    } else {
+      await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, status: String(body.status || "") });
+    }
     const items = await getPersonalWorks(user.role === "admin" ? null : user.id);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "İş yenilənmədi." }, { status: 500 }); }

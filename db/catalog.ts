@@ -137,6 +137,8 @@ async function ensureSchema() {
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_name TEXT").run();
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_size INTEGER").run();
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_type TEXT").run();
+  if (!personalWorksColumns2.results.some((column) => column.name === "delegated_task_id")) await db().prepare("ALTER TABLE personal_works ADD COLUMN delegated_task_id INTEGER REFERENCES tasks(id)").run();
+  if (!personalWorksColumns2.results.some((column) => column.name === "delegated_employee_id")) await db().prepare("ALTER TABLE personal_works ADD COLUMN delegated_employee_id INTEGER REFERENCES employees(id)").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_checklist_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
@@ -144,6 +146,9 @@ async function ensureSchema() {
     done INTEGER DEFAULT 0 NOT NULL,
     created_at TEXT NOT NULL
   )`).run();
+  const checklistItemColumns = await db().prepare("PRAGMA table_info(personal_work_checklist_items)").all<{ name: string }>();
+  if (!checklistItemColumns.results.some((column) => column.name === "delegated_task_id")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN delegated_task_id INTEGER REFERENCES tasks(id)").run();
+  if (!checklistItemColumns.results.some((column) => column.name === "delegated_employee_id")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN delegated_employee_id INTEGER REFERENCES employees(id)").run();
   const employeeColumns = await db().prepare("PRAGMA table_info(employees)").all<{ name: string }>();
   if (!employeeColumns.results.some((column) => column.name === "avatar_key")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN avatar_key TEXT").run();
@@ -484,6 +489,10 @@ export async function updateTask(input: { id: number; status?: string; evaluatio
       input.submissionAttachmentType ?? current.submission_attachment_type,
       input.id,
     ).run();
+  if (status === "Təsdiqlənib") {
+    await db().prepare("UPDATE personal_works SET status = 'Tamamlanıb', completed_at = ? WHERE delegated_task_id = ?").bind(completedAt, input.id).run();
+    await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
+  }
 }
 
 export async function deleteTask(id: number) {
@@ -526,10 +535,13 @@ export async function deleteChecklistItem(input: { id: number }) {
 
 export async function getPersonalWorks(userId: number | null) {
   await ensureSchema();
-  const base = `SELECT personal_works.*, app_users.name AS owner_name, companies.name AS company_name
+  const base = `SELECT personal_works.*, app_users.name AS owner_name, companies.name AS company_name,
+      delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status
     FROM personal_works
     JOIN app_users ON app_users.id = personal_works.user_id
-    LEFT JOIN companies ON companies.id = personal_works.company_id`;
+    LEFT JOIN companies ON companies.id = personal_works.company_id
+    LEFT JOIN employees AS delegated_employee ON delegated_employee.id = personal_works.delegated_employee_id
+    LEFT JOIN tasks AS delegated_task ON delegated_task.id = personal_works.delegated_task_id`;
   if (userId) {
     return (await db().prepare(`${base} WHERE personal_works.user_id = ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(userId).all()).results;
   }
@@ -556,18 +568,40 @@ export async function updatePersonalWorkStatus(input: { id: number; userId: numb
   await db().prepare("UPDATE personal_works SET status = ?, completed_at = ? WHERE id = ?").bind(input.status, completedAt, input.id).run();
 }
 
+export async function delegatePersonalWork(input: { id: number; userId: number; employeeId: number }) {
+  await ensureSchema();
+  const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!current) throw new Error("İş tapılmadı.");
+  if (Number(current.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
+  if (current.delegated_task_id) throw new Error("Bu iş artıq həvalə edilib.");
+  if (!current.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
+  if (!current.due_at) throw new Error("Həvalə etmək üçün əvvəlcə son tarixi təyin edin.");
+  const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, current.company_id).first();
+  if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
+  const result = await db().prepare(`INSERT INTO tasks
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
+    .bind(input.employeeId, current.company_id, current.title, current.description, current.due_at, current.due_at, new Date().toISOString()).run();
+  const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  await db().prepare("UPDATE personal_works SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
+}
+
 export async function deletePersonalWork(input: { id: number; userId: number }) {
   await ensureSchema();
-  const current = await db().prepare("SELECT user_id, status FROM personal_works WHERE id = ?").bind(input.id).first<{ user_id: number; status: string }>();
+  const current = await db().prepare("SELECT user_id, status, delegated_task_id FROM personal_works WHERE id = ?").bind(input.id).first<{ user_id: number; status: string; delegated_task_id: number | null }>();
   if (!current) throw new Error("İş tapılmadı.");
   if (current.user_id !== input.userId) throw new Error("Bu iş sizə aid deyil.");
   if (current.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu iş silinə bilər.");
+  if (current.delegated_task_id) throw new Error("Həvalə edilmiş iş silinə bilməz.");
   await db().prepare("DELETE FROM personal_works WHERE id = ?").bind(input.id).run();
 }
 
 export async function getPersonalWorkChecklist(personalWorkId: number) {
   await ensureSchema();
-  return (await db().prepare("SELECT * FROM personal_work_checklist_items WHERE personal_work_id = ? ORDER BY id").bind(personalWorkId).all()).results;
+  return (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status
+    FROM personal_work_checklist_items
+    LEFT JOIN employees AS delegated_employee ON delegated_employee.id = personal_work_checklist_items.delegated_employee_id
+    LEFT JOIN tasks AS delegated_task ON delegated_task.id = personal_work_checklist_items.delegated_task_id
+    WHERE personal_work_id = ? ORDER BY id`).bind(personalWorkId).all()).results;
 }
 
 export async function createPersonalWorkChecklistItem(input: { personalWorkId: number; title: string }) {
@@ -581,16 +615,38 @@ export async function createPersonalWorkChecklistItem(input: { personalWorkId: n
 
 export async function togglePersonalWorkChecklistItem(input: { id: number; done: boolean }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Bu addım işçiyə həvalə edilib, statusu tapşırığın təsdiqi ilə avtomatik yenilənəcək.");
   await db().prepare("UPDATE personal_work_checklist_items SET done = ? WHERE id = ?").bind(Number(input.done), input.id).run();
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
+export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; employeeId: number }) {
+  await ensureSchema();
+  const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Bu addım artıq həvalə edilib.");
+  const work = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<Record<string, unknown>>();
+  if (!work) throw new Error("İş tapılmadı.");
+  if (Number(work.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
+  if (!work.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
+  if (!work.due_at) throw new Error("Həvalə etmək üçün əvvəlcə işin son tarixini təyin edin.");
+  const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, work.company_id).first();
+  if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
+  const result = await db().prepare(`INSERT INTO tasks
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
+    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, work.description, work.due_at, work.due_at, new Date().toISOString()).run();
+  const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
+  return getPersonalWorkChecklist(Number(item.personal_work_id));
+}
+
 export async function deletePersonalWorkChecklistItem(input: { id: number }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Həvalə edilmiş addım silinə bilməz.");
   await db().prepare("DELETE FROM personal_work_checklist_items WHERE id = ?").bind(input.id).run();
   return getPersonalWorkChecklist(item.personal_work_id);
 }
