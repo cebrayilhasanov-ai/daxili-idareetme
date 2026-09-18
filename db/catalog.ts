@@ -460,7 +460,7 @@ export async function updateTask(input: { id: number; status?: string; evaluatio
   } else if (input.status === "Təsdiqlənib") {
     const score = Number(input.evaluation);
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq təsdiqlənə bilər.");
-    if (!(score >= 1 && score <= 5)) throw new Error("Qiymət 1 ilə 5 arasında olmalıdır.");
+    if (!(score >= 1 && score <= 10)) throw new Error("Qiymət 1 ilə 10 arasında olmalıdır.");
   } else if (input.status === "Geri qaytarılıb") {
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq geri qaytarıla bilər.");
     if (!input.evaluationNote?.trim()) throw new Error("Geri qaytarma səbəbini yazın.");
