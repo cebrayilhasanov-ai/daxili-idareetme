@@ -112,7 +112,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.30</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.31</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -247,8 +247,6 @@ function TasksPage({saving,employeeView,tasks,employees,companies,form,setForm,t
   </section>
 }
 function PersonalWorksPage({isAdmin,currentUserId,companies}:{isAdmin:boolean;currentUserId:number;companies:Company[]}){
-  const [colWidths,setColWidth]=useColumnWidths("personalworks2");
-  const resize=useEdgeResize(setColWidth,60);
   const [items,setItems]=useState<PersonalWork[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -307,11 +305,24 @@ function PersonalWorksPage({isAdmin,currentUserId,companies}:{isAdmin:boolean;cu
   };
   const statusTone=(s:string)=>s==="Tamamlanıb"?"done":s==="İcradadır"?"inprogress":"";
   const isOwn=(item:PersonalWork)=>item.user_id===currentUserId;
+  const openDetail=(item:PersonalWork)=>setDetailItem(item);
   const set=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string|null|undefined,key:string)=>(value||"").toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
-  const filtered=items.filter(i=>has(i.status,"status")&&has(i.company_name,"company")&&has(i.title,"title")&&has(i.description||"—","description")&&has(i.attachment_name||"Sənəd yoxdur","document")&&has(formatDate(i.created_at),"created")&&has(i.due_at?formatDate(i.due_at):"—","due"));
-  const headers:Array<[string,string]>=[["status","Status"],["company","Firma"],["title","İş"],["description","Açıqlama"],["document","Əlavə olunan sənəd"],["created","Yaranma tarixi"],["due","Son tarix"]];
-  const colDefaults=[120,140,170,220,150,140,150,140];
+  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
+  const personalWorkColumns:Array<{key:string;label:string;width:number;search:(item:PersonalWork)=>string;render:(item:PersonalWork)=>React.ReactNode}>=[
+    {key:"status",label:"Status",width:120,search:i=>i.status,render:i=><span className={`tablestatus ${statusTone(i.status)}`}>{i.status}</span>},
+    {key:"company",label:"Firma",width:140,search:i=>i.company_name||"",render:i=><b>{i.company_name||"—"}</b>},
+    {key:"title",label:"İş",width:170,search:i=>i.title,render:i=><button className="taskdetailbtn" onClick={()=>openDetail(i)}>{i.title}</button>},
+    {key:"description",label:"Açıqlama",width:220,search:i=>i.description||"—",render:i=><>{i.description||"—"}</>},
+    {key:"document",label:"Əlavə olunan sənəd",width:150,search:i=>i.attachment_name||"Sənəd yoxdur",render:i=>i.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(i.attachment_key)}`}>{i.attachment_name}<small>{formatFileSize(i.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
+    {key:"created",label:"Yaranma tarixi",width:140,search:i=>formatDate(i.created_at),render:i=><time>{formatDate(i.created_at)}</time>},
+    {key:"due",label:"Son tarix",width:150,search:i=>i.due_at?formatDate(i.due_at):"—",render:i=>i.due_at?<time>{formatDate(i.due_at)}</time>:"—"},
+  ];
+  const {order,widths,setWidth,moveColumn}=useTableColumns("personalworks2",personalWorkColumns.map(c=>c.key));
+  const resize=useEdgeResize(setWidth,60);
+  const {handleProps,targetProps}=useColumnDrag(moveColumn);
+  const columnsByKey=Object.fromEntries(personalWorkColumns.map(c=>[c.key,c]));
+  const defaultWidths=Object.fromEntries(personalWorkColumns.map(c=>[c.key,c.width]));
+  const filtered=items.filter(item=>personalWorkColumns.every(c=>has(c.search(item),c.key)));
   const current=detailItem&&items.find(i=>i.id===detailItem.id)||detailItem;
   const currentOwn=Boolean(current&&isOwn(current));
   useEffect(()=>{if(!current){setChecklist([]);setChecklistError("");return}let cancelled=false;setChecklistLoading(true);void fetch(`/api/personal-work-checklist?personalWorkId=${current.id}`).then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled)setChecklist(body.items||[])}).finally(()=>{if(!cancelled)setChecklistLoading(false)});return()=>{cancelled=true}},[current?.id]);
@@ -340,18 +351,18 @@ function PersonalWorksPage({isAdmin,currentUserId,companies}:{isAdmin:boolean;cu
       if(response.ok)setChecklist(body.items||[]);
     }catch{}
   };
-  const openDetail=(item:PersonalWork)=>setDetailItem(item);
   return <section className="panel pagepanel">
     <div className="pageactions"><div><h2>İşlərim</h2><p>{isAdmin?"Bütün istifadəçilərin öz qeyd etdiyi iş siyahısı":`${filtered.length} iş göstərilir`}</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni iş</Button></div>
     {creating&&<div className="inlinetaskrow personalworkrow"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/><label className="field filefield">Əlavə fayl (istəyə bağlı, maks. 25 MB)<Input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file&&<small>{file.name} • {formatFileSize(file.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable personalworktable"><ColGroup defaults={colDefaults} widths={colWidths}/><thead><tr>{headers.map(([key,label],i)=><th key={key} {...resize(i)}><input aria-label={`${label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><span>{label}</span></th>)}<th {...resize(headers.length)} className={`opencolumn${resize(headers.length).className?` ${resize(headers.length).className}`:""}`}><span>Əməliyyat</span></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}><td data-label="Status"><span className={`tablestatus ${statusTone(item.status)}`}>{item.status}</span></td><td data-label="Firma"><b>{item.company_name||"—"}</b></td><td data-label="İş"><button className="taskdetailbtn" onClick={()=>openDetail(item)}>{item.title}</button></td><td data-label="Açıqlama">{item.description||"—"}</td><td data-label="Sənəd">{item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`}>{item.attachment_name}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>}</td><td data-label="Yaranma tarixi"><time>{formatDate(item.created_at)}</time></td><td data-label="Son tarix">{item.due_at?<time>{formatDate(item.due_at)}</time>:"—"}</td><td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(item)}>Aç</button></td></tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun iş tapılmadı.":"Hələ öz işinizi əlavə etməmisiniz."}/>}</div>}
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable personalworktable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={targetProps(key)} handleProps={handleProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
+      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
+      <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(item)}>Aç</button></td>
+    </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun iş tapılmadı.":"Hələ öz işinizi əlavə etməmisiniz."}/>}</div>}
     <Dialog open={Boolean(current)} onOpenChange={v=>!v&&setDetailItem(null)}><DialogContent className="businessdialog">{current&&<FormShell title={current.title} desc={currentOwn?"Öz işim":current.owner_name} formClass="taskdetailform"><div className="taskdetailleft"><div className="taskdetailinfo"><p><b>Açıqlama</b><span>{current.description||"—"}</span></p><p><b>Firma</b><span>{current.company_name||"—"}</span></p><p><b>Yaranma tarixi</b><span>{formatDate(current.created_at)}</span></p><p><b>Son tarix</b><span>{current.due_at?formatDate(current.due_at):"—"}</span></p>{current.attachment_key&&<p><b>Əlavə olunan sənəd</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}<small>{formatFileSize(current.attachment_size||0)}</small></a></span></p>}</div><div className="field"><span>Status</span><strong className={`detailstatus ${statusTone(current.status)}`}>{current.status}</strong>{currentOwn&&current.status!=="Tamamlanıb"&&<Button onClick={()=>void advance(current)}>{current.status==="Yeni"?"İcraya al":"Tamamla"}</Button>}</div>{currentOwn&&current.status==="Yeni"&&<button className="deletetaskbtn detaildelete" onClick={()=>{setDetailItem(null);void remove(current)}}>İşi sil</button>}</div><div className="taskdetailright"><ChecklistSection employeeView={currentOwn} checklist={checklist} loading={checklistLoading} title={checklistTitle} setTitle={setChecklistTitle} busy={checklistBusy} error={checklistError} onAdd={()=>void addChecklistItem()} onToggle={item=>void toggleChecklistDone(item)} onRemove={item=>void removeChecklistItem(item)}/></div></FormShell>}</DialogContent></Dialog>
   </section>;
 }
 function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,onRequestDate,onResolveDateRequest}:{tasks:Task[];employeeView:boolean;onStatus:(t:Task,s:string,extra?:Record<string,unknown>)=>void;onEvaluate:(t:Task)=>void;onDelete:(t:Task)=>void;dateRequests:DateRequest[];onRequestDate:(taskId:number,proposedDueAt:string,reason:string)=>void;onResolveDateRequest:(id:number,approve:boolean,adminNote:string,finalDueAt:string)=>void}){
-  const [colWidths,setColWidth]=useColumnWidths("tasks2");
-  const resize=useEdgeResize(setColWidth,60);
   const [search,setSearch]=useState<Record<string,string>>({});
   const [dateOpen,setDateOpen]=useState(false);
   const [dateForm,setDateForm]=useState({proposedDueAt:"",reason:""});
@@ -368,19 +379,34 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const [checklistBusy,setChecklistBusy]=useState(false);
   const [checklistError,setChecklistError]=useState("");
   const set=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string|null|undefined,key:string)=>(value||"").toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
+  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
   const hasPendingRequest=(t:Task)=>dateRequests.some(r=>r.task_id===t.id&&r.status==="Gözləyir");
   const rowStatusLabel=(t:Task)=>hasPendingRequest(t)?"Dəyişiklik tələb olunur":displayStatus(t);
   const rowStatusClass=(t:Task)=>hasPendingRequest(t)?"changerequested":statusClass(t);
-  const filtered=tasks.filter(t=>has(rowStatusLabel(t),"status")&&has(t.company_name,"company")&&has(t.employee_name,"employee")&&has(t.employee_position,"position")&&has(t.title,"title")&&has(t.description,"description")&&has(t.attachment_name||"Sənəd yoxdur","document")&&has(formatDate(t.created_at),"created")&&has(formatDate(t.due_at),"due")&&has(t.evaluation?`${t.evaluation} bal`:displayStatus(t),"evaluation"));
-  const headers:[[string,string],...Array<[string,string]>]=[["status","Status"],["company","Firma"],["employee","Personal"],["position","Vəzifəsi"],["title","Tapşırıq"],["description","Tapşırığın açıqlaması"],["document","Əlavə olunan sənəd"],["created","Yaranma tarixi"],["due","Tapşırığın son tarixi"],["evaluation","Qiymətləndirmə"]];
-  const colDefaults=[120,140,150,140,170,220,150,140,150,160,140];
+  const openDetail=(t:Task)=>{setSubmitFile(null);setSubmitError("");setDateOpen(false);setDateForm({proposedDueAt:"",reason:""});setResolveNote("");setResolveDate("");setDetailTask(t)};
+  const taskColumns:Array<{key:string;label:string;width:number;search:(t:Task)=>string;render:(t:Task)=>React.ReactNode}>=[
+    {key:"status",label:"Status",width:120,search:t=>rowStatusLabel(t),render:t=><button className={`tablestatus statusopen ${rowStatusClass(t)}`} onClick={()=>openDetail(t)}>{rowStatusLabel(t)}</button>},
+    {key:"company",label:"Firma",width:140,search:t=>t.company_name||"",render:t=><b>{t.company_name||"—"}</b>},
+    {key:"employee",label:"Personal",width:150,search:t=>t.employee_name,render:t=><>{t.employee_name}</>},
+    {key:"position",label:"Vəzifəsi",width:140,search:t=>t.employee_position,render:t=><>{t.employee_position}</>},
+    {key:"title",label:"Tapşırıq",width:170,search:t=>t.title,render:t=><button className="taskdetailbtn" onClick={()=>openDetail(t)}>{t.title}</button>},
+    {key:"description",label:"Tapşırığın açıqlaması",width:220,search:t=>t.description||"",render:t=><>{t.description||"—"}</>},
+    {key:"document",label:"Əlavə olunan sənəd",width:150,search:t=>t.attachment_name||"Sənəd yoxdur",render:t=>t.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(t.attachment_key)}`}>{t.attachment_name}<small>{formatFileSize(t.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
+    {key:"created",label:"Yaranma tarixi",width:140,search:t=>formatDate(t.created_at),render:t=><time>{formatDate(t.created_at)}</time>},
+    {key:"due",label:"Tapşırığın son tarixi",width:150,search:t=>formatDate(t.due_at),render:t=>{const rowExpired=new Date(t.due_at).getTime()<=openedAt;return <><time>{formatDate(t.due_at)}</time>{employeeView&&rowExpired&&<small className="expirednote">Müddət bitib</small>}</>}},
+    {key:"evaluation",label:"Qiymətləndirmə",width:160,search:t=>t.evaluation?`${t.evaluation} bal`:displayStatus(t),render:t=><div className="tableactions"><RatingCell evaluation={t.evaluation} note={t.evaluation_note} compact/>{!employeeView&&t.status==="Təqdim edilib"?<button className="evaluatebtn" onClick={()=>onEvaluate(t)}>Qiymətləndir</button>:!t.evaluation&&!t.evaluation_note&&<span>—</span>}{!employeeView&&t.status==="Yeni"&&<button className="deletetaskbtn" onClick={()=>onDelete(t)}>Sil</button>}</div>},
+  ];
+  const {order,widths,setWidth,moveColumn}=useTableColumns("tasks2",taskColumns.map(c=>c.key));
+  const resize=useEdgeResize(setWidth,60);
+  const {handleProps,targetProps}=useColumnDrag(moveColumn);
+  const columnsByKey=Object.fromEntries(taskColumns.map(c=>[c.key,c]));
+  const defaultWidths=Object.fromEntries(taskColumns.map(c=>[c.key,c.width]));
+  const filtered=tasks.filter(t=>taskColumns.every(c=>has(c.search(t),c.key)));
   const current=detailTask&&tasks.find(t=>t.id===detailTask.id)||detailTask;
   useEffect(()=>{if(!current){setChecklist([]);setChecklistError("");return}let cancelled=false;setChecklistLoading(true);void fetch(`/api/checklist?taskId=${current.id}`).then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled)setChecklist(body.items||[])}).finally(()=>{if(!cancelled)setChecklistLoading(false)});return()=>{cancelled=true}},[current?.id]);
   const nextStatus=current?.status==="Yeni"?"İcradadır":(current?.status==="İcradadır"||current?.status==="Geri qaytarılıb")?"Təqdim edilib":null;
   const expired=Boolean(current&&current.status!=="Geri qaytarılıb"&&new Date(current.due_at).getTime()<=openedAt);
   const needsSubmissionFile=Boolean(current&&current.attachment_key&&!current.submission_attachment_key);
-  const openDetail=(t:Task)=>{setSubmitFile(null);setSubmitError("");setDateOpen(false);setDateForm({proposedDueAt:"",reason:""});setResolveNote("");setResolveDate("");setDetailTask(t)};
   const pendingRequest=current?dateRequests.find(r=>r.task_id===current.id&&r.status==="Gözləyir"):undefined;
   const taskRequest=current?dateRequests.find(r=>r.task_id===current.id):undefined;
   const submitDateRequest=()=>{if(!current||!dateForm.proposedDueAt)return;onRequestDate(current.id,new Date(dateForm.proposedDueAt).toISOString(),dateForm.reason);setDateOpen(false);setDateForm({proposedDueAt:"",reason:""})};
@@ -433,7 +459,10 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
       if(response.ok)setChecklist(body.items||[]);
     }catch{}
   };
-  return <><div className="tasktablewrap"><table className="tasktable"><ColGroup defaults={colDefaults} widths={colWidths}/><thead><tr>{headers.map(([key,label],i)=><th key={key} {...resize(i)}><input aria-label={`${label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><span>{label}</span></th>)}<th {...resize(headers.length)} className={`opencolumn${resize(headers.length).className?` ${resize(headers.length).className}`:""}`}><span>Əməliyyat</span></th></tr></thead><tbody>{filtered.map(t=>{const rowExpired=new Date(t.due_at).getTime()<=openedAt;return <tr key={t.id}><td data-label="Status"><button className={`tablestatus statusopen ${rowStatusClass(t)}`} onClick={()=>openDetail(t)}>{rowStatusLabel(t)}</button></td><td data-label="Firma"><b>{t.company_name||"—"}</b></td><td data-label="Personal">{t.employee_name}</td><td data-label="Vəzifəsi">{t.employee_position}</td><td data-label="Tapşırıq"><button className="taskdetailbtn" onClick={()=>openDetail(t)}>{t.title}</button></td><td data-label="Açıqlama">{t.description||"—"}</td><td data-label="Sənəd">{t.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(t.attachment_key)}`}>{t.attachment_name}<small>{formatFileSize(t.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>}</td><td data-label="Yaranma tarixi"><time>{formatDate(t.created_at)}</time></td><td data-label="Son tarix"><time>{formatDate(t.due_at)}</time>{employeeView&&rowExpired&&<small className="expirednote">Müddət bitib</small>}</td><td data-label="Qiymətləndirmə"><div className="tableactions"><RatingCell evaluation={t.evaluation} note={t.evaluation_note} compact/>{!employeeView&&t.status==="Təqdim edilib"?<button className="evaluatebtn" onClick={()=>onEvaluate(t)}>Qiymətləndir</button>:!t.evaluation&&!t.evaluation_note&&<span>—</span>}{!employeeView&&t.status==="Yeni"&&<button className="deletetaskbtn" onClick={()=>onDelete(t)}>Sil</button>}</div></td><td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(t)}>Aç</button></td></tr>})}</tbody></table>{!filtered.length&&<Empty text={tasks.length?"Axtarışa uyğun tapşırıq tapılmadı.":"Hələ tapşırıq yaradılmayıb."}/>}</div>
+  return <><div className="tasktablewrap"><table className="tasktable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={targetProps(key)} handleProps={handleProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(t=><tr key={t.id}>
+      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(t)}</td>})}
+      <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(t)}>Aç</button></td>
+    </tr>)}</tbody></table>{!filtered.length&&<Empty text={tasks.length?"Axtarışa uyğun tapşırıq tapılmadı.":"Hələ tapşırıq yaradılmayıb."}/>}</div>
     <Dialog open={Boolean(current)} onOpenChange={v=>!v&&setDetailTask(null)}><DialogContent className="businessdialog">{current&&<FormShell title={current.title} desc={`${current.employee_name} • ${current.company_name||"Firma qeyd edilməyib"}`} formClass="taskdetailform"><div className="taskdetailleft"><div className="taskdetailinfo"><p><b>Tapşırıq</b><span>{current.description||"—"}</span></p><p><b>Yaranma tarixi</b><span>{formatDate(current.created_at)}</span></p><p><b>Son icra tarixi</b><span>{formatDate(current.due_at)}{current.original_due_at&&current.original_due_at!==current.due_at&&<small className="daterequestnote"> (ilkin tarix: {formatDate(current.original_due_at)})</small>}</span></p>{current.attachment_key&&<p><b>Tapşırıqla göndərilən fayl</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}<small>{formatFileSize(current.attachment_size||0)}</small></a></span></p>}{current.submission_attachment_key&&<p><b>İşlənib təqdim olunan fayl</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.submission_attachment_key)}`}>{current.submission_attachment_name}<small>{formatFileSize(current.submission_attachment_size||0)}</small></a></span></p>}</div>{employeeView?<div className="field"><span>Status</span><strong className={`detailstatus ${pendingRequest?"changerequested":statusClass(current)}`}>{pendingRequest?"Dəyişiklik tələb olunur":displayStatus(current)}</strong><RatingCell evaluation={current.evaluation} note={current.evaluation_note}/>{nextStatus&&!expired&&Number(current.employee_status_changed)<2&&<>{nextStatus==="Təqdim edilib"&&<label className="field filefield">İşlənmiş fayl{needsSubmissionFile?" (mütləqdir)":" (istəyə bağlı)"}<Input type="file" onChange={e=>setSubmitFile(e.target.files?.[0]||null)}/>{submitFile&&<small>{submitFile.name} • {formatFileSize(submitFile.size)}</small>}</label>}{submitError&&<div className="errorbox">{submitError}</div>}<Button disabled={submitBusy} onClick={()=>nextStatus==="İcradadır"?(onStatus(current,nextStatus),setDetailTask({...current,status:nextStatus,employee_status_changed:Number(current.employee_status_changed)+1})):void submitTask()}>{submitBusy?"Göndərilir...":nextStatus==="İcradadır"?"İcraya al":"Təqdim et"}</Button></>}</div>:<div className="field"><span>Status</span><strong className={`detailstatus ${pendingRequest?"changerequested":statusClass(current)}`}>{pendingRequest?"Dəyişiklik tələb olunur":displayStatus(current)}</strong><RatingCell evaluation={current.evaluation} note={current.evaluation_note}/></div>}<DateRequestSection employeeView={employeeView} current={current} pendingRequest={pendingRequest} taskRequest={taskRequest} dateOpen={dateOpen} setDateOpen={setDateOpen} dateForm={dateForm} setDateForm={setDateForm} onSubmit={submitDateRequest} resolveNote={resolveNote} setResolveNote={setResolveNote} resolveDate={resolveDate} setResolveDate={setResolveDate} onResolve={resolveDateRequest}/>{employeeView&&expired&&<small className="expirednote">Müddət bitdiyi üçün status dəyişdirilə bilməz.</small>}{!employeeView&&current.status==="Təqdim edilib"&&<Button onClick={()=>onEvaluate(current)}>Qiymətləndir</Button>}{!employeeView&&current.status==="Yeni"&&<button className="deletetaskbtn detaildelete" onClick={()=>{setDetailTask(null);onDelete(current)}}>Tapşırığı sil</button>}</div><div className="taskdetailright"><ChecklistSection employeeView={employeeView} checklist={checklist} loading={checklistLoading} title={checklistTitle} setTitle={setChecklistTitle} busy={checklistBusy} error={checklistError} onAdd={()=>void addChecklistItem()} onToggle={item=>void toggleChecklistDone(item)} onRemove={item=>void removeChecklistItem(item)}/></div></FormShell>}</DialogContent></Dialog>
   </>
 }
@@ -446,9 +475,19 @@ function EmployeesPage({employees,tasks,onNew,onEdit,onView,onDelete}:{employees
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL VƏ GİRİŞ HESABLARI</span><h2>Personal reyestri</h2><p>Personal məlumatları və proqrama giriş icazələri vahid bölmədə idarə olunur</p></div><Button onClick={onNew}><Plus/>Yeni personal</Button></div>{error&&<div className="errorbox">{error}</div>}<div className="employeecards officialcards">{employees.length?employees.map(e=>{const own=tasks.filter(t=>t.employee_id===e.id);const done=own.filter(t=>t.status==="Təsdiqlənib");const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const rated=done.filter(t=>t.evaluation);const avg=rated.length?(rated.reduce((s,t)=>s+(t.evaluation||0),0)/rated.length).toFixed(1):"—";const account=accounts.find(a=>a.employee_id===e.id);const active=account?Boolean(account.active):Boolean(e.active);return <article key={e.id} className={!active?"inactivecard":""}><div className="identityblock"><i className={e.avatar_key?"hasphoto":""}>{e.avatar_key?<img src={`/api/file?key=${encodeURIComponent(e.avatar_key)}`} alt={e.name}/>:initials(e.name)}</i><div><div className="identitytitle"><h3>{e.name}</h3><span className={active?"recordstatus active":"recordstatus inactive"}>{active?"Aktiv":"Deaktiv"}</span></div><p><b>Vəzifə:</b> {e.position}</p><p><b>E-poçt və giriş adı:</b> {e.email||"Qeyd edilməyib"}</p><p><b>Giriş hesabı:</b> {account?"Yaradılıb":"Yaradılmayıb"}</p></div></div><div className="recordmetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>İcrada</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{done.length}</b></span><span><small>Orta qiymət</small><b>{avg}</b></span></div><div className="employeeactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(e)}>Redaktə et</button>{active&&<button className="viewasbtn" onClick={()=>onView(e)}>Personal görünüşü</button>}{account&&<button className="editcompanybtn" onClick={()=>{setReset(account);setPassword("")}}>Şifrəni yenilə</button>}{account&&<button className={active?"deactivatebtn":"activatebtn"} onClick={()=>{if(!active||window.confirm(`${e.name} adlı personalı deaktiv etmək istəyirsiniz?`))void toggle(account)}}>{active?"Deaktiv et":"Aktiv et"}</button>}{!active&&own.length===0&&<button className="deleteworkerbtn" onClick={()=>onDelete(e)}>Sil</button>}</div></article>}):<Empty text="İlk personalı əlavə edin."/>}</div><Dialog open={Boolean(reset)} onOpenChange={v=>!v&&setReset(null)}><DialogContent className="businessdialog">{reset&&<FormShell title="Personalın şifrəsini yenilə" desc={`${reset.name} üçün yeni müvəqqəti şifrə təyin edin.`}><Field label="Yeni şifrə (ən az 8 simvol)" type="password" value={password} set={setPassword}/><Button disabled={password.length<8} onClick={()=>void savePassword()}>Şifrəni yenilə</Button></FormShell>}</DialogContent></Dialog></section>
 }
 function CompaniesPage({companies,tasks,onNew,onEdit,onToggle}:{companies:Company[];tasks:Task[];onNew:()=>void;onEdit:(c:Company)=>void;onToggle:(c:Company)=>void}){return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">TƏŞKİLATİ MƏLUMATLAR</span><h2>Firmalar reyestri</h2><p>Tapşırıqların aid olduğu hüquqi şəxslər və əsas rekvizitlər</p></div><Button onClick={onNew}><Plus/>Yeni firma</Button></div><div className="companylist officialcards">{companies.length?companies.map(c=>{const own=tasks.filter(t=>t.company_id===c.id);const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const completed=own.filter(t=>t.status==="Təsdiqlənib").length;return <article key={c.id} className={!c.active?"inactivecard":""}><div className="identityblock companyidentity"><i><Building2/></i><div><div className="identitytitle"><h3>{c.name}</h3><span className={c.active?"recordstatus active":"recordstatus inactive"}>{c.active?"Aktiv":"Deaktiv"}</span></div><p><b>VÖEN:</b> {c.voen||"Qeyd edilməyib"}</p><p><b>Rəhbər:</b> {c.manager||"Qeyd edilməyib"}</p></div></div><div className="recordmetrics companymetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>Aktiv iş</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{completed}</b></span></div><div className="companyactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(c)}>Məlumatları redaktə et</button><button className={c.active?"deactivatebtn":"activatebtn"} onClick={()=>onToggle(c)}>{c.active?"Deaktiv et":"Aktiv et"}</button></div></article>}):<Empty text="İlk firmanı əlavə edin."/>}</div></section>}
+const customerColumns:Array<{key:string;label:string;width:number;search:(item:Customer)=>string;render:(item:Customer)=>React.ReactNode}>=[
+  {key:"status",label:"Statusu",width:130,search:i=>i.entity_type||"",render:i=><>{i.entity_type||"—"}</>},
+  {key:"voen",label:"VÖEN/FİN",width:100,search:i=>i.voen||"",render:i=><>{i.voen||"—"}</>},
+  {key:"name",label:"Müştərinin adı",width:200,search:i=>i.name||"",render:i=><b>{i.name}</b>},
+  {key:"address",label:"Hüquqi ünvan",width:340,search:i=>i.legal_address||"",render:i=><>{i.legal_address||"—"}</>},
+  {key:"manager",label:"Rəhbər",width:160,search:i=>i.manager||"",render:i=><>{i.manager||"—"}</>},
+];
 function CustomersPage(){
-  const [colWidths,setColWidth]=useColumnWidths("customers2");
-  const resize=useEdgeResize(setColWidth,60);
+  const {order,widths,setWidth,moveColumn}=useTableColumns("customers2",customerColumns.map(c=>c.key));
+  const resize=useEdgeResize(setWidth,60);
+  const {handleProps,targetProps}=useColumnDrag(moveColumn);
+  const columnsByKey=Object.fromEntries(customerColumns.map(c=>[c.key,c]));
+  const defaultWidths=Object.fromEntries(customerColumns.map(c=>[c.key,c.width]));
   const [items,setItems]=useState<Customer[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -460,7 +499,7 @@ function CustomersPage(){
   const [editBusy,setEditBusy]=useState(false);
   const [search,setSearch]=useState<Record<string,string>>({});
   const setQuery=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string|null|undefined,key:string)=>(value||"").toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
+  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/customers");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const requiredFilled=(values:Record<string,string>)=>Boolean((values.entityType||"").trim()&&(values.voen||"").trim()&&(values.name||"").trim()&&(values.legalAddress||"").trim()&&(values.manager||"").trim());
@@ -519,17 +558,13 @@ function CustomersPage(){
     <label className="field">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>
   </>;
   };
-  const filtered=items.filter(i=>has(i.entity_type,"status")&&has(i.voen,"voen")&&has(i.name,"name")&&has(i.legal_address,"address")&&has(i.manager,"manager"));
+  const filtered=items.filter(item=>customerColumns.every(c=>has(c.search(item),c.key)));
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştəri siyahısı</h2><p>{filtered.length} müştəri göstərilir</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button></div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">{fields(form,setForm)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!requiredFilled(form)} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup defaults={[130,100,200,340,160,140]} widths={colWidths}/><thead><tr><th {...resize(0)}><input aria-label="Statusu üzrə axtarış" placeholder="Axtar..." value={search.status||""} onChange={e=>setQuery("status",e.target.value)}/><span>Statusu</span></th><th {...resize(1)}><input aria-label="VÖEN/FİN üzrə axtarış" placeholder="Axtar..." value={search.voen||""} onChange={e=>setQuery("voen",e.target.value)}/><span>VÖEN/FİN</span></th><th {...resize(2)}><input aria-label="Müştərinin adı üzrə axtarış" placeholder="Axtar..." value={search.name||""} onChange={e=>setQuery("name",e.target.value)}/><span>Müştərinin adı</span></th><th {...resize(3)}><input aria-label="Hüquqi ünvan üzrə axtarış" placeholder="Axtar..." value={search.address||""} onChange={e=>setQuery("address",e.target.value)}/><span>Hüquqi ünvan</span></th><th {...resize(4)}><input aria-label="Rəhbər üzrə axtarış" placeholder="Axtar..." value={search.manager||""} onChange={e=>setQuery("manager",e.target.value)}/><span>Rəhbər</span></th><th {...resize(5)} className={`opencolumn${resize(5).className?` ${resize(5).className}`:""}`}><input aria-hidden="true" tabIndex={-1} readOnly value="" style={{visibility:"hidden"}}/><span>Əməliyyat</span></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={6}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
-      <td data-label="Statusu">{item.entity_type||"—"}</td>
-      <td data-label="VÖEN/FİN">{item.voen||"—"}</td>
-      <td data-label="Müştərinin adı"><b>{item.name}</b></td>
-      <td data-label="Hüquqi ünvan">{item.legal_address||"—"}</td>
-      <td data-label="Rəhbər">{item.manager||"—"}</td>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={targetProps(key)} handleProps={handleProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>setQuery(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       <td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
   </section>;
@@ -542,8 +577,6 @@ function AuditPage(){
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">ADMİN ƏMƏLİYYATLARI</span><h2>Tarixçə</h2><p>Son admin əməliyyatları xronoloji ardıcıllıqla</p></div></div>{error&&<div className="errorbox">{error}</div>}{loading?<div className="loading">Tarixçə yüklənir...</div>:<div className="auditlist">{items.length?items.map(item=><article key={item.id}><b>{formatDate(item.created_at)}</b><span>{item.actor_name}</span><span>{item.action}</span><span>{item.target_label||"—"}</span></article>):<Empty text="Hələ qeyd yoxdur."/>}</div>}</section>
 }
 function DocumentsPage({isAdmin}:{isAdmin:boolean}){
-  const [colWidths,setColWidth]=useColumnWidths("templates2");
-  const resize=useEdgeResize(setColWidth,60);
   const [items,setItems]=useState<DocumentTemplate[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -612,16 +645,28 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   };
   const templateLink=(key:string|null,name:string|null,size:number|null)=>key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(key)}`}>{name}<small>{formatFileSize(size||0)}</small></a>:<span className="nodocument">Yoxdur</span>;
   const templateLabel=(n:number)=><span className="templatelabel">Sənədin şablonu<br/>{n}</span>;
+  const documentColumns:Array<{key:string;label:string;width:number;headerContent:React.ReactNode;render:(item:DocumentTemplate)=>React.ReactNode}>=[
+    {key:"name",label:"Sənədin adı",width:240,headerContent:<span>Sənədin adı</span>,render:item=><b>{item.name}</b>},
+    {key:"template1",label:"Sənədin şablonu 1",width:220,headerContent:templateLabel(1),render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
+    {key:"template2",label:"Sənədin şablonu 2",width:220,headerContent:templateLabel(2),render:item=>templateLink(item.template2_key,item.template2_name,item.template2_size)},
+    {key:"template3",label:"Sənədin şablonu 3",width:220,headerContent:templateLabel(3),render:item=>templateLink(item.template3_key,item.template3_name,item.template3_size)},
+  ];
+  const {order,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
+  const resize=useEdgeResize(setWidth,60);
+  const {handleProps,targetProps}=useColumnDrag(moveColumn);
+  const columnsByKey=Object.fromEntries(documentColumns.map(c=>[c.key,c]));
+  const defaultWidths=Object.fromEntries(documentColumns.map(c=>[c.key,c.width]));
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları (3 versiyada)</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow"><Field label="Sənədin adı" value={name} set={setName}/><label className="field filefield">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label><label className="field filefield">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label><label className="field filefield">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup defaults={isAdmin?[240,220,220,220,140]:[240,220,220,220]} widths={colWidths}/><thead><tr><th {...resize(0)}><span>Sənədin adı</span></th><th {...resize(1)}>{templateLabel(1)}</th><th {...resize(2)}>{templateLabel(2)}</th><th {...resize(3)}>{templateLabel(3)}</th>{isAdmin&&<th {...resize(4)} className={`opencolumn${resize(4).className?` ${resize(4).className}`:""}`}><span>Əməliyyat</span></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={isAdmin?5:4}><div className="inlinetaskrow documentrow documenteditrow"><Field label="Sənədin adı" value={editName} set={setEditName}/><label className="field filefield">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small>Hazırkı: {item.template1_name}</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label><label className="field filefield">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small>Hazırkı: {item.template2_name}</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label><label className="field filefield">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small>Hazırkı: {item.template3_name}</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}><td data-label="Sənədin adı"><b>{item.name}</b></td><td data-label="Sənədin şablonu 1">{templateLink(item.template1_key,item.template1_name,item.template1_size)}</td><td data-label="Sənədin şablonu 2">{templateLink(item.template2_key,item.template2_name,item.template2_size)}</td><td data-label="Sənədin şablonu 3">{templateLink(item.template3_key,item.template3_name,item.template3_size)}</td>{isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}</tr>)}</tbody></table>{!items.length&&<Empty text="Hələ sənəd əlavə edilməyib."/>}</div>}
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={targetProps(key)} handleProps={handleProps(key)}>{col.headerContent}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow"><Field label="Sənədin adı" value={editName} set={setEditName}/><label className="field filefield">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small>Hazırkı: {item.template1_name}</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label><label className="field filefield">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small>Hazırkı: {item.template2_name}</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label><label className="field filefield">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small>Hazırkı: {item.template3_name}</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
+      {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
+    </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ sənəd əlavə edilməyib."/>}</div>}
   </section>;
 }
 function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
-  const [colWidths,setColWidth]=useColumnWidths("outgoing2");
-  const resize=useEdgeResize(setColWidth,60);
   const [items,setItems]=useState<OutgoingDocument[]>([]);
   const [templates,setTemplates]=useState<DocumentTemplate[]>([]);
   const [loading,setLoading]=useState(true);
@@ -709,28 +754,36 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
       <label className="field filefield">Doldurulmuş sənəd (istəyə bağlı)<Input type="file" onChange={e=>setFileValue(e.target.files?.[0]||null)}/>{fileValue&&<small>{fileValue.name} • {formatFileSize(fileValue.size)}</small>}</label>
     </>;
   };
+  const outgoingColumns:Array<{key:string;label:string;width:number;render:(item:OutgoingDocument)=>React.ReactNode}>=[
+    {key:"outgoingNo",label:"Çıxış No",width:110,render:item=><b>{item.outgoing_no}</b>},
+    {key:"outgoingDate",label:"Çıxış tarixi",width:110,render:item=><>{formatDateOnly(item.outgoing_date)}</>},
+    {key:"incomingNo",label:"Daxil olma No",width:130,render:item=><>{item.incoming_no||"—"}</>},
+    {key:"incomingDate",label:"Daxil olma tarixi",width:130,render:item=><>{formatDateOnly(item.incoming_date)}</>},
+    {key:"sendingDepartment",label:"Göndərən şöbə",width:150,render:item=><>{item.sending_department||"—"}</>},
+    {key:"documentType",label:"Sənədin tipi",width:130,render:item=><>{item.document_type||"—"}</>},
+    {key:"sendingMethod",label:"Göndərilmə Şəkli",width:140,render:item=><>{item.sending_method||"—"}</>},
+    {key:"deliveredBy",label:"Sənədi Götürən Şəxs",width:160,render:item=><>{item.delivered_by||"—"}</>},
+    {key:"copies",label:"Sənədin nüsxəsi",width:110,render:item=><>{item.copies||"—"}</>},
+    {key:"documentNumber",label:"Sənədin Nömrəsi",width:130,render:item=><>{item.document_number||"—"}</>},
+    {key:"documentDate",label:"Sənədin tarixi",width:110,render:item=><>{formatDateOnly(item.document_date)}</>},
+    {key:"voen",label:"Voeni",width:100,render:item=><>{item.voen||"—"}</>},
+    {key:"organizationName",label:"Təşkilatın adı",width:170,render:item=><>{item.organization_name||"—"}</>},
+    {key:"phone",label:"Müştərinin Telefonu",width:140,render:item=><>{item.phone||"—"}</>},
+    {key:"note",label:"Əlavə Qeydlər",width:180,render:item=><>{item.note||"—"}</>},
+    {key:"file",label:"Sənəd faylı",width:150,render:item=>item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yoxdur</span>},
+  ];
+  const {order,widths,setWidth,moveColumn}=useTableColumns("outgoing2",outgoingColumns.map(c=>c.key));
+  const resize=useEdgeResize(setWidth,60);
+  const {handleProps,targetProps}=useColumnDrag(moveColumn);
+  const columnsByKey=Object.fromEntries(outgoingColumns.map(c=>[c.key,c]));
+  const defaultWidths=Object.fromEntries(outgoingColumns.map(c=>[c.key,c.width]));
   return <section className="panel pagepanel directorypanel">
     <datalist id="documentTypeOptions">{templates.map(t=><option key={t.id} value={t.name}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan Sənədlər</h2><p>Təşkilatdan göndərilən sənədlərin qeydiyyatı</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields(form,setForm)}{templateAndFileBlock(form,newFile,setNewFile)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy||!(form.outgoingNo||"").trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup defaults={isAdmin?[110,110,130,130,150,130,140,160,110,130,110,100,170,140,180,150,140]:[110,110,130,130,150,130,140,160,110,130,110,100,170,140,180,150]} widths={colWidths}/><thead><tr><th {...resize(0)}><span>Çıxış No</span></th><th {...resize(1)}><span>Çıxış tarixi</span></th><th {...resize(2)}><span>Daxil olma No</span></th><th {...resize(3)}><span>Daxil olma tarixi</span></th><th {...resize(4)}><span>Göndərən şöbə</span></th><th {...resize(5)}><span>Sənədin tipi</span></th><th {...resize(6)}><span>Göndərilmə Şəkli</span></th><th {...resize(7)}><span>Sənədi Götürən Şəxs</span></th><th {...resize(8)}><span>Sənədin nüsxəsi</span></th><th {...resize(9)}><span>Sənədin Nömrəsi</span></th><th {...resize(10)}><span>Sənədin tarixi</span></th><th {...resize(11)}><span>Voeni</span></th><th {...resize(12)}><span>Təşkilatın adı</span></th><th {...resize(13)}><span>Müştərinin Telefonu</span></th><th {...resize(14)}><span>Əlavə Qeydlər</span></th><th {...resize(15)}><span>Sənəd faylı</span></th>{isAdmin&&<th {...resize(16)} className={`opencolumn${resize(16).className?` ${resize(16).className}`:""}`}><span>Əməliyyat</span></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={isAdmin?17:16}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!(editForm.outgoingNo||"").trim()} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
-      <td data-label="Çıxış No"><b>{item.outgoing_no}</b></td>
-      <td data-label="Çıxış tarixi">{formatDateOnly(item.outgoing_date)}</td>
-      <td data-label="Daxil olma No">{item.incoming_no||"—"}</td>
-      <td data-label="Daxil olma tarixi">{formatDateOnly(item.incoming_date)}</td>
-      <td data-label="Göndərən şöbə">{item.sending_department||"—"}</td>
-      <td data-label="Sənədin tipi">{item.document_type||"—"}</td>
-      <td data-label="Göndərilmə Şəkli">{item.sending_method||"—"}</td>
-      <td data-label="Sənədi Götürən Şəxs">{item.delivered_by||"—"}</td>
-      <td data-label="Sənədin nüsxəsi">{item.copies||"—"}</td>
-      <td data-label="Sənədin Nömrəsi">{item.document_number||"—"}</td>
-      <td data-label="Sənədin tarixi">{formatDateOnly(item.document_date)}</td>
-      <td data-label="Voeni">{item.voen||"—"}</td>
-      <td data-label="Təşkilatın adı">{item.organization_name||"—"}</td>
-      <td data-label="Müştərinin Telefonu">{item.phone||"—"}</td>
-      <td data-label="Əlavə Qeydlər">{item.note||"—"}</td>
-      <td data-label="Sənəd faylı">{item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yoxdur</span>}</td>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={targetProps(key)} handleProps={handleProps(key)}><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!(editForm.outgoingNo||"").trim()} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ çıxan sənəd qeydə alınmayıb."/>}</div>}
   </section>;
@@ -738,17 +791,17 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
 function PlaceholderPage({title,text}:{title:string;text:string}){
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>{title}</h2><p>Bu bölmə hazırlanma mərhələsindədir</p></div></div><Empty text={text}/></section>;
 }
-function WorkList({employeeView,tab,frequency,items,assignments,employees,companies,form,setForm,onAdd,onFrequency,onAssign,onCatalogAssign,onComplete}:{employeeView:boolean;tab:"catalog"|"assignments";frequency:"monthly"|"weekly";items:WorkItem[];assignments:WorkAssignment[];employees:Employee[];companies:Company[];form:Record<string,string>;setForm:React.Dispatch<React.SetStateAction<Record<string,string>>>;onAdd:()=>void;onFrequency:(item:WorkItem,frequency:"monthly"|"weekly"|"daily")=>void;onAssign:()=>void;onCatalogAssign:(workDefinitionId:number,companyId:number,employeeId:number)=>void;onComplete:(assignmentId:number)=>void}){const [creating,setCreating]=useState(false);const [catalogCompanyFilter,setCatalogCompanyFilter]=useState("all");const [catalogEmployeeFilter,setCatalogEmployeeFilter]=useState("all");const assignmentView=employeeView||tab==="assignments";const [catalogWidths,setCatalogWidth]=useColumnWidths("workcatalog2");const [matrixWidths,setMatrixWidth]=useColumnWidths("workmatrix2");const resizeCatalog=useEdgeResize(setCatalogWidth,40);const resizeMatrix=useEdgeResize(setMatrixWidth,40);const gridTemplate=(defaults:string[],widths:Record<number,number>)=>defaults.map((d,i)=>widths[i]?`${widths[i]}px`:d).join(" ");const catalogColumns={gridTemplateColumns:gridTemplate(["56px","minmax(240px,1fr)","minmax(300px,1.2fr)",...companies.map(()=>"92px")],catalogWidths)};const matrixColumns={gridTemplateColumns:gridTemplate(["56px","minmax(220px,1fr)","minmax(210px,.75fr)","170px",...companies.map(()=>"88px")],matrixWidths)};const selectedCompanies=new Set((form.assignCompanyIds||"").split(",").filter(Boolean).map(Number));const toggleAssignCompany=(id:number,checked:boolean)=>{const next=new Set(selectedCompanies);checked?next.add(id):next.delete(id);setForm({...form,assignCompanyIds:[...next].join(",")})};const filteredCatalogItems=items.filter(item=>(catalogCompanyFilter==="all"&&catalogEmployeeFilter==="all")||assignments.some(a=>a.work_definition_id===item.id&&(catalogCompanyFilter==="all"||String(a.company_id)===catalogCompanyFilter)&&(catalogEmployeeFilter==="all"||String(a.employee_id)===catalogEmployeeFilter)));const rows=assignments.map(a=>({key:`${a.work_definition_id}:${a.employee_id}`,workId:a.work_definition_id,employeeId:a.employee_id,title:a.title,description:a.description,frequency:a.frequency,employeeName:a.employee_name})).filter((row,index,list)=>list.findIndex(other=>other.key===row.key)===index);
+function WorkList({employeeView,tab,frequency,items,assignments,employees,companies,form,setForm,onAdd,onFrequency,onAssign,onCatalogAssign,onComplete}:{employeeView:boolean;tab:"catalog"|"assignments";frequency:"monthly"|"weekly";items:WorkItem[];assignments:WorkAssignment[];employees:Employee[];companies:Company[];form:Record<string,string>;setForm:React.Dispatch<React.SetStateAction<Record<string,string>>>;onAdd:()=>void;onFrequency:(item:WorkItem,frequency:"monthly"|"weekly"|"daily")=>void;onAssign:()=>void;onCatalogAssign:(workDefinitionId:number,companyId:number,employeeId:number)=>void;onComplete:(assignmentId:number)=>void}){const [creating,setCreating]=useState(false);const [catalogCompanyFilter,setCatalogCompanyFilter]=useState("all");const [catalogEmployeeFilter,setCatalogEmployeeFilter]=useState("all");const assignmentView=employeeView||tab==="assignments";const [catalogWidths,setCatalogWidth]=useSimpleColumnWidths("workcatalog2");const [matrixWidths,setMatrixWidth]=useSimpleColumnWidths("workmatrix2");const resizeCatalog=useEdgeResize(setCatalogWidth,40);const resizeMatrix=useEdgeResize(setMatrixWidth,40);const gridTemplate=(defaults:string[],widths:Record<string,number>)=>defaults.map((d,i)=>widths[i]?`${widths[i]}px`:d).join(" ");const catalogColumns={gridTemplateColumns:gridTemplate(["56px","minmax(240px,1fr)","minmax(300px,1.2fr)",...companies.map(()=>"92px")],catalogWidths)};const matrixColumns={gridTemplateColumns:gridTemplate(["56px","minmax(220px,1fr)","minmax(210px,.75fr)","170px",...companies.map(()=>"88px")],matrixWidths)};const selectedCompanies=new Set((form.assignCompanyIds||"").split(",").filter(Boolean).map(Number));const toggleAssignCompany=(id:number,checked:boolean)=>{const next=new Set(selectedCompanies);checked?next.add(id):next.delete(id);setForm({...form,assignCompanyIds:[...next].join(",")})};const filteredCatalogItems=items.filter(item=>(catalogCompanyFilter==="all"&&catalogEmployeeFilter==="all")||assignments.some(a=>a.work_definition_id===item.id&&(catalogCompanyFilter==="all"||String(a.company_id)===catalogCompanyFilter)&&(catalogEmployeeFilter==="all"||String(a.employee_id)===catalogEmployeeFilter)));const rows=assignments.map(a=>({key:`${a.work_definition_id}:${a.employee_id}`,workId:a.work_definition_id,employeeId:a.employee_id,title:a.title,description:a.description,frequency:a.frequency,employeeName:a.employee_name})).filter((row,index,list)=>list.findIndex(other=>other.key===row.key)===index);
   const catalogAllowedEmployees=(companyId:number)=>employees.filter(employee=>(employee.company_ids||"").split(",").filter(Boolean).map(Number).includes(companyId));
   const catalogGroup=(freq:"monthly"|"weekly"|"daily")=>{
     const list=filteredCatalogItems.filter(item=>item.frequency===freq);
     if(!list.length)return <Empty text="Bu dövr üzrə sabit iş tapılmadı."/>;
-    return <div className="workmatrix"><div className="workmatrixhead" style={catalogColumns}><span {...resizeCatalog(0)}>№</span><span {...resizeCatalog(1)}>İşlərin siyahısı</span><span {...resizeCatalog(2)}>İşin açıqlaması</span>{companies.map((c,i)=><span key={c.id} {...resizeCatalog(3+i)}>{c.name}</span>)}</div>{list.map((item,index)=><article key={item.id} style={catalogColumns}><b className="rownumber">{index+1}</b><h3>{item.title}</h3><p className="workdescription">{item.description||"—"}</p>{companies.map(c=>{const assigned=assignments.find(a=>a.work_definition_id===item.id&&a.company_id===c.id);const allowedEmployees=catalogAllowedEmployees(c.id);return <label className={assigned?"catalogassignee assignedname":"catalogassignee"} key={c.id}><select aria-label={`${c.name} üçün istifadəçi`} value={assigned?.employee_id||""} onChange={e=>e.target.value&&onCatalogAssign(item.id,c.id,Number(e.target.value))}><option value="">Seçin</option>{allowedEmployees.map(employee=><option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>})}</article>)}</div>;
+    return <div className="workmatrix"><div className="workmatrixhead" style={catalogColumns}><span {...resizeCatalog("0")}>№</span><span {...resizeCatalog("1")}>İşlərin siyahısı</span><span {...resizeCatalog("2")}>İşin açıqlaması</span>{companies.map((c,i)=><span key={c.id} {...resizeCatalog(String(3+i))}>{c.name}</span>)}</div>{list.map((item,index)=><article key={item.id} style={catalogColumns}><b className="rownumber">{index+1}</b><h3>{item.title}</h3><p className="workdescription">{item.description||"—"}</p>{companies.map(c=>{const assigned=assignments.find(a=>a.work_definition_id===item.id&&a.company_id===c.id);const allowedEmployees=catalogAllowedEmployees(c.id);return <label className={assigned?"catalogassignee assignedname":"catalogassignee"} key={c.id}><select aria-label={`${c.name} üçün istifadəçi`} value={assigned?.employee_id||""} onChange={e=>e.target.value&&onCatalogAssign(item.id,c.id,Number(e.target.value))}><option value="">Seçin</option>{allowedEmployees.map(employee=><option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>})}</article>)}</div>;
   };
   const assignmentGroup=(freq:"monthly"|"weekly"|"daily")=>{
     const list=rows.filter(row=>row.frequency===freq);
     if(!list.length)return <Empty text="Bu dövr üzrə təyin olunmuş iş yoxdur."/>;
-    return <div className="workmatrix"><div className="workmatrixhead" style={matrixColumns}><span {...resizeMatrix(0)}>№</span><span {...resizeMatrix(1)}>İşlərin siyahısı</span><span {...resizeMatrix(2)}>İşin açıqlaması</span><span {...resizeMatrix(3)}>İstifadəçi</span>{companies.map((c,i)=><span key={c.id} {...resizeMatrix(4+i)}>{c.name}</span>)}</div>{list.map((row,index)=><article key={row.key} style={matrixColumns}><b className="rownumber">{index+1}</b><h3>{row.title}</h3><p className="workdescription">{row.description||"—"}</p><span className="matrixuser">{row.employeeName}</span>{companies.map(c=>{const assigned=assignments.find(a=>a.work_definition_id===row.workId&&a.employee_id===row.employeeId&&a.company_id===c.id);const completed=Boolean(assigned?.is_completed);return assigned?<button type="button" disabled={completed} aria-label={`${c.name}: ${completed?"icra edilib":"icra edildi kimi işarələ"}`} className={`matrixplus assigned completionmark ${completed?"completed":""}`} key={c.id} onClick={()=>onComplete(assigned.id)}>{completed?<span className="completioncheck">✓</span>:null}</button>:<span className="matrixplus" key={c.id}/>})}</article>)}</div>;
+    return <div className="workmatrix"><div className="workmatrixhead" style={matrixColumns}><span {...resizeMatrix("0")}>№</span><span {...resizeMatrix("1")}>İşlərin siyahısı</span><span {...resizeMatrix("2")}>İşin açıqlaması</span><span {...resizeMatrix("3")}>İstifadəçi</span>{companies.map((c,i)=><span key={c.id} {...resizeMatrix(String(4+i))}>{c.name}</span>)}</div>{list.map((row,index)=><article key={row.key} style={matrixColumns}><b className="rownumber">{index+1}</b><h3>{row.title}</h3><p className="workdescription">{row.description||"—"}</p><span className="matrixuser">{row.employeeName}</span>{companies.map(c=>{const assigned=assignments.find(a=>a.work_definition_id===row.workId&&a.employee_id===row.employeeId&&a.company_id===c.id);const completed=Boolean(assigned?.is_completed);return assigned?<button type="button" disabled={completed} aria-label={`${c.name}: ${completed?"icra edilib":"icra edildi kimi işarələ"}`} className={`matrixplus assigned completionmark ${completed?"completed":""}`} key={c.id} onClick={()=>onComplete(assigned.id)}>{completed?<span className="completioncheck">✓</span>:null}</button>:<span className="matrixplus" key={c.id}/>})}</article>)}</div>;
   };
   const frequencyEyebrow=frequency==="monthly"?"AYLIQ SABİT İŞLƏR":"HƏFTƏLİK SABİT İŞLƏR";
   return <section className={`panel pagepanel recurringpage ${frequency}`}><div className="pageactions recurringhead"><div><span className="sectioneyebrow">{frequencyEyebrow}</span><h2>{employeeView?"Mənim sabit işlərim":assignmentView?"Personal sabit işlər":"Sabit işlərin siyahısı"}</h2><p>{employeeView?"Sizə sabit olaraq həvalə edilmiş işlər və firmalar":assignmentView?"Sabit işlərin personal və firmalar üzrə bölgüsü":"Sabit işlərin ümumi siyahısı"}</p></div>{!employeeView&&assignmentView&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Sabit iş yarat</Button>}</div>{!assignmentView?<><div className="catalogfilters"><label><span>Firma</span><select value={catalogCompanyFilter} onChange={e=>setCatalogCompanyFilter(e.target.value)}><option value="all">Bütün firmalar</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label><span>İstifadəçi</span><select value={catalogEmployeeFilter} onChange={e=>setCatalogEmployeeFilter(e.target.value)}><option value="all">Bütün istifadəçilər</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label></div><div className="workadd catalogadd"><Input placeholder="Yeni sabit işin adını yazın" value={form.workTitle||""} onChange={e=>setForm({...form,workTitle:e.target.value})}/><Input placeholder="İşin açıqlamasını yazın" value={form.workDescription||""} onChange={e=>setForm({...form,workDescription:e.target.value})}/><select value={form.workFrequency||frequency} onChange={e=>setForm({...form,workFrequency:e.target.value})}><option value="monthly">Aylıq</option><option value="weekly">Həftəlik</option></select><Button disabled={!form.workTitle?.trim()} onClick={onAdd}><Plus/>Siyahıya əlavə et</Button></div>{filteredCatalogItems.length?catalogGroup(frequency):<Empty text={items.length?"Seçilmiş filtrlərə uyğun sabit iş tapılmadı.":"Sabit işlərin siyahısı hələ boşdur."}/>}</>:<>{creating&&<div className="fixedtaskcreate"><div className="fixedtaskfields"><label>Sabit iş<select value={form.assignWorkId||""} onChange={e=>setForm({...form,assignWorkId:e.target.value})}><option value="">Sabit işi seçin</option>{items.filter(i=>i.frequency===frequency).map(i=><option key={i.id} value={i.id}>{i.title}</option>)}</select></label><label>İstifadəçi<select value={form.assignEmployeeId||""} onChange={e=>setForm({...form,assignEmployeeId:e.target.value})}><option value="">İstifadəçini seçin</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label></div><div className="fixedcompanies"><b>Firmaları seçin</b><div>{companies.map(c=><label key={c.id}><input type="checkbox" checked={selectedCompanies.has(c.id)} onChange={e=>toggleAssignCompany(c.id,e.target.checked)}/><span>✓</span>{c.name}</label>)}</div></div><div className="fixedtaskactions"><button onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={!form.assignWorkId||!form.assignEmployeeId||!selectedCompanies.size} onClick={()=>{onAssign();setCreating(false)}}>Sabit işi yarat</Button></div></div>}{rows.length?assignmentGroup(frequency):<Empty text={employeeView?"Sizə hələ sabit iş təyin edilməyib.":"Hələ personala sabit iş təyin edilməyib."}/>}</>}</section>}
@@ -786,44 +839,97 @@ function SelectEmployee({employees,value,set}:{employees:Employee[];value:string
 function SelectCompany({companies,value,set}:{companies:Company[];value:string;set:(v:string)=>void}){return <label className="field">Firma<select value={value} onChange={e=>set(e.target.value)}><option value="">Firma seçin</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
 function Stat({icon,tone,label,value}:{icon:React.ReactNode;tone:string;label:string;value:number}){return <article className="stat"><i className={tone}>{icon}</i><div><p>{label}</p><strong>{value}</strong></div></article>}
 function Empty({text}:{text:string}){return <div className="empty"><ClipboardList/><p>{text}</p></div>}
-function useColumnWidths(storageKey:string){
-  const [widths,setWidths]=useState<Record<number,number>>(()=>{
+function useTableColumns(storageKey:string,defaultKeys:string[]){
+  const heal=(order:string[])=>{
+    const known=new Set(defaultKeys);
+    const healed=order.filter(k=>known.has(k));
+    for(const k of defaultKeys)if(!healed.includes(k))healed.push(k);
+    return healed;
+  };
+  const [state,setState]=useState<{order:string[];widths:Record<string,number>}>(()=>{
+    if(typeof window==="undefined")return {order:defaultKeys,widths:{}};
+    try{
+      const raw=window.localStorage.getItem(`cols:${storageKey}`);
+      if(!raw)return {order:defaultKeys,widths:{}};
+      const parsed=JSON.parse(raw);
+      return {order:heal(Array.isArray(parsed.order)?parsed.order:defaultKeys),widths:parsed.widths&&typeof parsed.widths==="object"?parsed.widths:{}};
+    }catch{return {order:defaultKeys,widths:{}}}
+  });
+  const persist=(next:{order:string[];widths:Record<string,number>})=>{
+    setState(next);
+    if(typeof window!=="undefined"){try{window.localStorage.setItem(`cols:${storageKey}`,JSON.stringify(next))}catch{}}
+  };
+  const setWidth=(key:string,width:number)=>persist({...state,widths:{...state.widths,[key]:Math.round(width)}});
+  const moveColumn=(key:string,targetKey:string)=>{
+    if(key===targetKey)return;
+    const order=state.order.filter(k=>k!==key);
+    const targetIndex=order.indexOf(targetKey);
+    if(targetIndex<0)return;
+    order.splice(targetIndex,0,key);
+    persist({...state,order});
+  };
+  return {order:state.order,widths:state.widths,setWidth,moveColumn};
+}
+function useSimpleColumnWidths(storageKey:string){
+  const [widths,setWidths]=useState<Record<string,number>>(()=>{
     if(typeof window==="undefined")return {};
     try{const raw=window.localStorage.getItem(`colw:${storageKey}`);return raw?JSON.parse(raw):{}}catch{return {}}
   });
-  const setWidth=(index:number,width:number)=>{
+  const setWidth=(key:string,width:number)=>{
     setWidths(prev=>{
-      const next={...prev,[index]:Math.round(width)};
+      const next={...prev,[key]:Math.round(width)};
       if(typeof window!=="undefined"){try{window.localStorage.setItem(`colw:${storageKey}`,JSON.stringify(next))}catch{}}
       return next;
     });
   };
   return [widths,setWidth] as const;
 }
-function useEdgeResize(onResize:(index:number,width:number)=>void,min=60){
-  const [hoverIndex,setHoverIndex]=useState<number|null>(null);
+function useColumnDrag(moveColumn:(key:string,targetKey:string)=>void){
+  const [draggingKey,setDraggingKey]=useState<string|null>(null);
+  const [overKey,setOverKey]=useState<string|null>(null);
+  const handleProps=(key:string)=>({
+    draggable:true,
+    onDragStart:(e:React.DragEvent)=>{setDraggingKey(key);e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",key)}catch{}},
+    onDragEnd:()=>{setDraggingKey(null);setOverKey(null)},
+  });
+  const targetProps=(key:string)=>({
+    onDragOver:(e:React.DragEvent)=>{if(!draggingKey)return;e.preventDefault();e.dataTransfer.dropEffect="move";if(overKey!==key)setOverKey(key)},
+    onDragLeave:()=>setOverKey(current=>current===key?null:current),
+    onDrop:(e:React.DragEvent)=>{e.preventDefault();if(draggingKey&&draggingKey!==key)moveColumn(draggingKey,key);setDraggingKey(null);setOverKey(null)},
+    className:overKey===key?"coldragover":undefined,
+  });
+  return {handleProps,targetProps};
+}
+function DragHandle(props:React.HTMLAttributes<HTMLSpanElement>){return <span className="colhandle" role="button" tabIndex={0} aria-label="Sütunu sürüşdürərək yerini dəyiş" title="Sütunu sürüşdürərək yerini dəyiş" {...props}>⠿</span>}
+function SortableTh({resize,drag,handleProps,className,children}:{resize:{onMouseMove:(e:React.MouseEvent<HTMLElement>)=>void;onMouseLeave:()=>void;onMouseDown:(e:React.MouseEvent<HTMLElement>)=>void;className?:string};drag:{onDragOver:(e:React.DragEvent)=>void;onDragLeave:()=>void;onDrop:(e:React.DragEvent)=>void;className?:string};handleProps:React.HTMLAttributes<HTMLSpanElement>;className?:string;children:React.ReactNode}){
+  return <th onMouseMove={resize.onMouseMove} onMouseLeave={resize.onMouseLeave} onMouseDown={resize.onMouseDown} onDragOver={drag.onDragOver} onDragLeave={drag.onDragLeave} onDrop={drag.onDrop} className={joinClass(resize.className,drag.className,className)}><DragHandle {...handleProps}/>{children}</th>;
+}
+function useEdgeResize(onResize:(key:string,width:number)=>void,min=60){
+  const [hoverKey,setHoverKey]=useState<string|null>(null);
   const EDGE=8;
   const near=(e:React.MouseEvent<HTMLElement>)=>Math.abs(e.currentTarget.getBoundingClientRect().right-e.clientX)<=EDGE;
-  return (index:number)=>({
-    onMouseMove:(e:React.MouseEvent<HTMLElement>)=>setHoverIndex(near(e)?index:null),
-    onMouseLeave:()=>setHoverIndex(current=>current===index?null:current),
+  return (key:string)=>({
+    onMouseMove:(e:React.MouseEvent<HTMLElement>)=>setHoverKey(near(e)?key:null),
+    onMouseLeave:()=>setHoverKey(current=>current===key?null:current),
     onMouseDown:(e:React.MouseEvent<HTMLElement>)=>{
       if(!near(e))return;
       e.preventDefault();e.stopPropagation();
       const startX=e.clientX;
       const startWidth=e.currentTarget.getBoundingClientRect().width;
       document.body.classList.add("colresizing");
-      const onMove=(ev:MouseEvent)=>{ev.preventDefault();onResize(index,Math.max(min,startWidth+(ev.clientX-startX)))};
+      const onMove=(ev:MouseEvent)=>{ev.preventDefault();onResize(key,Math.max(min,startWidth+(ev.clientX-startX)))};
       const onUp=()=>{document.body.classList.remove("colresizing");window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp)};
       window.addEventListener("mousemove",onMove);
       window.addEventListener("mouseup",onUp);
     },
-    className:hoverIndex===index?"edgeresizing":undefined,
+    className:hoverKey===key?"edgeresizing":undefined,
   });
 }
-function ColGroup({defaults,widths}:{defaults:number[];widths:Record<number,number>}){
-  return <colgroup>{defaults.map((d,i)=><col key={i} style={{width:widths[i]||d}}/>)}</colgroup>;
+function ColGroup({order,defaultWidths,widths,extraKeys=[]}:{order:string[];defaultWidths:Record<string,number>;widths:Record<string,number>;extraKeys?:string[]}){
+  return <colgroup>{order.map(key=><col key={key} style={{width:widths[key]||defaultWidths[key]}}/>)}{extraKeys.map(key=><col key={key} style={{width:widths[key]||defaultWidths[key]||140}}/>)}</colgroup>;
 }
+function joinClass(...parts:Array<string|undefined>){return parts.filter(Boolean).join(" ")||undefined}
+function ActionsHeader({hasSearch=false}:{hasSearch?:boolean}){return <><span className="colhandle" aria-hidden="true" style={{visibility:"hidden"}}>⠿</span>{hasSearch&&<input aria-hidden="true" tabIndex={-1} readOnly value="" style={{visibility:"hidden"}}/>}<span>Əməliyyat</span></>}
 function DebugOverlay(){
   const [info,setInfo]=useState("");
   useEffect(()=>{
