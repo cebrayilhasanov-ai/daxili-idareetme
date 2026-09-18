@@ -107,12 +107,11 @@ export default function Home(){
   if(authLoading&&!user)return <div className="authpage"><div className="authcard"><div className="authlogo">Dİ</div><h1>Daxili İdarəetmə</h1><p>Giriş yoxlanılır...</p></div></div>;
   if(!user)return <LoginScreen form={authForm} setForm={setAuthForm} error={error} loading={authLoading} onLogin={()=>void signIn()}/>;
   return <div className="shell">
-    <DebugOverlay/>
     {menu&&<button className="shade" onClick={()=>setMenu(false)}/>}
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.36</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.37</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -943,21 +942,6 @@ function ColGroup({order,defaultWidths,widths,extraKeys=[]}:{order:string[];defa
 }
 function joinClass(...parts:Array<string|undefined>){return parts.filter(Boolean).join(" ")||undefined}
 function ActionsHeader({hasSearch=false}:{hasSearch?:boolean}){return <>{hasSearch&&<input aria-hidden="true" tabIndex={-1} readOnly value="" style={{visibility:"hidden"}}/>}<span>Əməliyyat</span></>}
-function DebugOverlay(){
-  const [info,setInfo]=useState("");
-  useEffect(()=>{
-    const onMove=(e:MouseEvent)=>{
-      const el=document.elementFromPoint(e.clientX,e.clientY) as HTMLElement|null;
-      const th=el?.closest("th") as HTMLElement|null;
-      const rect=el?.getBoundingClientRect();
-      const thRect=th?.getBoundingClientRect();
-      setInfo(`mouseX=${e.clientX} | under-cursor: <${el?.tagName.toLowerCase()} class="${(el?.className||"").toString().slice(0,40)}"> left=${rect?Math.round(rect.left):"-"} right=${rect?Math.round(rect.right):"-"} width=${rect?Math.round(rect.width):"-"} || closest <th>: left=${thRect?Math.round(thRect.left):"-"} right=${thRect?Math.round(thRect.right):"-"} width=${thRect?Math.round(thRect.width):"-"} cursor=${el?getComputedStyle(el).cursor:"-"}`);
-    };
-    window.addEventListener("mousemove",onMove);
-    return ()=>window.removeEventListener("mousemove",onMove);
-  },[]);
-  return <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#000",color:"#0f0",fontSize:11,padding:"6px 10px",zIndex:99999,fontFamily:"monospace",pointerEvents:"none",whiteSpace:"pre-wrap"}}>{info}</div>;
-}
 function RatingStars({value,compact=false,twoRows=false}:{value:number;compact?:boolean;twoRows?:boolean}){
   const star=(n:number)=><span key={n} className={n<=value?"filled":"empty"}>★</span>;
   if(twoRows)return <span className={joinClass(compact?"ratingstars compact":"ratingstars","tworows")}><span className="starsrow">{[1,2,3,4,5].map(star)}</span><span className="starsrow">{[6,7,8,9,10].map(star)}</span></span>;
