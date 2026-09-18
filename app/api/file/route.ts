@@ -22,16 +22,14 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try { await requireUser(request); } catch { return new Response("Giriş tələb olunur.", { status: 401 }); }
-  const url = new URL(request.url);
-  const key = url.searchParams.get("key");
+  const key = new URL(request.url).searchParams.get("key");
   if (!key) return new Response("Fayl seçilməyib.", { status: 400 });
   const object = await env.FILES.get(key);
   if (!object) return new Response("Fayl tapılmadı.", { status: 404 });
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   const isImage = (object.httpMetadata?.contentType || "").startsWith("image/");
-  const wantsInline = url.searchParams.get("view") === "1";
-  headers.set("content-disposition", `${isImage || wantsInline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(object.customMetadata?.originalName || "fayl")}`);
+  headers.set("content-disposition", `${isImage ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(object.customMetadata?.originalName || "fayl")}`);
   headers.set("content-length", String(object.size));
   return new Response(object.body, { headers });
 }
