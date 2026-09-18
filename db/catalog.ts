@@ -137,8 +137,6 @@ async function ensureSchema() {
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_name TEXT").run();
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_size INTEGER").run();
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_type TEXT").run();
-  if (!personalWorksColumns2.results.some((column) => column.name === "delegated_task_id")) await db().prepare("ALTER TABLE personal_works ADD COLUMN delegated_task_id INTEGER REFERENCES tasks(id)").run();
-  if (!personalWorksColumns2.results.some((column) => column.name === "delegated_employee_id")) await db().prepare("ALTER TABLE personal_works ADD COLUMN delegated_employee_id INTEGER REFERENCES employees(id)").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_checklist_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
@@ -490,7 +488,6 @@ export async function updateTask(input: { id: number; status?: string; evaluatio
       input.id,
     ).run();
   if (status === "Təsdiqlənib") {
-    await db().prepare("UPDATE personal_works SET status = 'Tamamlanıb', completed_at = ? WHERE delegated_task_id = ?").bind(completedAt, input.id).run();
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
   }
 }
@@ -535,13 +532,10 @@ export async function deleteChecklistItem(input: { id: number }) {
 
 export async function getPersonalWorks(userId: number | null) {
   await ensureSchema();
-  const base = `SELECT personal_works.*, app_users.name AS owner_name, companies.name AS company_name,
-      delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status
+  const base = `SELECT personal_works.*, app_users.name AS owner_name, companies.name AS company_name
     FROM personal_works
     JOIN app_users ON app_users.id = personal_works.user_id
-    LEFT JOIN companies ON companies.id = personal_works.company_id
-    LEFT JOIN employees AS delegated_employee ON delegated_employee.id = personal_works.delegated_employee_id
-    LEFT JOIN tasks AS delegated_task ON delegated_task.id = personal_works.delegated_task_id`;
+    LEFT JOIN companies ON companies.id = personal_works.company_id`;
   if (userId) {
     return (await db().prepare(`${base} WHERE personal_works.user_id = ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(userId).all()).results;
   }
@@ -568,30 +562,12 @@ export async function updatePersonalWorkStatus(input: { id: number; userId: numb
   await db().prepare("UPDATE personal_works SET status = ?, completed_at = ? WHERE id = ?").bind(input.status, completedAt, input.id).run();
 }
 
-export async function delegatePersonalWork(input: { id: number; userId: number; employeeId: number }) {
-  await ensureSchema();
-  const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
-  if (!current) throw new Error("İş tapılmadı.");
-  if (Number(current.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
-  if (current.delegated_task_id) throw new Error("Bu iş artıq həvalə edilib.");
-  if (!current.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
-  if (!current.due_at) throw new Error("Həvalə etmək üçün əvvəlcə son tarixi təyin edin.");
-  const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, current.company_id).first();
-  if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
-  const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
-    .bind(input.employeeId, current.company_id, current.title, current.description, current.due_at, current.due_at, new Date().toISOString()).run();
-  const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
-  await db().prepare("UPDATE personal_works SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
-}
-
 export async function deletePersonalWork(input: { id: number; userId: number }) {
   await ensureSchema();
-  const current = await db().prepare("SELECT user_id, status, delegated_task_id FROM personal_works WHERE id = ?").bind(input.id).first<{ user_id: number; status: string; delegated_task_id: number | null }>();
+  const current = await db().prepare("SELECT user_id, status FROM personal_works WHERE id = ?").bind(input.id).first<{ user_id: number; status: string }>();
   if (!current) throw new Error("İş tapılmadı.");
   if (current.user_id !== input.userId) throw new Error("Bu iş sizə aid deyil.");
   if (current.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu iş silinə bilər.");
-  if (current.delegated_task_id) throw new Error("Həvalə edilmiş iş silinə bilməz.");
   await db().prepare("DELETE FROM personal_works WHERE id = ?").bind(input.id).run();
 }
 
