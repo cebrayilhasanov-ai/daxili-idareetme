@@ -112,7 +112,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.35</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.36</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -702,6 +702,8 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   };
   const create=async()=>{
     if(!(form.outgoingNo||"").trim())return;
+    const voenValue=(form.voen||"").trim();
+    if(voenValue&&!customers.some(c=>c.voen===voenValue)){setError("Bu VÖEN müştəri siyahısında tapılmadı. Zəhmət olmasa düzgün VÖEN daxil edin.");return}
     setBusy(true);setError("");
     try{
       let attachment:Record<string,unknown>={};
@@ -716,6 +718,8 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditFile(null);setEditForm({outgoingNo:item.outgoing_no||"",outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",sendingDepartment:item.sending_department||"",documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",copies:item.copies||"",documentNumber:item.document_number||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||""})};
   const cancelEdit=()=>{setEditingId(null);setEditForm({});setEditFile(null)};
   const saveEdit=async(id:number)=>{
+    const voenValue=(editForm.voen||"").trim();
+    if(voenValue&&!customers.some(c=>c.voen===voenValue)){setError("Bu VÖEN müştəri siyahısında tapılmadı. Zəhmət olmasa düzgün VÖEN daxil edin.");return}
     setEditBusy(true);setError("");
     try{
       let attachment:Record<string,unknown>={};
@@ -752,8 +756,8 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
     copies:(values,set)=><label className="field" key="copies">Sənədin nüsxəsi<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{copiesOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     documentNumber:(values,set)=><Field key="documentNumber" label="Sənədin Nömrəsi" value={values.documentNumber||""} set={v=>set({...values,documentNumber:v})}/>,
     documentDate:(values,set)=><Field key="documentDate" label="Sənədin tarixi" type="date" value={values.documentDate||""} set={v=>set({...values,documentDate:v})}/>,
-    voen:(values,set)=><label className="field" key="voen">Voeni<select value={values.voen||""} onChange={e=>{const selected=customers.find(c=>c.voen===e.target.value);set({...values,voen:e.target.value,organizationName:selected?selected.name:values.organizationName})}}><option value="">Seçin</option>{customers.filter(c=>c.voen).map(c=><option key={c.id} value={c.voen as string}>{c.voen} — {c.name}</option>)}</select></label>,
-    organizationName:(values,set)=><Field key="organizationName" label="Təşkilatın adı" value={values.organizationName||""} set={v=>set({...values,organizationName:v})}/>,
+    voen:(values,set)=><label className="field" key="voen">Voeni<Input value={values.voen||""} onChange={e=>set({...values,voen:e.target.value})} onBlur={e=>{const trimmed=e.target.value.trim();const match=customers.find(c=>c.voen===trimmed);set({...values,voen:trimmed,organizationName:match?match.name:""})}}/></label>,
+    organizationName:(values)=><label className="field" key="organizationName">Təşkilatın adı<Input value={values.organizationName||""} readOnly placeholder="Əvvəlcə VÖEN daxil edin"/></label>,
     phone:(values,set)=><Field key="phone" label="Müştərinin Telefonu" value={values.phone||""} set={v=>set({...values,phone:v})}/>,
     note:(values,set)=><Field key="note" label="Əlavə Qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>,
   };
