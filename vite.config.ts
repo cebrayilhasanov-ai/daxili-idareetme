@@ -1,7 +1,12 @@
+import { existsSync } from "node:fs";
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
+
+// A real wrangler.jsonc (with live D1/R2 resource ids) takes over the DB/FILES
+// bindings entirely. Without it, fall back to the local dev placeholder below.
+const hasWranglerConfig = existsSync(new URL("./wrangler.jsonc", import.meta.url));
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -57,7 +62,7 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,
-        config: localBindingConfig,
+        ...(hasWranglerConfig ? {} : { config: localBindingConfig }),
       }),
     ],
   };
