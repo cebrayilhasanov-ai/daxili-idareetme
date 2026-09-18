@@ -62,7 +62,11 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,
-        ...(hasWranglerConfig ? {} : { config: localBindingConfig }),
+        // The vite build needs `main` to point at the source worker entry
+        // (the dist output doesn't exist yet while building). With a real
+        // wrangler.jsonc present, skip its d1/r2 blocks here so bindings
+        // aren't declared twice; the file supplies those for the actual deploy.
+        config: hasWranglerConfig ? { main: "./worker/index.ts" } : localBindingConfig,
       }),
     ],
   };
