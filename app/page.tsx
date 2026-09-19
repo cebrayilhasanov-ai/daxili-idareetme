@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Bell, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
+import { Bell, Briefcase, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,7 @@ export default function Home(){
   const [taskSubTab,setTaskSubTab]=useState<"tasks"|"monthly"|"weekly">("tasks");
   const [tasksSection,setTasksSection]=useState<"manager"|"mine">("manager");
   const [documentsMenuOpen,setDocumentsMenuOpen]=useState(true);
+  const [hrMenuOpen,setHrMenuOpen]=useState(true);
   const [documentSubTab,setDocumentSubTab]=useState<"templates"|"outgoing"|"incoming">("templates");
   const [notifOpen,setNotifOpen]=useState(false);
 
@@ -101,8 +102,8 @@ export default function Home(){
   const activeEmployees=data.employees.filter(e=>Boolean(e.active));
   const scored=completed.filter(t=>t.evaluation);
   const average=scored.length?(scored.reduce((s,t)=>s+(t.evaluation||0),0)/scored.length).toFixed(1):"—";
-  const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"Noqsanlar"};
-  const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","Noqsanlar",CircleAlert],["chat","Çat",MessageCircle]];
+  const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"HR"};
+  const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","HR",Briefcase],["chat","Çat",MessageCircle]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
 
   if(authLoading&&!user)return <div className="authpage"><div className="authcard"><div className="authlogo">Dİ</div><h1>Daxili İdarəetmə</h1><p>Giriş yoxlanılır...</p></div></div>;
@@ -112,11 +113,12 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.47</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.48</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
         if(id==="documents")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setDocumentSubTab("templates");setPage("documents");setMenu(false)}} onDoubleClick={()=>setDocumentsMenuOpen(v=>!v)}><Icon/>{label}</button>{documentsMenuOpen&&<div className="navchildren"><button className={page==="documents"&&documentSubTab==="templates"?"on":""} onClick={()=>{setDocumentSubTab("templates");setPage("documents");setMenu(false)}}>Şablonlar</button><button className={page==="documents"&&documentSubTab==="outgoing"?"on":""} onClick={()=>{setDocumentSubTab("outgoing");setPage("documents");setMenu(false)}}>Çıxan Sənədlər</button><button className={page==="documents"&&documentSubTab==="incoming"?"on":""} onClick={()=>{setDocumentSubTab("incoming");setPage("documents");setMenu(false)}}>Daxil Olan Sənədlər</button></div>}</Fragment>;
+        if(id==="hr")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage("hr");setMenu(false)}} onDoubleClick={()=>setHrMenuOpen(v=>!v)}><Icon/>{label}</button>{hrMenuOpen&&<div className="navchildren"><button className={page==="hr"?"on":""} onClick={()=>{setPage("hr");setMenu(false)}}>Noqsanlar</button></div>}</Fragment>;
         return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}{id==="chat"&&chatUnread>0&&<em>{chatUnread}</em>}</button></Fragment>;
       })}</nav>
       </div>
