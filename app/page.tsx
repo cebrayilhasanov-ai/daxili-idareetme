@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Bell, Briefcase, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
+import { Bell, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ type AppUser = { id:number; name:string; email:string; role:"admin"|"employee"; 
 type ManagedUser = { id:number; name:string; email:string; role:string; employee_id:number|null; active:number; must_change_password:number };
 type Page = "dashboard"|"tasks"|"chat"|"employees"|"companies"|"customers"|"audit"|"documents"|"hr";
 type AuditItem = { id:number; actor_name:string; action:string; target_type:string; target_label:string|null; created_at:string };
+type Violation = { id:number; employee_id:number; employee_name:string; title:string; note:string|null; created_by_name:string|null; created_at:string };
 type ChatThread = { id:number; type:"group"|"direct"; name:string; avatar_key:string|null; last_message:string|null; last_message_at:string|null; unread:number };
 type ChatMessage = { id:number; thread_id:number; sender_user_id:number; sender_name:string; sender_avatar_key:string|null; body:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string };
 type ChatUser = { id:number; name:string; email:string; avatar_key:string|null };
@@ -100,8 +101,8 @@ export default function Home(){
   const activeEmployees=data.employees.filter(e=>Boolean(e.active));
   const scored=completed.filter(t=>t.evaluation);
   const average=scored.length?(scored.reduce((s,t)=>s+(t.evaluation||0),0)/scored.length).toFixed(1):"—";
-  const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"HR"};
-  const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","HR",Briefcase],["chat","Çat",MessageCircle]];
+  const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"Noqsanlar"};
+  const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","Noqsanlar",CircleAlert],["chat","Çat",MessageCircle]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
 
   if(authLoading&&!user)return <div className="authpage"><div className="authcard"><div className="authlogo">Dİ</div><h1>Daxili İdarəetmə</h1><p>Giriş yoxlanılır...</p></div></div>;
@@ -111,7 +112,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.46</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.47</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{overdue.length>0&&<em>{overdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -141,7 +142,7 @@ export default function Home(){
         {documentSubTab==="templates"&&<DocumentsPage isAdmin={isAdmin}/>}
         {documentSubTab==="outgoing"&&<OutgoingDocumentsPage isAdmin={isAdmin}/>}
         {documentSubTab==="incoming"&&<PlaceholderPage title="Daxil Olan Sənədlər" text="Bu bölmə tezliklə hazırlanacaq."/>}</>}
-        {page==="hr"&&<PlaceholderPage title="HR" text="Bu bölmə tezliklə hazırlanacaq."/>}
+        {page==="hr"&&<ViolationsPage isAdmin={isAdmin} employees={data.employees}/>}
       </>}
     </main>
     <Dialog open={dialog!==null} onOpenChange={v=>!v&&setDialog(null)}><DialogContent className="businessdialog">
@@ -583,6 +584,57 @@ function AuditPage(){
   const [loading,setLoading]=useState(true);
   useEffect(()=>{void(async()=>{try{const response=await fetch("/api/audit");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Tarixçə yüklənmədi.")}finally{setLoading(false)}})()},[]);
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">ADMİN ƏMƏLİYYATLARI</span><h2>Tarixçə</h2><p>Son admin əməliyyatları xronoloji ardıcıllıqla</p></div></div>{error&&<div className="errorbox">{error}</div>}{loading?<div className="loading">Tarixçə yüklənir...</div>:<div className="auditlist">{items.length?items.map(item=><article key={item.id}><b>{formatDate(item.created_at)}</b><span>{item.actor_name}</span><span>{item.action}</span><span>{item.target_label||"—"}</span></article>):<Empty text="Hələ qeyd yoxdur."/>}</div>}</section>
+}
+function ViolationsPage({isAdmin,employees}:{isAdmin:boolean;employees:Employee[]}){
+  const [items,setItems]=useState<Violation[]>([]);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  const [creating,setCreating]=useState(false);
+  const [form,setForm]=useState<Record<string,string>>({});
+  const [busy,setBusy]=useState(false);
+  const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/violations");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Qeydlər yüklənmədi.")}finally{setLoading(false)}};
+  useEffect(()=>{void load()},[]);
+  const create=async()=>{
+    if(!form.employeeId||!(form.title||"").trim())return;
+    setBusy(true);setError("");
+    try{
+      const response=await fetch("/api/violations",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({employeeId:Number(form.employeeId),title:form.title,note:form.note})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error);
+      setItems(result.items||[]);setForm({});setCreating(false);
+    }catch(e){setError(e instanceof Error?e.message:"Qeyd saxlanmadı.")}
+    finally{setBusy(false)}
+  };
+  const remove=async(item:Violation)=>{
+    if(!window.confirm(`"${item.title}" qeydini silmək istəyirsiniz?`))return;
+    setError("");
+    try{
+      const response=await fetch(`/api/violations?id=${item.id}`,{method:"DELETE"});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error);
+      setItems(result.items||[]);
+    }catch(e){setError(e instanceof Error?e.message:"Qeyd silinmədi.")}
+  };
+  const counts=Object.values(items.reduce((acc,item)=>{
+    const existing=acc[item.employee_id];
+    if(existing){existing.count+=1;if(item.created_at>existing.last)existing.last=item.created_at}
+    else acc[item.employee_id]={employeeId:item.employee_id,name:item.employee_name,count:1,last:item.created_at};
+    return acc;
+  },{} as Record<number,{employeeId:number;name:string;count:number;last:string}>)).sort((a,b)=>b.count-a.count);
+  return <section className="panel pagepanel directorypanel">
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Noqsanlar</h2><p>{isAdmin?"Hər bir işçi üzrə qeydə alınmış noqsanların hesabatı":"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni qeyd</Button>}</div>
+    {creating&&<div className="inlinetaskrow documentrow customerrow">
+      <label className="field">İşçi<select value={form.employeeId||""} onChange={e=>setForm({...form,employeeId:e.target.value})}><option value="">Seçin</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
+      <label className="field">Noqsanın başlığı<Input value={form.title||""} onChange={e=>setForm({...form,title:e.target.value})}/></label>
+      <label className="field">Qeyd (istəyə bağlı)<Input value={form.note||""} onChange={e=>setForm({...form,note:e.target.value})}/></label>
+      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!form.employeeId||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Saxlanılır...":"Əlavə et"}</Button></div>
+    </div>}
+    {error&&<div className="errorbox">{error}</div>}
+    {loading?<div className="loading">Yüklənir...</div>:<>
+      {isAdmin&&<div className="employeecards officialcards">{counts.length?counts.map(c=><article key={c.employeeId}><div className="identityblock"><i>{initials(c.name)}</i><div><div className="identitytitle"><h3>{c.name}</h3></div><p><b>Son qeyd:</b> {formatDate(c.last)}</p></div></div><div className="recordmetrics"><span><small>Noqsan sayı</small><b>{c.count}</b></span></div></article>):<Empty text="Hələ heç bir noqsan qeydə alınmayıb."/>}</div>}
+      <div className="auditlist">{items.length?items.map(item=><article key={item.id}><b>{formatDate(item.created_at)}</b><span>{item.employee_name}</span><span>{item.title}</span><span>{item.note||"—"}</span>{isAdmin&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}</article>):<Empty text="Hələ qeyd yoxdur."/>}</div>
+    </>}
+  </section>;
 }
 function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [items,setItems]=useState<DocumentTemplate[]>([]);

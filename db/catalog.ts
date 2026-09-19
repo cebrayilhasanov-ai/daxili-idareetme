@@ -187,6 +187,14 @@ async function ensureSchema() {
     company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     PRIMARY KEY(employee_id, company_id)
   )`).run();
+  await db().prepare(`CREATE TABLE IF NOT EXISTS employee_violations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    note TEXT,
+    created_by_name TEXT,
+    created_at TEXT NOT NULL
+  )`).run();
   const migrated = await db().prepare("SELECT COUNT(*) AS count FROM work_definitions").first<{count:number}>();
   if (!migrated?.count) {
     await db().prepare(`INSERT INTO work_definitions (title, frequency, created_at)
@@ -782,6 +790,35 @@ export async function createRecurring(input: { employeeId: number; title: string
     (employee_id, title, description, due_day, frequency, weekday, due_time, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`)
     .bind(input.employeeId, input.title, input.description || null, input.dueDay || 25, input.frequency || "monthly", input.weekday || null, input.dueTime || "14:00", new Date().toISOString()).run();
   await ensureRecurringTasks();
+}
+
+export async function listViolations() {
+  await ensureSchema();
+  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name
+    FROM employee_violations JOIN employees ON employees.id = employee_violations.employee_id
+    ORDER BY employee_violations.created_at DESC`).all()).results;
+}
+
+export async function listViolationsForEmployee(employeeId: number) {
+  await ensureSchema();
+  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name
+    FROM employee_violations JOIN employees ON employees.id = employee_violations.employee_id
+    WHERE employee_violations.employee_id = ?
+    ORDER BY employee_violations.created_at DESC`).bind(employeeId).all()).results;
+}
+
+export async function createViolation(input: { employeeId: number; title: string; note?: string; createdByName?: string }) {
+  await ensureSchema();
+  const title = input.title?.trim();
+  if (!title) throw new Error("Noqsanın başlığını yazın.");
+  if (!input.employeeId) throw new Error("Personal seçin.");
+  await db().prepare(`INSERT INTO employee_violations (employee_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .bind(input.employeeId, title, input.note?.trim() || null, input.createdByName || null, new Date().toISOString()).run();
+}
+
+export async function deleteViolation(id: number) {
+  await ensureSchema();
+  await db().prepare("DELETE FROM employee_violations WHERE id = ?").bind(id).run();
 }
 
 export async function updateRecurring(input: { id: number; active?: boolean }) {
