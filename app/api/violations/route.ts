@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireUser(request, "admin");
     const body = await request.json();
-    await createViolation({ employeeId: Number(body.employeeId), title: String(body.title || ""), note: body.note, createdByName: user.name });
+    await createViolation({ employeeId: Number(body.employeeId), companyId: body.companyId ? Number(body.companyId) : undefined, title: String(body.title || ""), note: body.note, createdByName: user.name });
     await logAudit(user, "Noqsan qeydə alındı", "employee", `#${body.employeeId}`);
     return Response.json({ items: await listViolations() });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Qeyd saxlanmadı." }, { status: 400 }); }

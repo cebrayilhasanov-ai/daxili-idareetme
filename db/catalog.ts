@@ -195,6 +195,10 @@ async function ensureSchema() {
     created_by_name TEXT,
     created_at TEXT NOT NULL
   )`).run();
+  const violationColumns = await db().prepare("PRAGMA table_info(employee_violations)").all<{ name: string }>();
+  if (!violationColumns.results.some((column) => column.name === "company_id")) {
+    await db().prepare("ALTER TABLE employee_violations ADD COLUMN company_id INTEGER REFERENCES companies(id)").run();
+  }
   const migrated = await db().prepare("SELECT COUNT(*) AS count FROM work_definitions").first<{count:number}>();
   if (!migrated?.count) {
     await db().prepare(`INSERT INTO work_definitions (title, frequency, created_at)
@@ -794,26 +798,30 @@ export async function createRecurring(input: { employeeId: number; title: string
 
 export async function listViolations() {
   await ensureSchema();
-  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name
-    FROM employee_violations JOIN employees ON employees.id = employee_violations.employee_id
+  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name, companies.name AS company_name
+    FROM employee_violations
+    JOIN employees ON employees.id = employee_violations.employee_id
+    LEFT JOIN companies ON companies.id = employee_violations.company_id
     ORDER BY employee_violations.created_at DESC`).all()).results;
 }
 
 export async function listViolationsForEmployee(employeeId: number) {
   await ensureSchema();
-  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name
-    FROM employee_violations JOIN employees ON employees.id = employee_violations.employee_id
+  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name, companies.name AS company_name
+    FROM employee_violations
+    JOIN employees ON employees.id = employee_violations.employee_id
+    LEFT JOIN companies ON companies.id = employee_violations.company_id
     WHERE employee_violations.employee_id = ?
     ORDER BY employee_violations.created_at DESC`).bind(employeeId).all()).results;
 }
 
-export async function createViolation(input: { employeeId: number; title: string; note?: string; createdByName?: string }) {
+export async function createViolation(input: { employeeId: number; companyId?: number; title: string; note?: string; createdByName?: string }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("Noqsanın başlığını yazın.");
   if (!input.employeeId) throw new Error("Personal seçin.");
-  await db().prepare(`INSERT INTO employee_violations (employee_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?)`)
-    .bind(input.employeeId, title, input.note?.trim() || null, input.createdByName || null, new Date().toISOString()).run();
+  await db().prepare(`INSERT INTO employee_violations (employee_id, company_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(input.employeeId, input.companyId || null, title, input.note?.trim() || null, input.createdByName || null, new Date().toISOString()).run();
 }
 
 export async function deleteViolation(id: number) {
