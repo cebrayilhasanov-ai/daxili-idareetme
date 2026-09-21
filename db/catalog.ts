@@ -553,10 +553,24 @@ export async function getPersonalWorks(userId: number | null) {
     FROM personal_works
     JOIN app_users ON app_users.id = personal_works.user_id
     LEFT JOIN companies ON companies.id = personal_works.company_id`;
-  if (userId) {
-    return (await db().prepare(`${base} WHERE personal_works.user_id = ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(userId).all()).results;
+  const works = userId
+    ? (await db().prepare(`${base} WHERE personal_works.user_id = ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(userId).all<Record<string, unknown> & { id: number }>()).results
+    : (await db().prepare(`${base} ORDER BY personal_works.created_at DESC, personal_works.id DESC`).all<Record<string, unknown> & { id: number }>()).results;
+  // Who each work's steps were handed to, and how many of that person's steps are done (a step is checked once its task is approved).
+  const delegations = (await db().prepare(`SELECT items.personal_work_id AS work_id, employees.id AS employee_id, employees.name AS name, items.done AS done
+    FROM personal_work_checklist_items AS items
+    JOIN employees ON employees.id = items.delegated_employee_id
+    WHERE items.delegated_task_id IS NOT NULL ORDER BY items.id`).all<{ work_id: number; employee_id: number; name: string; done: number }>()).results;
+  const sharedByWork = new Map<number, Map<number, { employee_id: number; name: string; total: number; done: number }>>();
+  for (const row of delegations) {
+    const people = sharedByWork.get(row.work_id) ?? new Map();
+    const person = people.get(row.employee_id) ?? { employee_id: row.employee_id, name: row.name, total: 0, done: 0 };
+    person.total += 1;
+    person.done += row.done ? 1 : 0;
+    people.set(row.employee_id, person);
+    sharedByWork.set(row.work_id, people);
   }
-  return (await db().prepare(`${base} ORDER BY personal_works.created_at DESC, personal_works.id DESC`).all()).results;
+  return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []) }));
 }
 
 export async function createPersonalWork(input: { userId: number; title: string; description?: string; companyId?: number; dueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {

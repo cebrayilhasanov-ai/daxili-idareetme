@@ -342,3 +342,7 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .checklistcommentactions{display:flex;justify-content:flex-end;gap:8px}
 .checklistcommentactions .inlinecancel{padding:0 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer}
 .checklistcommentactions .inlinecancel:hover{background:#f1f5f9}
+.sharedlist{display:grid;gap:3px}
+.sharedname{color:#d92d20;font-size:11px;font-weight:800;line-height:1.35}
+.sharedname small{font-size:10px;font-weight:700;opacity:.85}
+.sharedname.done{color:#1e3a8a}

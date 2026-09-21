@@ -26,7 +26,7 @@ type ChatUser = { id:number; name:string; email:string; avatar_key:string|null }
 type Customer = { id:number; entity_type:string|null; voen:string|null; name:string; legal_address:string|null; legal_address2:string|null; manager:string|null; created_at:string };
 type ChecklistItem = { id:number; task_id:number; title:string; done:number; created_at:string };
 type ChecklistLikeItem = { id:number; title:string; done:number; delegated_task_id?:number|null; delegated_employee_name?:string|null; delegated_task_status?:string|null; attachment_key?:string|null; attachment_name?:string|null; attachment_size?:number|null };
-type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
+type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[] };
 type PersonalWorkChecklistItem = { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
 type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; created_at:string };
 type OutgoingDocument = { id:number; outgoing_no:string; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string };
@@ -117,7 +117,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.58</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.59</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{unseenOverdue.length>0&&<em>{unseenOverdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -277,6 +277,8 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
   const [checklistBusy,setChecklistBusy]=useState(false);
   const [checklistError,setChecklistError]=useState("");
   const [checklistAttachBusy,setChecklistAttachBusy]=useState<number|null>(null);
+  // Quiet refresh (no loading flash) so the "Paylaşılıb" column updates right after a step is handed over.
+  const reloadItems=async()=>{try{const response=await fetch("/api/personal-works");const body=await response.json();if(response.ok)setItems(body.items||[])}catch{}};
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/personal-works");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const create=async()=>{
@@ -332,6 +334,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
     {key:"document",label:"Əlavə olunan sənəd",width:150,search:i=>i.attachment_name||"Sənəd yoxdur",render:i=>i.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(i.attachment_key)}`}>{i.attachment_name}<small>{formatFileSize(i.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
     {key:"created",label:"Yaranma tarixi",width:140,search:i=>formatDate(i.created_at),render:i=><time>{formatDate(i.created_at)}</time>},
     {key:"due",label:"Son tarix",width:150,search:i=>i.due_at?formatDate(i.due_at):"—",render:i=>i.due_at?<time>{formatDate(i.due_at)}</time>:"—"},
+    {key:"shared",label:"Paylaşılıb",width:180,search:i=>(i.shared||[]).map(s=>s.name).join(" ")||"—",render:i=>i.shared?.length?<div className="sharedlist">{i.shared.map(s=><span key={s.employee_id} className={s.done>=s.total?"sharedname done":"sharedname"} title={s.done>=s.total?"Tamamlayıb, ✓ qoyulub":"İcra edir"}>{s.name}{s.total>1&&<small> ({s.done}/{s.total})</small>}</span>)}</div>:<span className="nodocument">—</span>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("personalworks2",personalWorkColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
@@ -377,6 +380,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
+      void reloadItems();
     }catch(e){setChecklistError(e instanceof Error?e.message:"Həvalə edilmədi.")}
   };
   const attachChecklistFile=async(item:ChecklistLikeItem,file:File)=>{
