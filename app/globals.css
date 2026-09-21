@@ -292,3 +292,26 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .checklistempty{color:#94a3b8;font-size:11px}.checklistitemactions{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;min-height:44px}.checklistdelegate{display:flex;align-items:stretch;gap:5px}.checklistdelegate select{height:auto;border:1px solid #dbe3ee;border-radius:6px;background:#fff;padding:0 8px;font-size:12px;color:#172237;min-width:160px;max-width:220px}.delegatebtn{border:1px solid #0C8599;border-radius:6px;background:#fff;color:#0C8599;padding:4px 8px;font-size:10px;font-weight:700;white-space:nowrap}.delegatebtn:hover{background:#0C8599;color:#fff}.delegatebtn:disabled{opacity:.5;cursor:not-allowed;background:#fff;color:#0C8599}.delegatedtag{grid-column:3;display:flex;align-items:center;padding:4px 9px;border-radius:12px;background:#E3FAFD;color:#0C8599;font-size:9px;font-weight:700;white-space:nowrap}
 @media(max-width:500px){.checklist li label span{white-space:normal;overflow-wrap:anywhere}}
 @media(max-width:600px){.checklistadd{flex-direction:column}}
+.businessdialog[data-resizable]{overflow:visible!important}
+.dialogresizebody{position:relative;height:100%;max-height:calc(100vh - 48px);overflow-x:hidden;overflow-y:auto;border-radius:inherit}
+.businessdialog[data-resized] .dialogresizebody{max-height:none}
+.businessdialog .dialogresizebody>[data-slot=dialog-close]{top:22px!important;right:22px!important;width:34px;height:34px;display:grid;place-items:center;border-radius:9px!important;background:#ffffff14;color:#fff;opacity:1!important}
+.dialogresizehandle{position:absolute;z-index:30;touch-action:none}
+.dialogresizehandle[data-edge=n]{top:-4px;left:14px;right:14px;height:8px;cursor:ns-resize}
+.dialogresizehandle[data-edge=s]{bottom:-4px;left:14px;right:14px;height:8px;cursor:ns-resize}
+.dialogresizehandle[data-edge=e]{right:-5px;top:14px;bottom:14px;width:8px;cursor:ew-resize}
+.dialogresizehandle[data-edge=w]{left:-4px;top:14px;bottom:14px;width:8px;cursor:ew-resize}
+.dialogresizehandle[data-edge=ne]{top:-5px;right:-5px;width:16px;height:16px;cursor:nesw-resize}
+.dialogresizehandle[data-edge=nw]{top:-5px;left:-5px;width:16px;height:16px;cursor:nwse-resize}
+.dialogresizehandle[data-edge=se]{bottom:-5px;right:-5px;width:16px;height:16px;cursor:nwse-resize}
+.dialogresizehandle[data-edge=sw]{bottom:-5px;left:-5px;width:16px;height:16px;cursor:nesw-resize}
+@media(max-width:700px){.dialogresizehandle{display:none}}
+.checklistfile{display:flex;align-items:center;gap:4px;max-width:210px;min-width:0;padding:0 8px;border:1px solid #dbe3ee;border-radius:6px;background:#fff}
+.checklistfilelink{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0C8599;font-size:11px;font-weight:700;text-decoration:none}
+.checklistfilelink:hover{text-decoration:underline}
+.checklistfilelink svg{display:inline;width:12px;height:12px;margin-right:4px;vertical-align:-2px}
+.checklistattach{display:flex;align-items:stretch}
+.checklistattachbtn{display:flex;align-items:center;gap:5px;padding:0 10px;border:1px dashed #94a3b8;border-radius:6px;background:#fff;color:#475569;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer}
+.checklistattachbtn svg{width:13px;height:13px}
+.checklistattachbtn:hover:not(:disabled){border-color:#0C8599;color:#0C8599}
+.checklistattachbtn:disabled{opacity:.6;cursor:wait}

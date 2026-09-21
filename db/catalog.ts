@@ -147,6 +147,10 @@ async function ensureSchema() {
   const checklistItemColumns = await db().prepare("PRAGMA table_info(personal_work_checklist_items)").all<{ name: string }>();
   if (!checklistItemColumns.results.some((column) => column.name === "delegated_task_id")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN delegated_task_id INTEGER REFERENCES tasks(id)").run();
   if (!checklistItemColumns.results.some((column) => column.name === "delegated_employee_id")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN delegated_employee_id INTEGER REFERENCES employees(id)").run();
+  if (!checklistItemColumns.results.some((column) => column.name === "attachment_key")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_key TEXT").run();
+  if (!checklistItemColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_name TEXT").run();
+  if (!checklistItemColumns.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_size INTEGER").run();
+  if (!checklistItemColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_type TEXT").run();
   const employeeColumns = await db().prepare("PRAGMA table_info(employees)").all<{ name: string }>();
   if (!employeeColumns.results.some((column) => column.name === "avatar_key")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN avatar_key TEXT").run();
@@ -623,20 +627,42 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   if (!work.due_at) throw new Error("Həvalə etmək üçün əvvəlcə işin son tarixini təyin edin.");
   const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, work.company_id).first();
   if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
+  // The task gets its own copy of the step's file so deleting either one never orphans the other.
+  let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
+  if (item.attachment_key && env.FILES) {
+    const source = await env.FILES.get(String(item.attachment_key));
+    if (source) {
+      const copyKey = `${crypto.randomUUID()}-${String(item.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
+      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
+      attachment = { key: copyKey, name: (item.attachment_name as string | null) ?? null, size: (item.attachment_size as number | null) ?? null, type: (item.attachment_type as string | null) ?? null };
+    }
+  }
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
-    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, work.description, work.due_at, work.due_at, new Date().toISOString()).run();
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
+    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, work.description, work.due_at, work.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
   const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
   return getPersonalWorkChecklist(Number(item.personal_work_id));
 }
 
+export async function setPersonalWorkChecklistItemAttachment(input: { id: number; attachment: { key: string; name: string; size: number; type: string } | null }) {
+  await ensureSchema();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null }>();
+  if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Həvalə edilmiş addımın faylı dəyişdirilə bilməz.");
+  await db().prepare("UPDATE personal_work_checklist_items SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
+    .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
+  if (item.attachment_key && item.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(item.attachment_key);
+  return getPersonalWorkChecklist(item.personal_work_id);
+}
+
 export async function deletePersonalWorkChecklistItem(input: { id: number }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id, delegated_task_id FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Həvalə edilmiş addım silinə bilməz.");
   await db().prepare("DELETE FROM personal_work_checklist_items WHERE id = ?").bind(input.id).run();
+  if (item.attachment_key && env.FILES) await env.FILES.delete(item.attachment_key);
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 

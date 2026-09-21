@@ -1,4 +1,4 @@
-import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, togglePersonalWorkChecklistItem } from "@/db/catalog";
+import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 
@@ -46,7 +46,12 @@ export async function PATCH(request: Request) {
     await assertAccess(user, existing.personal_work_id);
     const items = body.delegateEmployeeId
       ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, employeeId: Number(body.delegateEmployeeId) })
-      : await togglePersonalWorkChecklistItem({ id, done: Boolean(body.done) });
+      : body.removeAttachment || body.attachmentKey
+        ? await setPersonalWorkChecklistItemAttachment({
+            id,
+            attachment: body.removeAttachment ? null : { key: String(body.attachmentKey), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") },
+          })
+        : await togglePersonalWorkChecklistItem({ id, done: Boolean(body.done) });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım yenilənmədi." }, { status: 500 }); }
 }
