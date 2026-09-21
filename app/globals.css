@@ -316,3 +316,21 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .checklistattachbtn:hover:not(:disabled){border-color:#0C8599;color:#0C8599}
 .checklistattachbtn:disabled{opacity:.6;cursor:wait}
 @media(min-width:701px){.businessdialog[data-resizable] .businessdialogheader{cursor:grab;user-select:none}.businessdialog[data-resizable] .businessdialogheader:active{cursor:grabbing}}
+.businessdialog[data-resizable]{background:#eaf6f9!important}
+.businessdialog[data-resizable] .dialogresizebody{background:linear-gradient(160deg,#e3f6f9 0%,#efeafc 52%,#fdf1e2 100%)}
+.businessdialog[data-resizable] .taskdetailform{background:transparent!important}
+.businessdialog[data-resizable] .taskdetailinfo p{border:1px solid #cfe9ee;border-left:4px solid #0C8599;background:#e9f8fb;box-shadow:0 2px 8px #0c85991a}
+.businessdialog[data-resizable] .taskdetailinfo p b{color:#0a6b7a}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(2){border-color:#dcd3f5;border-left-color:#7c5cd6;background:#f1edfc;box-shadow:0 2px 8px #7c5cd61a}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(2) b{color:#5b3fb0}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(3){border-color:#f4e0b4;border-left-color:#e59b1f;background:#fdf4df;box-shadow:0 2px 8px #e59b1f1a}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(3) b{color:#9a5b00}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(4){border-color:#f5cfd6;border-left-color:#e0566b;background:#fdecef;box-shadow:0 2px 8px #e0566b1a}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(4) b{color:#b3243f}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(5){border-color:#c6e9d3;border-left-color:#16a34a;background:#e8f7ee;box-shadow:0 2px 8px #16a34a1a}
+.businessdialog[data-resizable] .taskdetailinfo p:nth-child(5) b{color:#15803d}
+.businessdialog[data-resizable] .checklistsection{border:1px solid #b9e2ea;border-top:4px solid #0C8599;background:linear-gradient(180deg,#ffffff,#eef9fb);box-shadow:0 6px 18px #0c85991f}
+.businessdialog[data-resizable] .checklisthead b{color:#0a6b7a;font-size:13px}
+.businessdialog[data-resizable] .checklist li.done label span{background:#e6f7ed;border-color:#a9dfbf;color:#166534}
+.businessdialog[data-resizable] .checklist li:not(.done) label span{border-color:#d6e6ec}
+.businessdialog[data-resizable] .checklistfile{border-color:#b9e2ea;background:#e9f8fb}
