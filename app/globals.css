@@ -364,3 +364,6 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .historyactor{color:#64748b;font-size:10px;font-weight:700}
 .historybody p{margin:3px 0 0;color:#334155;font-size:11px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
 .historyrow time.undated{color:#94a3b8;font-style:italic;font-weight:600}
+.historyheadright{display:flex;align-items:center;gap:10px}
+.historytoggle{padding:5px 16px;border:1px solid #7c5cd6;border-radius:8px;background:#fff;color:#5b3fb0;font-size:11px;font-weight:800;cursor:pointer}
+.historytoggle:hover{background:#7c5cd6;color:#fff}
