@@ -45,7 +45,7 @@ export async function PATCH(request: Request) {
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
     const items = body.delegateEmployeeId
-      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, employeeId: Number(body.delegateEmployeeId) })
+      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
       : body.removeAttachment || body.attachmentKey
         ? await setPersonalWorkChecklistItemAttachment({
             id,

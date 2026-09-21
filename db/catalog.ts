@@ -622,7 +622,7 @@ export async function togglePersonalWorkChecklistItem(input: { id: number; done:
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
-export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; employeeId: number }) {
+export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; employeeId: number; comment?: string }) {
   await ensureSchema();
   const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!item) throw new Error("İş addımı tapılmadı.");
@@ -647,7 +647,7 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   }
   const result = await db().prepare(`INSERT INTO tasks
     (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
-    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, work.description, work.due_at, work.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
+    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
   const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
   return getPersonalWorkChecklist(Number(item.personal_work_id));

@@ -336,3 +336,9 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .businessdialog[data-resizable] .checklistfile{border-color:#b9e2ea;background:#e9f8fb}
 .completehint{display:block;margin-top:2px;padding:7px 10px;border:1px solid #f4e0b4;border-radius:8px;background:#fdf4df;color:#9a5b00;font-size:10px;font-weight:700;line-height:1.4}
 .businessform .field button:disabled{opacity:.55;cursor:not-allowed}
+.checklistcomment{grid-column:1/-1;display:grid;gap:8px;padding:12px;border:1px solid #f4e0b4;border-left:4px solid #e59b1f;border-radius:10px;background:#fdf4df}
+.checklistcomment b{font-size:11px;color:#9a5b00}
+.businessform .checklistcomment textarea{min-height:76px!important}
+.checklistcommentactions{display:flex;justify-content:flex-end;gap:8px}
+.checklistcommentactions .inlinecancel{padding:0 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;font-size:12px;font-weight:700;cursor:pointer}
+.checklistcommentactions .inlinecancel:hover{background:#f1f5f9}
