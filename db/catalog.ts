@@ -508,6 +508,7 @@ export async function deleteTask(id: number) {
   const task = await db().prepare("SELECT id, status, attachment_key FROM tasks WHERE id = ?").bind(id).first<{ id: number; status: string; attachment_key: string | null }>();
   if (!task) throw new Error("Tapşırıq tapılmadı.");
   if (task.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu tapşırıq silinə bilər.");
+  await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();
   await db().prepare("DELETE FROM tasks WHERE id = ?").bind(id).run();
   if (task.attachment_key && env.FILES) await env.FILES.delete(task.attachment_key);
 }
