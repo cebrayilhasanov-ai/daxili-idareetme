@@ -614,12 +614,51 @@ export async function getPersonalWorkHistory(personalWorkId: number) {
     FROM personal_works JOIN app_users ON app_users.id = personal_works.user_id WHERE personal_works.id = ?`).bind(personalWorkId)
     .first<{ title: string; status: string; created_at: string; completed_at: string | null; owner_name: string }>();
   if (!work) throw new Error("İş tapılmadı.");
-  const events = (await db().prepare("SELECT id, actor_name, action, detail, created_at FROM personal_work_events WHERE personal_work_id = ? ORDER BY created_at, id").bind(personalWorkId)
-    .all<{ id: number; actor_name: string; action: string; detail: string | null; created_at: string }>()).results;
-  // Works created before the history existed still get their start (and finish) from the work row itself.
-  if (!events.some((event) => event.action === "İş yaradıldı")) events.unshift({ id: 0, actor_name: work.owner_name, action: "İş yaradıldı", detail: work.title, created_at: work.created_at });
-  if (work.status === "Tamamlanıb" && work.completed_at && !events.some((event) => event.action === "İş tamamlandı")) events.push({ id: -1, actor_name: work.owner_name, action: "İş tamamlandı", detail: null, created_at: work.completed_at });
-  return events;
+  type HistoryEvent = { id: number; actor_name: string; action: string; detail: string | null; created_at: string | null };
+  const logged = (await db().prepare("SELECT id, actor_name, action, detail, created_at FROM personal_work_events WHERE personal_work_id = ? ORDER BY created_at, id").bind(personalWorkId)
+    .all<HistoryEvent>()).results;
+  const has = (action: string, detailStart: string | null) => logged.some((event) => event.action === action && (detailStart === null || (event.detail || "").startsWith(detailStart)));
+
+  // Everything that happened before events were logged is rebuilt from the rows themselves. Where the database never stored a
+  // time (an employee starting or submitting a task), the step is still listed, in its logical place, without a date.
+  const rebuilt: Array<HistoryEvent & { sortAt: string }> = [];
+  const add = (sortAt: string, actor: string, action: string, detail: string | null, createdAt: string | null) =>
+    rebuilt.push({ id: -(rebuilt.length + 1), actor_name: actor, action, detail, created_at: createdAt, sortAt });
+
+  if (!has("İş yaradıldı", null)) add(work.created_at, work.owner_name, "İş yaradıldı", work.title, work.created_at);
+  if ((work.status === "İcradadır" || work.status === "Tamamlanıb") && !has("İş icraya alındı", null)) add(work.created_at, work.owner_name, "İş icraya alındı", null, null);
+  if (work.status === "Tamamlanıb" && work.completed_at && !has("İş tamamlandı", null)) add(work.completed_at, work.owner_name, "İş tamamlandı", null, work.completed_at);
+
+  const steps = (await db().prepare("SELECT title, created_at FROM personal_work_checklist_items WHERE personal_work_id = ? ORDER BY id").bind(personalWorkId).all<{ title: string; created_at: string }>()).results;
+  for (const step of steps) if (!has("Addım əlavə edildi", step.title)) add(step.created_at, work.owner_name, "Addım əlavə edildi", step.title, step.created_at);
+
+  const tasks = (await db().prepare(`SELECT items.title AS step_title, tasks.status, tasks.created_at, tasks.completed_at, tasks.evaluation, tasks.evaluation_note,
+      tasks.description, tasks.attachment_name, employees.name AS employee_name
+    FROM personal_work_checklist_items AS items
+    JOIN tasks ON tasks.id = items.delegated_task_id
+    JOIN employees ON employees.id = tasks.employee_id
+    WHERE items.personal_work_id = ? ORDER BY tasks.id`).bind(personalWorkId)
+    .all<{ step_title: string; status: string; created_at: string; completed_at: string | null; evaluation: number | null; evaluation_note: string | null; description: string | null; attachment_name: string | null; employee_name: string }>()).results;
+  for (const task of tasks) {
+    const subject = `${task.step_title} — ${task.employee_name}`;
+    const started = task.status !== "Yeni";
+    const submitted = task.status === "Təqdim edilib" || task.status === "Təsdiqlənib";
+    if (!has("Addım işçiyə verildi", `${task.step_title} → ${task.employee_name}`)) {
+      add(task.created_at, work.owner_name, "Addım işçiyə verildi", `${task.step_title} → ${task.employee_name}${task.description ? `\nŞərh: ${task.description}` : ""}${task.attachment_name ? `\nFayl: ${task.attachment_name}` : ""}`, task.created_at);
+    }
+    if (started && !has("İşçi tapşırığı icraya aldı", subject)) add(task.created_at, task.employee_name, "İşçi tapşırığı icraya aldı", subject, null);
+    if (submitted && !has("İşçi tapşırığı təqdim etdi", subject)) add(task.created_at, task.employee_name, "İşçi tapşırığı təqdim etdi", subject, null);
+    if (task.status === "Təsdiqlənib" && !has("Tapşırıq təsdiqləndi ✓", subject)) add(task.completed_at || task.created_at, "Rəhbər", "Tapşırıq təsdiqləndi ✓", `${subject} — qiymət ${task.evaluation ?? "—"}/10`, task.completed_at);
+    if (task.status === "Geri qaytarılıb" && !has("Tapşırıq geri qaytarıldı", subject)) add(task.created_at, "Rəhbər", "Tapşırıq geri qaytarıldı", `${subject}\nSəbəb: ${task.evaluation_note?.trim() || "—"}`, null);
+  }
+
+  // Dated events keep their real time; the undated rebuilt ones sit right after the moment they logically follow.
+  const all = [...logged.map((event) => ({ ...event, sortAt: event.created_at || "" })), ...rebuilt];
+  return all.map((event, index) => ({ event, index })).sort((a, b) => a.event.sortAt.localeCompare(b.event.sortAt) || a.index - b.index).map(({ event }) => {
+    const { sortAt, ...rest } = event;
+    void sortAt;
+    return rest;
+  });
 }
 
 export async function createPersonalWork(input: { userId: number; actorName?: string; title: string; description?: string; companyId?: number; dueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {

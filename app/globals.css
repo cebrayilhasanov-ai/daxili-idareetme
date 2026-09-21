@@ -363,3 +363,4 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .historyrow time{color:#64748b;font-size:10px;font-weight:700}
 .historyactor{color:#64748b;font-size:10px;font-weight:700}
 .historybody p{margin:3px 0 0;color:#334155;font-size:11px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
+.historyrow time.undated{color:#94a3b8;font-style:italic;font-weight:600}
