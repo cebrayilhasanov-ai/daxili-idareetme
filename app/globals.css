@@ -315,3 +315,4 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .checklistattachbtn svg{width:13px;height:13px}
 .checklistattachbtn:hover:not(:disabled){border-color:#0C8599;color:#0C8599}
 .checklistattachbtn:disabled{opacity:.6;cursor:wait}
+@media(min-width:701px){.businessdialog[data-resizable] .businessdialogheader{cursor:grab;user-select:none}.businessdialog[data-resizable] .businessdialogheader:active{cursor:grabbing}}

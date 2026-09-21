@@ -53,29 +53,35 @@ const RESIZE_EDGES: ResizeEdge[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"]
 const MIN_DIALOG_WIDTH = 480
 const MIN_DIALOG_HEIGHT = 320
 
+const clampNumber = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+function placeDialog(el: HTMLElement, left: number, top: number, width: number, height: number) {
+  el.style.setProperty("left", `${left}px`, "important")
+  el.style.setProperty("top", `${top}px`, "important")
+  el.style.setProperty("width", `${width}px`, "important")
+  el.style.setProperty("height", `${height}px`, "important")
+}
+
+// Pins the dialog to explicit pixels (dropping the CSS centering) so an edge or the whole window can follow the pointer.
+function pinDialog(el: HTMLElement) {
+  const rect = el.getBoundingClientRect()
+  el.dataset.resized = "true"
+  for (const property of ["transform", "translate"]) el.style.setProperty(property, "none", "important")
+  el.style.setProperty("max-width", "none", "important")
+  el.style.setProperty("max-height", "none", "important")
+  placeDialog(el, rect.left, rect.top, rect.width, rect.height)
+  return rect
+}
+
 function DialogResizeHandle({ edge }: { edge: ResizeEdge }) {
   const drag = React.useRef<{ x: number; y: number; rect: DOMRect } | null>(null)
-
-  const apply = (el: HTMLElement, left: number, top: number, width: number, height: number) => {
-    el.style.setProperty("left", `${left}px`, "important")
-    el.style.setProperty("top", `${top}px`, "important")
-    el.style.setProperty("width", `${width}px`, "important")
-    el.style.setProperty("height", `${height}px`, "important")
-  }
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = event.currentTarget.closest<HTMLElement>("[data-slot=dialog-content]")
     if (!el || event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    const rect = el.getBoundingClientRect()
-    drag.current = { x: event.clientX, y: event.clientY, rect }
-    // Pin the dialog to explicit pixels so the dragged edge follows the pointer and the opposite edge stays put.
-    el.dataset.resized = "true"
-    for (const property of ["transform", "translate"]) el.style.setProperty(property, "none", "important")
-    el.style.setProperty("max-width", "none", "important")
-    el.style.setProperty("max-height", "none", "important")
-    apply(el, rect.left, rect.top, rect.width, rect.height)
+    drag.current = { x: event.clientX, y: event.clientY, rect: pinDialog(el) }
   }
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -85,7 +91,7 @@ function DialogResizeHandle({ edge }: { edge: ResizeEdge }) {
     const { rect } = state
     const dx = event.clientX - state.x
     const dy = event.clientY - state.y
-    const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+    const clamp = clampNumber
     let left = rect.left
     let top = rect.top
     let width = rect.width
@@ -100,7 +106,7 @@ function DialogResizeHandle({ edge }: { edge: ResizeEdge }) {
       height = clamp(rect.height - dy, MIN_DIALOG_HEIGHT, rect.bottom)
       top = rect.bottom - height
     }
-    apply(el, left, top, width, height)
+    placeDialog(el, left, top, width, height)
   }
 
   const onPointerUp = () => {
@@ -129,6 +135,30 @@ function DialogContent({
   showCloseButton?: boolean
   resizable?: boolean
 }) {
+  // A resizable dialog can also be moved by dragging its header, like a window title bar.
+  const move = React.useRef<{ x: number; y: number; rect: DOMRect } | null>(null)
+  const onMoveStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement
+    if (event.button !== 0 || window.innerWidth <= 700 || !target.closest("[data-slot=dialog-header]") || target.closest("button,a,input,select,textarea")) return
+    const el = event.currentTarget.closest<HTMLElement>("[data-slot=dialog-content]")
+    if (!el) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    move.current = { x: event.clientX, y: event.clientY, rect: pinDialog(el) }
+  }
+  const onMoveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = move.current
+    const el = event.currentTarget.closest<HTMLElement>("[data-slot=dialog-content]")
+    if (!state || !el) return
+    const { rect } = state
+    // Keep a strip of the header on screen so the window can always be grabbed back.
+    const left = clampNumber(rect.left + event.clientX - state.x, 100 - rect.width, window.innerWidth - 100)
+    const top = clampNumber(rect.top + event.clientY - state.y, 0, window.innerHeight - 60)
+    placeDialog(el, left, top, rect.width, rect.height)
+  }
+  const onMoveEnd = () => {
+    move.current = null
+  }
   const closeButton = showCloseButton && (
     <DialogPrimitive.Close
       data-slot="dialog-close"
@@ -152,7 +182,7 @@ function DialogContent({
       >
         {resizable ? (
           <>
-            <div className="dialogresizebody">
+            <div className="dialogresizebody" onPointerDown={onMoveStart} onPointerMove={onMoveDrag} onPointerUp={onMoveEnd} onPointerCancel={onMoveEnd}>
               {children}
               {closeButton}
             </div>
