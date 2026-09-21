@@ -346,3 +346,20 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .sharedname{color:#d92d20;font-size:11px;font-weight:800;line-height:1.35}
 .sharedname small{font-size:10px;font-weight:700;opacity:.85}
 .sharedname.done{color:#1e3a8a}
+.historysection{display:grid;gap:10px;padding:14px 16px;border:1px solid #d9d4f3;border-top:4px solid #7c5cd6;border-radius:12px;background:linear-gradient(180deg,#fff,#f5f2fd);box-shadow:0 6px 18px #7c5cd61f}
+.historyhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.historyhead b{color:#5b3fb0;font-size:13px;font-weight:800}
+.historyhead small{color:#64748b;font-size:10px;font-weight:700}
+.historylist{list-style:none;margin:0;padding:0 0 0 2px;display:grid}
+.historylist li{position:relative;display:grid;grid-template-columns:14px 1fr;gap:10px;padding-bottom:13px}
+.historylist li:not(:last-child)::before{content:"";position:absolute;left:6px;top:16px;bottom:-1px;width:2px;background:#d6d0ee}
+.historylist li i{z-index:1;width:14px;height:14px;margin-top:2px;border:3px solid #0C8599;border-radius:50%;background:#fff}
+.historylist li.tone-good i{border-color:#16a34a}
+.historylist li.tone-bad i{border-color:#e0566b}
+.historylist li.tone-share i{border-color:#7c5cd6}
+.historylist li.tone-file i{border-color:#e59b1f}
+.historyrow{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 8px}
+.historyrow b{color:#172237;font-size:12px;font-weight:800}
+.historyrow time{color:#64748b;font-size:10px;font-weight:700}
+.historyactor{color:#64748b;font-size:10px;font-weight:700}
+.historybody p{margin:3px 0 0;color:#334155;font-size:11px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}

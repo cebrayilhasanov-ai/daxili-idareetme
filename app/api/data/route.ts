@@ -76,7 +76,7 @@ export async function PATCH(request: Request) {
         await logAudit(user, isToggleOnly ? (body.active ? "Firma aktiv edildi" : "Firma deaktiv edildi") : "Firma yeniləndi", "company", body.name || `#${body.id}`);
       }
     }
-    else if (body.action === "task") await updateTask(body);
+    else if (body.action === "task") await updateTask({ ...body, actorName: user.name });
     else if (body.action === "recurring") await updateRecurring(body);
     else if (body.action === "work-item") await updateWorkItem(body);
     else if (body.action === "work-assignment") await toggleWorkAssignment(body);
@@ -93,7 +93,7 @@ export async function DELETE(request: Request) {
     const params = new URL(request.url).searchParams;
     const taskId = Number(params.get("taskId"));
     const employeeId = Number(params.get("employeeId"));
-    if (taskId) await deleteTask(taskId);
+    if (taskId) await deleteTask(taskId, user.name);
     else if (employeeId) { await deleteEmployee(employeeId); await logAudit(user, "Personal silindi", "employee", `#${employeeId}`); }
     else return Response.json({ error: "Silinəcək məlumat seçilməyib." }, { status: 400 });
     return Response.json(await getAllData());

@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     await createPersonalWork({
       userId: user.id,
+      actorName: user.name,
       title: String(body.title || ""),
       description: body.description,
       companyId: body.companyId ? Number(body.companyId) : undefined,
@@ -40,7 +41,7 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request);
     const body = await request.json();
-    await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, status: String(body.status || "") });
+    await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
     const items = await getPersonalWorks(user.role === "admin" ? null : user.id);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "İş yenilənmədi." }, { status: 500 }); }

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const personalWorkId = Number(body.personalWorkId);
     await assertAccess(user, personalWorkId);
-    const items = await createPersonalWorkChecklistItem({ personalWorkId, title: String(body.title || "") });
+    const items = await createPersonalWorkChecklistItem({ personalWorkId, actorName: user.name, title: String(body.title || "") });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım əlavə olunmadı." }, { status: 500 }); }
 }
@@ -45,13 +45,14 @@ export async function PATCH(request: Request) {
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
     const items = body.delegateEmployeeId
-      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
+      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, actorName: user.name, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
       : body.removeAttachment || body.attachmentKey
         ? await setPersonalWorkChecklistItemAttachment({
             id,
+            actorName: user.name,
             attachment: body.removeAttachment ? null : { key: String(body.attachmentKey), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") },
           })
-        : await togglePersonalWorkChecklistItem({ id, done: Boolean(body.done) });
+        : await togglePersonalWorkChecklistItem({ id, actorName: user.name, done: Boolean(body.done) });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım yenilənmədi." }, { status: 500 }); }
 }
@@ -63,7 +64,7 @@ export async function DELETE(request: Request) {
     const existing = await env.DB.prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(id).first<{ personal_work_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
-    const items = await deletePersonalWorkChecklistItem({ id });
+    const items = await deletePersonalWorkChecklistItem({ id, actorName: user.name });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım silinmədi." }, { status: 500 }); }
 }

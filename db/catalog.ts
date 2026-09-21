@@ -151,6 +151,14 @@ async function ensureSchema() {
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_name TEXT").run();
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_size INTEGER").run();
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_type TEXT").run();
+  await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
+    actor_name TEXT NOT NULL,
+    action TEXT NOT NULL,
+    detail TEXT,
+    created_at TEXT NOT NULL
+  )`).run();
   const employeeColumns = await db().prepare("PRAGMA table_info(employees)").all<{ name: string }>();
   if (!employeeColumns.results.some((column) => column.name === "avatar_key")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN avatar_key TEXT").run();
@@ -463,7 +471,7 @@ export async function resolveDateChangeRequest(input: { id: number; approve: boo
   }
 }
 
-export async function updateTask(input: { id: number; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionAttachmentKey?: string; submissionAttachmentName?: string; submissionAttachmentSize?: number; submissionAttachmentType?: string }) {
+export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionAttachmentKey?: string; submissionAttachmentName?: string; submissionAttachmentSize?: number; submissionAttachmentType?: string }) {
   const current = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Tapşırıq tapılmadı.");
   if (input.userMode) {
@@ -506,14 +514,31 @@ export async function updateTask(input: { id: number; status?: string; evaluatio
   if (status === "Təsdiqlənib") {
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
   }
+  // A task handed over from a personal work reports its progress back into that work's history.
+  if (input.status && input.status !== current.status) {
+    const linked = await db().prepare(`SELECT items.personal_work_id, items.title, employees.name AS employee_name
+      FROM personal_work_checklist_items AS items
+      JOIN tasks ON tasks.id = items.delegated_task_id
+      JOIN employees ON employees.id = tasks.employee_id
+      WHERE items.delegated_task_id = ?`).bind(input.id).first<{ personal_work_id: number; title: string; employee_name: string }>();
+    if (linked) {
+      const subject = `${linked.title} — ${linked.employee_name}`;
+      if (status === "İcradadır") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı icraya aldı", subject);
+      else if (status === "Təqdim edilib") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı təqdim etdi", subject);
+      else if (status === "Təsdiqlənib") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq təsdiqləndi ✓", `${subject} — qiymət ${input.evaluation}/10`);
+      else if (status === "Geri qaytarılıb") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq geri qaytarıldı", `${subject}\nSəbəb: ${input.evaluationNote?.trim() || "—"}`);
+    }
+  }
 }
 
-export async function deleteTask(id: number) {
+export async function deleteTask(id: number, actorName?: string) {
   const task = await db().prepare("SELECT id, status, attachment_key FROM tasks WHERE id = ?").bind(id).first<{ id: number; status: string; attachment_key: string | null }>();
   if (!task) throw new Error("Tapşırıq tapılmadı.");
   if (task.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu tapşırıq silinə bilər.");
+  const linked = await db().prepare("SELECT personal_work_id, title FROM personal_work_checklist_items WHERE delegated_task_id = ?").bind(id).first<{ personal_work_id: number; title: string }>();
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();
   await db().prepare("DELETE FROM tasks WHERE id = ?").bind(id).run();
+  if (linked) await recordPersonalWorkEvent(linked.personal_work_id, actorName, "Həvalə ləğv edildi (tapşırıq silindi)", linked.title);
   if (task.attachment_key && env.FILES) await env.FILES.delete(task.attachment_key);
 }
 
@@ -573,16 +598,42 @@ export async function getPersonalWorks(userId: number | null) {
   return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []) }));
 }
 
-export async function createPersonalWork(input: { userId: number; title: string; description?: string; companyId?: number; dueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+// Per-work history shown in the "Aç" dialog. Purely informational, so a failed write never blocks the action itself.
+export async function recordPersonalWorkEvent(workId: number, actorName: string | null | undefined, action: string, detail?: string | null) {
+  try {
+    await db().prepare("INSERT INTO personal_work_events (personal_work_id, actor_name, action, detail, created_at) VALUES (?, ?, ?, ?, ?)")
+      .bind(workId, actorName || "Naməlum", action, detail || null, new Date().toISOString()).run();
+  } catch {
+    // ignore
+  }
+}
+
+export async function getPersonalWorkHistory(personalWorkId: number) {
+  await ensureSchema();
+  const work = await db().prepare(`SELECT personal_works.title, personal_works.status, personal_works.created_at, personal_works.completed_at, app_users.name AS owner_name
+    FROM personal_works JOIN app_users ON app_users.id = personal_works.user_id WHERE personal_works.id = ?`).bind(personalWorkId)
+    .first<{ title: string; status: string; created_at: string; completed_at: string | null; owner_name: string }>();
+  if (!work) throw new Error("İş tapılmadı.");
+  const events = (await db().prepare("SELECT id, actor_name, action, detail, created_at FROM personal_work_events WHERE personal_work_id = ? ORDER BY created_at, id").bind(personalWorkId)
+    .all<{ id: number; actor_name: string; action: string; detail: string | null; created_at: string }>()).results;
+  // Works created before the history existed still get their start (and finish) from the work row itself.
+  if (!events.some((event) => event.action === "İş yaradıldı")) events.unshift({ id: 0, actor_name: work.owner_name, action: "İş yaradıldı", detail: work.title, created_at: work.created_at });
+  if (work.status === "Tamamlanıb" && work.completed_at && !events.some((event) => event.action === "İş tamamlandı")) events.push({ id: -1, actor_name: work.owner_name, action: "İş tamamlandı", detail: null, created_at: work.completed_at });
+  return events;
+}
+
+export async function createPersonalWork(input: { userId: number; actorName?: string; title: string; description?: string; companyId?: number; dueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("İşin adını yazın.");
-  await db().prepare(`INSERT INTO personal_works (user_id, title, description, company_id, due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type)
+  const result = await db().prepare(`INSERT INTO personal_works (user_id, title, description, company_id, due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type)
     VALUES (?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
     .bind(input.userId, title, input.description?.trim() || null, input.companyId || null, input.dueAt || null, new Date().toISOString(), input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null).run();
+  const workId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", title);
 }
 
-export async function updatePersonalWorkStatus(input: { id: number; userId: number; status: string }) {
+export async function updatePersonalWorkStatus(input: { id: number; userId: number; actorName?: string; status: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("İş tapılmadı.");
@@ -595,6 +646,7 @@ export async function updatePersonalWorkStatus(input: { id: number; userId: numb
   }
   const completedAt = input.status === "Tamamlanıb" ? new Date().toISOString() : null;
   await db().prepare("UPDATE personal_works SET status = ?, completed_at = ? WHERE id = ?").bind(input.status, completedAt, input.id).run();
+  await recordPersonalWorkEvent(input.id, input.actorName, input.status === "Tamamlanıb" ? "İş tamamlandı" : "İş icraya alındı");
 }
 
 export async function deletePersonalWork(input: { id: number; userId: number }) {
@@ -615,7 +667,7 @@ export async function getPersonalWorkChecklist(personalWorkId: number) {
     WHERE personal_work_id = ? ORDER BY id`).bind(personalWorkId).all()).results;
 }
 
-export async function createPersonalWorkChecklistItem(input: { personalWorkId: number; title: string }) {
+export async function createPersonalWorkChecklistItem(input: { personalWorkId: number; actorName?: string; title: string }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("İş addımının adını yazın.");
@@ -624,19 +676,21 @@ export async function createPersonalWorkChecklistItem(input: { personalWorkId: n
   if (work.status === "Tamamlanıb") throw new Error("Tamamlanmış işə yeni addım əlavə etmək olmaz.");
   await db().prepare("INSERT INTO personal_work_checklist_items (personal_work_id, title, done, created_at) VALUES (?, ?, 0, ?)")
     .bind(input.personalWorkId, title, new Date().toISOString()).run();
+  await recordPersonalWorkEvent(input.personalWorkId, input.actorName, "Addım əlavə edildi", title);
   return getPersonalWorkChecklist(input.personalWorkId);
 }
 
-export async function togglePersonalWorkChecklistItem(input: { id: number; done: boolean }) {
+export async function togglePersonalWorkChecklistItem(input: { id: number; actorName?: string; done: boolean }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id, delegated_task_id FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Bu addım işçiyə həvalə edilib, statusu tapşırığın təsdiqi ilə avtomatik yenilənəcək.");
   await db().prepare("UPDATE personal_work_checklist_items SET done = ? WHERE id = ?").bind(Number(input.done), input.id).run();
+  await recordPersonalWorkEvent(item.personal_work_id, input.actorName, input.done ? "Addım tamamlandı ✓" : "Addımdan ✓ götürüldü", item.title);
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
-export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; employeeId: number; comment?: string }) {
+export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; actorName?: string; employeeId: number; comment?: string }) {
   await ensureSchema();
   const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!item) throw new Error("İş addımı tapılmadı.");
@@ -664,27 +718,32 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
     .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
   const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
+  const employee = await db().prepare("SELECT name FROM employees WHERE id = ?").bind(input.employeeId).first<{ name: string }>();
+  const note = input.comment?.trim();
+  await recordPersonalWorkEvent(Number(item.personal_work_id), input.actorName, "Addım işçiyə verildi", `${item.title} → ${employee?.name || "işçi"}${note ? `\nŞərh: ${note}` : ""}${attachment ? `\nFayl: ${attachment.name || "əlavə"}` : ""}`);
   return getPersonalWorkChecklist(Number(item.personal_work_id));
 }
 
-export async function setPersonalWorkChecklistItemAttachment(input: { id: number; attachment: { key: string; name: string; size: number; type: string } | null }) {
+export async function setPersonalWorkChecklistItemAttachment(input: { id: number; actorName?: string; attachment: { key: string; name: string; size: number; type: string } | null }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key, attachment_name, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null; attachment_name: string | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Həvalə edilmiş addımın faylı dəyişdirilə bilməz.");
   await db().prepare("UPDATE personal_work_checklist_items SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
     .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
   if (item.attachment_key && item.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(item.attachment_key);
+  await recordPersonalWorkEvent(item.personal_work_id, input.actorName, input.attachment ? "Fayl əlavə edildi" : "Fayl silindi", `${item.title} — ${input.attachment ? input.attachment.name : item.attachment_name || "fayl"}`);
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
-export async function deletePersonalWorkChecklistItem(input: { id: number }) {
+export async function deletePersonalWorkChecklistItem(input: { id: number; actorName?: string }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Həvalə edilmiş addım silinə bilməz.");
   await db().prepare("DELETE FROM personal_work_checklist_items WHERE id = ?").bind(input.id).run();
   if (item.attachment_key && env.FILES) await env.FILES.delete(item.attachment_key);
+  await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "Addım silindi", item.title);
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
