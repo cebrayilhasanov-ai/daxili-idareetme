@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const user = await requireUser(request, "admin");
     const body = await request.json();
     await createOutgoingDocument(body);
-    await logAudit(user, "Çıxan sənəd yaradıldı", "outgoing-document", body.outgoingNo);
+    await logAudit(user, "Çıxan sənəd yaradıldı", "outgoing-document", body.documentType || body.organizationName || "yeni sənəd");
     return Response.json({ items: await getOutgoingDocuments() });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd əlavə olunmadı." }, { status: 500 }); }
 }
@@ -31,7 +31,7 @@ export async function PATCH(request: Request) {
     const user = await requireUser(request, "admin");
     const body = await request.json();
     await updateOutgoingDocument({ ...body, id: Number(body.id) });
-    await logAudit(user, "Çıxan sənəd yeniləndi", "outgoing-document", body.outgoingNo || `#${body.id}`);
+    await logAudit(user, "Çıxan sənəd yeniləndi", "outgoing-document", `#${body.id}`);
     return Response.json({ items: await getOutgoingDocuments() });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd yenilənmədi." }, { status: 500 }); }
 }

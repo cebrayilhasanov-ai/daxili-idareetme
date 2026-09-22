@@ -74,6 +74,8 @@ async function ensureSchema() {
   if (!documentColumns.results.some((column) => column.name === "template3_name")) await db().prepare("ALTER TABLE document_templates ADD COLUMN template3_name TEXT").run();
   if (!documentColumns.results.some((column) => column.name === "template3_size")) await db().prepare("ALTER TABLE document_templates ADD COLUMN template3_size INTEGER").run();
   if (!documentColumns.results.some((column) => column.name === "template3_type")) await db().prepare("ALTER TABLE document_templates ADD COLUMN template3_type TEXT").run();
+  if (!documentColumns.results.some((column) => column.name === "draft_folder_path")) await db().prepare("ALTER TABLE document_templates ADD COLUMN draft_folder_path TEXT").run();
+  if (!documentColumns.results.some((column) => column.name === "final_folder_path")) await db().prepare("ALTER TABLE document_templates ADD COLUMN final_folder_path TEXT").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS outgoing_documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     outgoing_no TEXT NOT NULL,
@@ -836,21 +838,21 @@ export async function getDocumentTemplates() {
   return (await db().prepare("SELECT * FROM document_templates ORDER BY name").all()).results;
 }
 
-export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string }) {
+export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Sənədin adını yazın.");
   await db().prepare(`INSERT INTO document_templates
-    (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, new Date().toISOString()).run();
+    (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, new Date().toISOString()).run();
 }
 
-export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string }) {
+export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
-  await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ? WHERE id = ?`)
+  await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ? WHERE id = ?`)
     .bind(
       input.name?.trim() || current.name,
       input.template1Key ?? current.template1_key,
@@ -865,6 +867,8 @@ export async function updateDocumentTemplate(input: { id: number; name?: string;
       input.template3Name ?? current.template3_name,
       input.template3Size ?? current.template3_size,
       input.template3Type ?? current.template3_type,
+      input.draftFolderPath !== undefined ? input.draftFolderPath.trim() || null : current.draft_folder_path,
+      input.finalFolderPath !== undefined ? input.finalFolderPath.trim() || null : current.final_folder_path,
       input.id,
     ).run();
 }
@@ -879,23 +883,33 @@ export async function getOutgoingDocuments() {
   return (await db().prepare("SELECT * FROM outgoing_documents ORDER BY id DESC").all()).results;
 }
 
-export async function createOutgoingDocument(input: { outgoingNo: string; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentNumber?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function createOutgoingDocument(input: { outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
   await ensureSchema();
-  const outgoingNo = input.outgoingNo?.trim();
-  if (!outgoingNo) throw new Error("Çıxış nömrəsini yazın.");
+  // Çıxış No: one continuous sequence for every outgoing document ever created, regardless of type — never resets.
+  const maxOutgoing = await db().prepare("SELECT MAX(CAST(outgoing_no AS INTEGER)) AS maxNo FROM outgoing_documents").first<{ maxNo: number | null }>();
+  const outgoingNo = String((maxOutgoing?.maxNo || 0) + 1);
+  // Sənədin Nömrəsi: its own sequence that starts over at 1 each calendar year, shown as "N/YYYY".
+  const year = new Date().getFullYear();
+  const yearRows = await db().prepare("SELECT document_number FROM outgoing_documents WHERE document_number LIKE ?").bind(`%/${year}`).all<{ document_number: string | null }>();
+  let maxDocNumber = 0;
+  for (const row of yearRows.results) {
+    const parsed = parseInt(String(row.document_number || "").split("/")[0], 10);
+    if (!isNaN(parsed) && parsed > maxDocNumber) maxDocNumber = parsed;
+  }
+  const documentNumber = `${maxDocNumber + 1}/${year}`;
   await db().prepare(`INSERT INTO outgoing_documents
     (outgoing_no, outgoing_date, incoming_no, incoming_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, attachment_key, attachment_name, attachment_size, attachment_type, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(outgoingNo, input.outgoingDate || null, input.incomingNo || null, input.incomingDate || null, input.sendingDepartment || null, input.documentType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, input.documentNumber || null, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, new Date().toISOString()).run();
+    .bind(outgoingNo, input.outgoingDate || null, input.incomingNo || null, input.incomingDate || null, input.sendingDepartment || null, input.documentType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, new Date().toISOString()).run();
 }
 
-export async function updateOutgoingDocument(input: { id: number; outgoingNo?: string; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentNumber?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function updateOutgoingDocument(input: { id: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM outgoing_documents WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
-  await db().prepare(`UPDATE outgoing_documents SET outgoing_no = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_number = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?`)
+  // Çıxış No and Sənədin Nömrəsi are system-assigned at creation and stay fixed afterwards, so the sequence they guarantee is never broken by an edit.
+  await db().prepare(`UPDATE outgoing_documents SET outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?`)
     .bind(
-      input.outgoingNo?.trim() || current.outgoing_no,
       input.outgoingDate ?? current.outgoing_date,
       input.incomingNo ?? current.incoming_no,
       input.incomingDate ?? current.incoming_date,
@@ -904,7 +918,6 @@ export async function updateOutgoingDocument(input: { id: number; outgoingNo?: s
       input.sendingMethod ?? current.sending_method,
       input.deliveredBy ?? current.delivered_by,
       input.copies ?? current.copies,
-      input.documentNumber ?? current.document_number,
       input.documentDate ?? current.document_date,
       input.voen ?? current.voen,
       input.organizationName ?? current.organization_name,

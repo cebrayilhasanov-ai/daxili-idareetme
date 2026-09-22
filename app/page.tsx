@@ -29,7 +29,7 @@ type ChecklistLikeItem = { id:number; title:string; done:number; delegated_task_
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[] };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
-type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; created_at:string };
+type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; created_at:string };
 type OutgoingDocument = { id:number; outgoing_no:string; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string };
 type ChatData = { threads:ChatThread[]; users:ChatUser[]; messages:ChatMessage[]; selectedThreadId:number; totalUnread:number; readUpTo:number };
 
@@ -111,7 +111,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.77</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.78</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{unseenOverdue.length>0&&<em>{unseenOverdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -776,12 +776,16 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [file1,setFile1]=useState<File|null>(null);
   const [file2,setFile2]=useState<File|null>(null);
   const [file3,setFile3]=useState<File|null>(null);
+  const [draftFolderPath,setDraftFolderPath]=useState("");
+  const [finalFolderPath,setFinalFolderPath]=useState("");
   const [busy,setBusy]=useState(false);
   const [editingId,setEditingId]=useState<number|null>(null);
   const [editName,setEditName]=useState("");
   const [editFile1,setEditFile1]=useState<File|null>(null);
   const [editFile2,setEditFile2]=useState<File|null>(null);
   const [editFile3,setEditFile3]=useState<File|null>(null);
+  const [editDraftFolderPath,setEditDraftFolderPath]=useState("");
+  const [editFinalFolderPath,setEditFinalFolderPath]=useState("");
   const [editBusy,setEditBusy]=useState(false);
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
@@ -797,23 +801,23 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     if(!name.trim())return;
     setBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={name};
+      const body:Record<string,unknown>={name,draftFolderPath,finalFolderPath};
       if(file1){const uploaded=await uploadFile(file1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(file2){const uploaded=await uploadFile(file2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(file3){const uploaded=await uploadFile(file3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
       const response=await fetch("/api/documents",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
-      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setCreating(false);
+      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null)};
+  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"")};
   const cancelEdit=()=>{setEditingId(null);setEditFile1(null);setEditFile2(null);setEditFile3(null)};
   const saveEdit=async(item:DocumentTemplate)=>{
     setEditBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={id:item.id,name:editName};
+      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath};
       if(editFile1){const uploaded=await uploadFile(editFile1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(editFile2){const uploaded=await uploadFile(editFile2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(editFile3){const uploaded=await uploadFile(editFile3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
@@ -841,6 +845,8 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     {key:"template1",label:"Sənədin şablonu 1",width:220,headerContent:templateLabel(1),render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
     {key:"template2",label:"Sənədin şablonu 2",width:220,headerContent:templateLabel(2),render:item=>templateLink(item.template2_key,item.template2_name,item.template2_size)},
     {key:"template3",label:"Sənədin şablonu 3",width:220,headerContent:templateLabel(3),render:item=>templateLink(item.template3_key,item.template3_name,item.template3_size)},
+    {key:"draftFolder",label:"İlkin sənəd papkası",width:220,headerContent:<span>İlkin sənəd papkası</span>,render:item=>item.draft_folder_path?<span className="folderpath" title={item.draft_folder_path}>{item.draft_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
+    {key:"finalFolder",label:"Hazır sənəd papkası",width:220,headerContent:<span>Hazır sənəd papkası</span>,render:item=>item.final_folder_path?<span className="folderpath" title={item.final_folder_path}>{item.final_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
@@ -852,12 +858,16 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label>,
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label>,
+    draftFolder:()=><Field key="draftFolder" label="İlkin sənəd papkası" value={draftFolderPath} set={setDraftFolderPath}/>,
+    finalFolder:()=><Field key="finalFolder" label="Hazır sənəd papkası" value={finalFolderPath} set={setFinalFolderPath}/>,
   };
   const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
     name:()=><Field key="name" label="Sənədin adı" value={editName} set={setEditName}/>,
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small>Hazırkı: {item.template1_name}</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small>Hazırkı: {item.template2_name}</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label>,
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small>Hazırkı: {item.template3_name}</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label>,
+    draftFolder:()=><Field key="draftFolder" label="İlkin sənəd papkası" value={editDraftFolderPath} set={setEditDraftFolderPath}/>,
+    finalFolder:()=><Field key="finalFolder" label="Hazır sənəd papkası" value={editFinalFolderPath} set={setEditFinalFolderPath}/>,
   });
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları (3 versiyada)</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
@@ -894,7 +904,6 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
     return result as {key:string;name:string;size:number;type:string};
   };
   const create=async()=>{
-    if(!(form.outgoingNo||"").trim())return;
     const voenValue=(form.voen||"").trim();
     if(voenValue&&!customers.some(c=>c.voen===voenValue)){setError("Bu VÖEN müştəri siyahısında tapılmadı. Zəhmət olmasa düzgün VÖEN daxil edin.");return}
     setBusy(true);setError("");
@@ -908,7 +917,7 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditFile(null);setEditForm({outgoingNo:item.outgoing_no||"",outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",sendingDepartment:item.sending_department||"",documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",copies:item.copies||"",documentNumber:item.document_number||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||""})};
+  const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditFile(null);setEditForm({outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",sendingDepartment:item.sending_department||"",documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",copies:item.copies||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||""})};
   const cancelEdit=()=>{setEditingId(null);setEditForm({});setEditFile(null)};
   const saveEdit=async(id:number)=>{
     const voenValue=(editForm.voen||"").trim();
@@ -938,7 +947,6 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   const copiesOptions=["1","2","3","4","5"];
   const templateFor=(typeName:string)=>templates.find(t=>t.name.trim().toLocaleLowerCase("az-AZ")===typeName.trim().toLocaleLowerCase("az-AZ"));
   const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
-    outgoingNo:(values,set)=><Field key="outgoingNo" label="Çıxış No" value={values.outgoingNo||""} set={v=>set({...values,outgoingNo:v})}/>,
     outgoingDate:(values,set)=><Field key="outgoingDate" label="Çıxış tarixi" type="date" value={values.outgoingDate||""} set={v=>set({...values,outgoingDate:v})}/>,
     incomingNo:(values,set)=><Field key="incomingNo" label="Daxil olma No" value={values.incomingNo||""} set={v=>set({...values,incomingNo:v})}/>,
     incomingDate:(values,set)=><Field key="incomingDate" label="Daxil olma tarixi" type="date" value={values.incomingDate||""} set={v=>set({...values,incomingDate:v})}/>,
@@ -947,7 +955,6 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
     sendingMethod:(values,set)=><label className="field" key="sendingMethod">Göndərilmə Şəkli<select value={values.sendingMethod||""} onChange={e=>set({...values,sendingMethod:e.target.value})}><option value="">Seçin</option>{sendingMethodOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     deliveredBy:(values,set)=><Field key="deliveredBy" label="Sənədi Götürən Şəxs" value={values.deliveredBy||""} set={v=>set({...values,deliveredBy:v})}/>,
     copies:(values,set)=><label className="field" key="copies">Sənədin nüsxəsi<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{copiesOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
-    documentNumber:(values,set)=><Field key="documentNumber" label="Sənədin Nömrəsi" value={values.documentNumber||""} set={v=>set({...values,documentNumber:v})}/>,
     documentDate:(values,set)=><Field key="documentDate" label="Sənədin tarixi" type="date" value={values.documentDate||""} set={v=>set({...values,documentDate:v})}/>,
     voen:(values,set)=><label className="field" key="voen">Voeni<Input value={values.voen||""} onChange={e=>set({...values,voen:e.target.value})} onBlur={e=>{const trimmed=e.target.value.trim();const match=customers.find(c=>c.voen===trimmed);set({...values,voen:trimmed,organizationName:match?match.name:""})}}/></label>,
     organizationName:(values)=><label className="field" key="organizationName">Təşkilatın adı<Input value={values.organizationName||""} readOnly placeholder="Əvvəlcə VÖEN daxil edin"/></label>,
@@ -989,9 +996,9 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   return <section className="panel pagepanel directorypanel">
     <datalist id="documentTypeOptions">{templates.map(t=><option key={t.id} value={t.name}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan Sənədlər</h2><p>Təşkilatdan göndərilən sənədlərin qeydiyyatı</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
-    {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields(form,setForm)}{templateAndFileBlock(form,newFile,setNewFile)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy||!(form.outgoingNo||"").trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
+    {creating&&<div className="inlinetaskrow documentrow outgoingrow"><small className="completehint">Çıxış No və Sənədin Nömrəsi sistem tərəfindən avtomatik təyin ediləcək.</small>{fields(form,setForm)}{templateAndFileBlock(form,newFile,setNewFile)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!(editForm.outgoingNo||"").trim()} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ çıxan sənəd qeydə alınmayıb."/>}</div>}
