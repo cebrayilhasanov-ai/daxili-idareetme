@@ -100,8 +100,6 @@ export default function Home(){
   useEffect(()=>{if(!user||(!notifOpen&&page!=="tasks"))return;const ids=overdue.map(t=>t.id);if(ids.every(id=>seenOverdue.includes(id)))return;const next=Array.from(new Set([...seenOverdue,...ids]));setSeenOverdue(next);try{localStorage.setItem(`seenOverdue:${user.id}`,JSON.stringify(next))}catch{}},[user,notifOpen,page,overdue,seenOverdue]);
   const completed=visibleTasks.filter(t=>t.status==="Təsdiqlənib");
   const activeEmployees=data.employees.filter(e=>Boolean(e.active));
-  const scored=completed.filter(t=>t.evaluation);
-  const average=scored.length?(scored.reduce((s,t)=>s+(t.evaluation||0),0)/scored.length).toFixed(1):"—";
   const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"HR"};
   const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","HR",Briefcase],["chat","Çat",MessageCircle]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
@@ -113,7 +111,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.75</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.76</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{unseenOverdue.length>0&&<em>{unseenOverdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -129,7 +127,7 @@ export default function Home(){
       {viewAs&&<div className="viewasbar"><div><strong>{viewAs.name}</strong><span>Personal görünüşündəsiniz</span></div><button onClick={()=>{setViewAs(null);setPage("employees")}}>Admin görünüşünə qayıt</button></div>}
       {error&&<div className="errorbox">{error}</div>}
       {loading?<div className="loading">Məlumatlar yüklənir...</div>:<>
-        {page==="dashboard"&&<Dashboard userName={user.name} avatarKey={ownAvatarKey} onEditAvatar={()=>{setOwnAvatarFile(null);setDialog("avatar")}} tasks={visibleTasks} active={activeTasks.length} overdue={overdue.length} completed={completed.length} employees={effectiveView?1:activeEmployees.length} average={average} goTasks={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}} evaluationEmployees={effectiveView?[effectiveView]:data.employees} ownEmployeeId={effectiveView?effectiveView.id:null}/>}
+        {page==="dashboard"&&<Dashboard userName={user.name} avatarKey={ownAvatarKey} onEditAvatar={()=>{setOwnAvatarFile(null);setDialog("avatar")}} tasks={visibleTasks} active={activeTasks.length} overdue={overdue.length} completed={completed.length} employees={effectiveView?1:activeEmployees.length} goTasks={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}} evaluationEmployees={effectiveView?[effectiveView]:data.employees} ownEmployeeId={effectiveView?effectiveView.id:null}/>}
         {page==="tasks"&&<>
         {taskSubTab==="tasks"&&<>
         {tasksSection==="manager"&&<TasksPage employeeView={Boolean(effectiveView)} tasks={visibleTasks} onDelete={task=>void deleteTaskItem(task)} onStatus={(task,status,extra)=>void request("PATCH",{action:"task",id:task.id,status,userMode:Boolean(effectiveView),...(extra||{})})} onEvaluate={(task)=>{setSelectedTask(task);open("evaluate",{evaluation:String(task.evaluation||10),evaluationNote:task.evaluation_note||""})}} dateRequests={data.dateRequests} onRequestDate={(taskId,proposedDueAt,reason)=>void request("POST",{action:"date-request",taskId,proposedDueAt,reason})} onResolveDateRequest={(id,approve,adminNote,finalDueAt)=>void request("PATCH",{action:"resolve-date-request",id,approve,adminNote,finalDueAt})}/>}
@@ -220,7 +218,37 @@ function chatFileSize(size:number){if(!size)return "";if(size<1024)return `${siz
 function threadTime(iso:string){const d=new Date(iso);const now=new Date();if(d.toDateString()===now.toDateString())return new Intl.DateTimeFormat("az-AZ",{hour:"2-digit",minute:"2-digit"}).format(d);const yesterday=new Date(now);yesterday.setDate(now.getDate()-1);if(d.toDateString()===yesterday.toDateString())return "Dünən";return new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"2-digit"}).format(d)}
 function dayLabel(iso:string){const d=new Date(iso);const now=new Date();if(d.toDateString()===now.toDateString())return "Bugün";const yesterday=new Date(now);yesterday.setDate(now.getDate()-1);if(d.toDateString()===yesterday.toDateString())return "Dünən";return new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(d)}
 
-function Dashboard({userName,avatarKey,onEditAvatar,tasks,active,overdue,completed,employees,average,goTasks,evaluationEmployees,ownEmployeeId}:{userName:string;avatarKey:string|null;onEditAvatar:()=>void;tasks:Task[];active:number;overdue:number;completed:number;employees:number;average:string;goTasks:()=>void;evaluationEmployees:Employee[];ownEmployeeId:number|null}){return <><section className="welcome"><div><small>{new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(new Date()).toUpperCase()}</small><h2>Salam, {userName}</h2><p>Bu gün komandanızın iş vəziyyətini buradan izləyə bilərsiniz.</p></div><div className="welcomeaside"><button className={avatarKey?"welcomephotobtn":"welcomephotobtn empty"} title={avatarKey?"Profil şəklini dəyiş":"Profil şəkli əlavə et"} onClick={onEditAvatar}>{avatarKey?<img className="welcomephoto" src={`/api/file?key=${encodeURIComponent(avatarKey)}`} alt={userName}/>:<span className="welcomephoto">{initials(userName)}</span>}</button><Bell/></div></section><EvaluationSection employees={evaluationEmployees} tasks={tasks}/><section className="stats"><Stat icon={<ClipboardList/>} tone="blue" label="Aktiv tapşırıq" value={active}/><Stat icon={<CircleAlert/>} tone="red" label="Gecikən" value={overdue}/><Stat icon={<CheckCircle2/>} tone="green" label="Tamamlanan" value={completed}/><Stat icon={<Users/>} tone="gold" label="Aktiv personal" value={employees}/></section>{ownEmployeeId&&<MyViolationsPanel employeeId={ownEmployeeId}/>}<TrendSection employees={evaluationEmployees} tasks={tasks}/><section className="panel"><div className="head"><div><h3>Son tapşırıqlar</h3><p>Orta qiymət: {average} / 10</p></div><button onClick={goTasks}>Hamısına bax</button></div><TaskTable tasks={tasks.slice(0,8)}/></section></>}
+function Dashboard({userName,avatarKey,onEditAvatar,tasks,active,overdue,completed,employees,goTasks,evaluationEmployees,ownEmployeeId}:{userName:string;avatarKey:string|null;onEditAvatar:()=>void;tasks:Task[];active:number;overdue:number;completed:number;employees:number;goTasks:()=>void;evaluationEmployees:Employee[];ownEmployeeId:number|null}){return <><section className="welcome"><div><small>{new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(new Date()).toUpperCase()}</small><h2>Salam, {userName}</h2><p>Bu gün komandanızın iş vəziyyətini buradan izləyə bilərsiniz.</p></div><div className="welcomeaside"><button className={avatarKey?"welcomephotobtn":"welcomephotobtn empty"} title={avatarKey?"Profil şəklini dəyiş":"Profil şəkli əlavə et"} onClick={onEditAvatar}>{avatarKey?<img className="welcomephoto" src={`/api/file?key=${encodeURIComponent(avatarKey)}`} alt={userName}/>:<span className="welcomephoto">{initials(userName)}</span>}</button><Bell/></div></section><EvaluationSection employees={evaluationEmployees} tasks={tasks}/><section className="stats"><Stat icon={<ClipboardList/>} tone="blue" label="Aktiv tapşırıq" value={active}/><Stat icon={<CircleAlert/>} tone="red" label="Gecikən" value={overdue}/><Stat icon={<CheckCircle2/>} tone="green" label="Tamamlanan" value={completed}/><Stat icon={<Users/>} tone="gold" label="Aktiv personal" value={employees}/></section>{ownEmployeeId&&<MyViolationsPanel employeeId={ownEmployeeId}/>}<div className="modulecharts"><TaskStatusChart tasks={tasks} onViewAll={goTasks}/><DocumentsOverviewChart/><ViolationsChart/></div></>}
+function TaskStatusChart({tasks,onViewAll}:{tasks:Task[];onViewAll:()=>void}){
+  const order:[string,string][]=[["Yeni","#64748b"],["İcradadır","#0C8599"],["Geri qaytarılıb","#7c3aed"],["Təqdim edilib","#f59e0b"],["Təsdiqlənib","#16a34a"],["Gecikib","#dc2626"]];
+  const counts=Object.fromEntries(order.map(([label])=>[label,0])) as Record<string,number>;
+  tasks.forEach(t=>{const label=displayStatus(t);if(label in counts)counts[label]++});
+  const rows=order.filter(([label])=>counts[label]>0);
+  const max=Math.max(...rows.map(([label])=>counts[label]),1);
+  return <section className="panel modulepanel"><div className="head"><div><h3>Tapşırıqlar</h3><p>Status üzrə paylanma</p></div><button onClick={onViewAll}>Hamısına bax</button></div>
+    {rows.length?<div className="trendbars">{rows.map(([label,color])=><div className="trendrow" key={label}><span className="trendname">{label}</span><div className="trendtrack"><span className="trendfill" style={{left:0,width:`${(counts[label]/max)*100}%`,background:color,borderRadius:6}}/></div><span className="trendcount">{counts[label]}</span></div>)}</div>:<Empty text="Hələ tapşırıq yoxdur."/>}
+  </section>;
+}
+function DocumentsOverviewChart(){
+  const [counts,setCounts]=useState<{templates:number;outgoing:number}|null>(null);
+  useEffect(()=>{let cancelled=false;Promise.all([fetch("/api/documents").then(r=>r.ok?r.json():{items:[]}),fetch("/api/documents/outgoing").then(r=>r.ok?r.json():{items:[]})]).then(([tpl,out])=>{if(!cancelled)setCounts({templates:(tpl.items||[]).length,outgoing:(out.items||[]).length})}).catch(()=>{if(!cancelled)setCounts({templates:0,outgoing:0})});return()=>{cancelled=true}},[]);
+  const rows:[string,number,string][]=[["Şablonlar",counts?.templates||0,"#0C8599"],["Çıxan sənədlər",counts?.outgoing||0,"#d97706"]];
+  const max=Math.max(...rows.map(r=>r[1]),1);
+  return <section className="panel modulepanel"><div className="head"><div><h3>Sənədlər</h3><p>Ümumi say üzrə</p></div></div>
+    {!counts?<small className="checklistempty">Yüklənir...</small>:rows.some(r=>r[1]>0)?<div className="trendbars">{rows.map(([label,count,color])=><div className="trendrow" key={label}><span className="trendname">{label}</span><div className="trendtrack"><span className="trendfill" style={{left:0,width:`${(count/max)*100}%`,background:color,borderRadius:6}}/></div><span className="trendcount">{count}</span></div>)}</div>:<Empty text="Hələ sənəd yoxdur."/>}
+  </section>;
+}
+function ViolationsChart(){
+  const [items,setItems]=useState<Violation[]|null>(null);
+  useEffect(()=>{let cancelled=false;fetch("/api/violations").then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled)setItems(body.items||[])}).catch(()=>{if(!cancelled)setItems([])});return()=>{cancelled=true}},[]);
+  const byEmployee=new Map<string,number>();
+  (items||[]).forEach(v=>byEmployee.set(v.employee_name,(byEmployee.get(v.employee_name)||0)+1));
+  const rows=[...byEmployee.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const max=Math.max(...rows.map(r=>r[1]),1);
+  return <section className="panel modulepanel"><div className="head"><div><h3>HR</h3><p>Personal üzrə qeydə alınan noqsanlar</p></div></div>
+    {items===null?<small className="checklistempty">Yüklənir...</small>:rows.length?<div className="trendbars">{rows.map(([name,count])=><div className="trendrow" key={name}><span className="trendname">{name}</span><div className="trendtrack"><span className="trendfill" style={{left:0,width:`${(count/max)*100}%`,background:"#dc2626",borderRadius:6}}/></div><span className="trendcount">{count}</span></div>)}</div>:<Empty text="Qeydə alınmış noqsan yoxdur."/>}
+  </section>;
+}
 function MyViolationsPanel({employeeId}:{employeeId:number}){
   const [items,setItems]=useState<Violation[]|null>(null);
   useEffect(()=>{let cancelled=false;void fetch("/api/violations").then(r=>r.ok?r.json():{items:[]}).then(body=>{if(cancelled)return;const own=(body.items||[]).filter((i:Violation)=>i.employee_id===employeeId);setItems(own)}).catch(()=>{if(!cancelled)setItems([])});return()=>{cancelled=true}},[employeeId]);
@@ -229,18 +257,6 @@ function MyViolationsPanel({employeeId}:{employeeId:number}){
     <div className="head"><div><h3>Noqsanlarım</h3><p>{items.length?`Ümumi ${items.length} qeyd`:"Qeydə alınmış noqsan yoxdur"}</p></div></div>
     {items.length?<div className="auditlist">{items.slice(0,5).map(item=><article key={item.id}><b>{formatDate(item.created_at)}</b><span>{item.title}</span><span>{item.company_name||"—"}</span><span>{item.note||"—"}</span></article>)}</div>:<Empty text="Hələ qeydə alınmış noqsanınız yoxdur."/>}
   </section>;
-}
-function TrendSection({employees,tasks}:{employees:Employee[];tasks:Task[]}){
-  const now=Date.now();
-  const rows=employees.map(e=>{
-    const own=tasks.filter(t=>t.employee_id===e.id);
-    const completed=own.filter(t=>t.status==="Təsdiqlənib").length;
-    const late=own.filter(t=>t.status!=="Təsdiqlənib"&&new Date(t.due_at).getTime()<now).length;
-    return {id:e.id,name:e.name,total:own.length,completed,late};
-  }).filter(r=>r.total>0).sort((a,b)=>b.total-a.total).slice(0,6);
-  if(!rows.length)return null;
-  const max=Math.max(...rows.map(r=>r.total),1);
-  return <section className="panel trendpanel"><div className="head"><div><h3>İş yükü müqayisəsi</h3><p>Personal üzrə tamamlanan və gecikən tapşırıqlar</p></div></div><div className="trendbars">{rows.map(r=><div className="trendrow" key={r.id}><span className="trendname">{r.name}</span><div className="trendtrack"><span className="trendfill done" style={{width:`${(r.completed/max)*100}%`}}/><span className="trendfill late" style={{width:`${(r.late/max)*100}%`,left:`${(r.completed/max)*100}%`}}/></div><span className="trendcount">{r.completed}/{r.total}</span></div>)}</div><div className="trendlegend"><span><i className="dot done"/>Tamamlanan</span><span><i className="dot late"/>Gecikən</span></div></section>;
 }
 function TasksPage({employeeView,tasks,onDelete,onStatus,onEvaluate,dateRequests,onRequestDate,onResolveDateRequest}:{employeeView:boolean;tasks:Task[];onDelete:(t:Task)=>void;onStatus:(t:Task,s:string,extra?:Record<string,unknown>)=>void;onEvaluate:(t:Task)=>void;dateRequests:DateRequest[];onRequestDate:(taskId:number,proposedDueAt:string,reason:string)=>void;onResolveDateRequest:(id:number,approve:boolean,adminNote:string,finalDueAt:string)=>void}){
   return <section className="panel pagepanel">
@@ -1019,7 +1035,6 @@ function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}
     </article>;
   })}</div>{!tasks.some(t=>t.evaluation)&&<Empty text="Hələ qiymətləndirilmiş iş yoxdur."/>}</section>;
 }
-function TaskTable({tasks}:{tasks:Task[]}){return <div className="simpletasks">{tasks.length?tasks.map(t=><article key={t.id}><span className={`dot ${statusClass(t)}`}/><div><h4>{t.title}</h4><p>{t.employee_name}</p></div><time>{formatDate(t.due_at)}</time><b className={`pill ${statusClass(t)}`}>{displayStatus(t)}</b></article>):<Empty text="Hələ tapşırıq yoxdur."/>}</div>}
 function ChecklistFileButton({busy,onPick}:{busy:boolean;onPick:(file:File)=>void}){
   const input=useRef<HTMLInputElement>(null);
   return <span className="checklistattach"><button type="button" className="checklistattachbtn" title="Fayl əlavə et (maks. 25 MB)" disabled={busy} onClick={()=>input.current?.click()}><Paperclip/>{busy?"Yüklənir...":"Fayl"}</button><input ref={input} type="file" hidden onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)onPick(file)}}/></span>;
