@@ -113,7 +113,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.71</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.72</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{unseenOverdue.length>0&&<em>{unseenOverdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -133,7 +133,7 @@ export default function Home(){
         {page==="tasks"&&<>
         {taskSubTab==="tasks"&&<>
         {tasksSection==="manager"&&<TasksPage employeeView={Boolean(effectiveView)} tasks={visibleTasks} onDelete={task=>void deleteTaskItem(task)} onStatus={(task,status,extra)=>void request("PATCH",{action:"task",id:task.id,status,userMode:Boolean(effectiveView),...(extra||{})})} onEvaluate={(task)=>{setSelectedTask(task);open("evaluate",{evaluation:String(task.evaluation||10),evaluationNote:task.evaluation_note||""})}} dateRequests={data.dateRequests} onRequestDate={(taskId,proposedDueAt,reason)=>void request("POST",{action:"date-request",taskId,proposedDueAt,reason})} onResolveDateRequest={(id,approve,adminNote,finalDueAt)=>void request("PATCH",{action:"resolve-date-request",id,approve,adminNote,finalDueAt})}/>}
-        {tasksSection==="mine"&&<PersonalWorksPage isAdmin={isAdmin} currentUserId={user.id} companies={data.companies} employees={activeEmployees}/>}</>}
+        {tasksSection==="mine"&&<PersonalWorksPage isAdmin={isAdmin} currentUserId={user.id} viewAsEmployeeId={viewAs?.id??null} companies={data.companies} employees={activeEmployees}/>}</>}
         {taskSubTab!=="tasks"&&<>{isAdmin&&!viewAs&&<div className="fixedsubtabs"><button className={fixedTab==="catalog"?"on":""} onClick={()=>setFixedTab("catalog")}>Sabit işlərin siyahısı</button><button className={fixedTab==="assignments"?"on":""} onClick={()=>setFixedTab("assignments")}>Personal sabit işlər</button></div>}<WorkList employeeView={Boolean(effectiveView)} tab={fixedTab} frequency={taskSubTab} items={data.workItems} assignments={effectiveView?data.workAssignments.filter(a=>a.employee_id===effectiveView.id):data.workAssignments} employees={activeEmployees} companies={data.companies.filter(c=>Boolean(c.active))} form={form} setForm={setForm} onAdd={()=>void request("POST",{action:"work-item",title:form.workTitle,description:form.workDescription,frequency:form.workFrequency||taskSubTab})} onFrequency={(item,frequency)=>void request("PATCH",{action:"work-item",id:item.id,frequency})} onAssign={()=>void request("POST",{action:"work-assignment",workDefinitionId:Number(form.assignWorkId),companyIds:(form.assignCompanyIds||"").split(",").filter(Boolean).map(Number),employeeId:Number(form.assignEmployeeId)})} onCatalogAssign={(workDefinitionId,companyId,employeeId)=>void request("POST",{action:"work-assignment",workDefinitionId,companyIds:[companyId],employeeId})} onComplete={(assignmentId)=>void request("PATCH",{action:"work-completion",assignmentId})}/></>}</>}
         {page==="chat"&&<ChatPage currentUser={user} onUnread={setChatUnread}/>}
         {page==="employees"&&<EmployeesPage employees={data.employees} tasks={data.tasks} onNew={()=>{setEmployeePhoto(null);open("employee")}} onEdit={e=>{setEmployeePhoto(null);open("employee",{id:String(e.id),name:e.name,position:e.position,email:e.email||"",companyIds:e.company_ids||""})}} onView={e=>{setViewAs(e);setPage("dashboard")}} onToggle={e=>void request("PATCH",{action:"employee",id:e.id,active:!Boolean(e.active)})} onDelete={e=>void deleteWorker(e)}/>}
@@ -248,7 +248,8 @@ function TasksPage({employeeView,tasks,onDelete,onStatus,onEvaluate,dateRequests
     <TaskGrid tasks={tasks} employeeView={employeeView} onStatus={onStatus} onEvaluate={onEvaluate} onDelete={onDelete} dateRequests={dateRequests} onRequestDate={onRequestDate} onResolveDateRequest={onResolveDateRequest}/>
   </section>
 }
-function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:boolean;currentUserId:number;companies:Company[];employees:Employee[]}){
+function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,employees}:{isAdmin:boolean;currentUserId:number;viewAsEmployeeId?:number|null;companies:Company[];employees:Employee[]}){
+  const worksUrl=(extra?:string)=>{const query=[viewAsEmployeeId?`employeeId=${viewAsEmployeeId}`:"",extra||""].filter(Boolean).join("&");return query?`/api/personal-works?${query}`:"/api/personal-works"};
   const [items,setItems]=useState<PersonalWork[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -269,8 +270,8 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
   const [checklistAttachBusy,setChecklistAttachBusy]=useState<number|null>(null);
   const [history,setHistory]=useState<{workId:number;events:WorkHistoryEvent[]}|null>(null);
   // Quiet refresh (no loading flash) so the "Paylaşılıb" column updates right after a step is handed over.
-  const reloadItems=async()=>{try{const response=await fetch("/api/personal-works");const body=await response.json();if(response.ok)setItems(body.items||[])}catch{}};
-  const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/personal-works");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
+  const reloadItems=async()=>{try{const response=await fetch(worksUrl());const body=await response.json();if(response.ok)setItems(body.items||[])}catch{}};
+  const load=async()=>{setLoading(true);setError("");try{const response=await fetch(worksUrl());const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const create=async()=>{
     if(!form.title.trim())return;
@@ -285,7 +286,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
         if(!uploadResponse.ok)throw new Error(uploadResult.error||"Fayl yüklənmədi.");
         attachment={attachmentKey:uploadResult.key,attachmentName:uploadResult.name,attachmentSize:uploadResult.size,attachmentType:uploadResult.type};
       }
-      const response=await fetch("/api/personal-works",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,...attachment})});
+      const response=await fetch(worksUrl(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,...attachment})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setItems(body.items||[]);setForm({title:"",description:"",companyId:"",dueAt:""});setFile(null);setCreating(false);
@@ -296,7 +297,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
     const next=item.status==="Yeni"?"İcradadır":"Tamamlanıb";
     setError("");
     try{
-      const response=await fetch("/api/personal-works",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,status:next})});
+      const response=await fetch(worksUrl(),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,status:next})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setItems(body.items||[]);
@@ -306,7 +307,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
     if(!window.confirm(`"${item.title}" işini silmək istəyirsiniz?`))return;
     setError("");
     try{
-      const response=await fetch(`/api/personal-works?id=${item.id}`,{method:"DELETE"});
+      const response=await fetch(worksUrl(`id=${item.id}`),{method:"DELETE"});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setItems(body.items||[]);
@@ -332,7 +333,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
       }else if(editRemoveAttachment){
         attachment={removeAttachment:true};
       }
-      const response=await fetch("/api/personal-works",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:Number(form.id),title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,...attachment})});
+      const response=await fetch(worksUrl(),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:Number(form.id),title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,...attachment})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setItems(body.items||[]);
@@ -430,7 +431,7 @@ function PersonalWorksPage({isAdmin,currentUserId,companies,employees}:{isAdmin:
     }catch(e){setChecklistError(e instanceof Error?e.message:"Fayl silinmədi.")}
   };
   return <section className="panel pagepanel">
-    <div className="pageactions"><div><h2>İşlərim</h2><p>{isAdmin?"Bütün istifadəçilərin öz qeyd etdiyi iş siyahısı":`${filtered.length} iş göstərilir`}</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni iş</Button></div>
+    <div className="pageactions"><div><h2>İşlərim</h2><p>{viewAsEmployeeId?`${employees.find(e=>e.id===viewAsEmployeeId)?.name||"Personal"} adına ${filtered.length} iş göstərilir`:`${filtered.length} iş göstərilir`}</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni iş</Button></div>
     {creating&&<div className="inlinetaskrow personalworkrow"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/><label className="field filefield">Əlavə fayl (istəyə bağlı, maks. 25 MB)<Input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file&&<small>{file.name} • {formatFileSize(file.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable personalworktable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
