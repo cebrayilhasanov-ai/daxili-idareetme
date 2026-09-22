@@ -687,6 +687,24 @@ export async function createPersonalWork(input: { userId: number; actorName?: st
   await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", title);
 }
 
+export async function updatePersonalWork(input: { id: number; userId: number; actorName?: string; title: string; description?: string; companyId?: number | null; dueAt?: string | null; removeAttachment?: boolean; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+  await ensureSchema();
+  const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!current) throw new Error("İş tapılmadı.");
+  if (Number(current.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
+  if (current.status === "Tamamlanıb") throw new Error("Tamamlanmış iş redaktə edilə bilməz.");
+  const title = input.title?.trim();
+  if (!title) throw new Error("İşin adını yazın.");
+  const attachmentKey = input.removeAttachment ? null : input.attachmentKey ?? current.attachment_key;
+  const attachmentName = input.removeAttachment ? null : input.attachmentName ?? current.attachment_name;
+  const attachmentSize = input.removeAttachment ? null : input.attachmentSize ?? current.attachment_size;
+  const attachmentType = input.removeAttachment ? null : input.attachmentType ?? current.attachment_type;
+  await db().prepare(`UPDATE personal_works SET title = ?, description = ?, company_id = ?, due_at = ?, attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?`)
+    .bind(title, input.description?.trim() || null, input.companyId ?? null, input.dueAt ?? null, attachmentKey, attachmentName, attachmentSize, attachmentType, input.id).run();
+  if (current.attachment_key && current.attachment_key !== attachmentKey && env.FILES) await env.FILES.delete(String(current.attachment_key));
+  await recordPersonalWorkEvent(input.id, input.actorName, "İş məlumatları redaktə edildi", title);
+}
+
 export async function updatePersonalWorkStatus(input: { id: number; userId: number; actorName?: string; status: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();

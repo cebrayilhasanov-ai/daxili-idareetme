@@ -1,4 +1,4 @@
-import { createPersonalWork, deletePersonalWork, getPersonalWorks, updatePersonalWorkStatus } from "@/db/catalog";
+import { createPersonalWork, deletePersonalWork, getPersonalWorks, updatePersonalWork, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 
 function authError(error: unknown) {
@@ -41,7 +41,24 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request);
     const body = await request.json();
-    await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
+    if (body.status) {
+      await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
+    } else {
+      await updatePersonalWork({
+        id: Number(body.id),
+        userId: user.id,
+        actorName: user.name,
+        title: String(body.title || ""),
+        description: body.description,
+        companyId: body.companyId ? Number(body.companyId) : null,
+        dueAt: body.dueAt || null,
+        removeAttachment: body.removeAttachment,
+        attachmentKey: body.attachmentKey,
+        attachmentName: body.attachmentName,
+        attachmentSize: body.attachmentSize,
+        attachmentType: body.attachmentType,
+      });
+    }
     const items = await getPersonalWorks(user.role === "admin" ? null : user.id);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "İş yenilənmədi." }, { status: 500 }); }
