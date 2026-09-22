@@ -699,7 +699,8 @@ export async function deletePersonalWork(input: { id: number; userId: number }) 
 
 export async function getPersonalWorkChecklist(personalWorkId: number) {
   await ensureSchema();
-  return (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status
+  return (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
+    delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size
     FROM personal_work_checklist_items
     LEFT JOIN employees AS delegated_employee ON delegated_employee.id = personal_work_checklist_items.delegated_employee_id
     LEFT JOIN tasks AS delegated_task ON delegated_task.id = personal_work_checklist_items.delegated_task_id
