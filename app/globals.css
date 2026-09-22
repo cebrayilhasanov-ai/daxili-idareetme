@@ -221,10 +221,6 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .datewrap input[type=datetime-local]::-webkit-datetime-edit,.datewrap input[type=datetime-local]::-webkit-datetime-edit-fields-wrapper,.datewrap input[type=datetime-local]::-webkit-datetime-edit-text,.datewrap input[type=datetime-local]::-webkit-datetime-edit-day-field,.datewrap input[type=datetime-local]::-webkit-datetime-edit-month-field,.datewrap input[type=datetime-local]::-webkit-datetime-edit-year-field,.datewrap input[type=datetime-local]::-webkit-datetime-edit-hour-field,.datewrap input[type=datetime-local]::-webkit-datetime-edit-minute-field,.datewrap input[type=datetime-local]::-webkit-datetime-edit-ampm-field{color:transparent}
 .dateoverlay{position:absolute;left:13px;top:50%;transform:translateY(-50%);pointer-events:none;color:#172237;font-size:13px;font-weight:600}
 
-/* Tapşırıqlar filtrləri - başlıqlı */
-.filterfield{display:grid;gap:4px;font-size:11px;color:#64748b;font-weight:700}
-@media(max-width:600px){.filterfield{width:100%}.filterfield select{width:100%}}
-
 /* "Tapşırıqlar" bölməsinin "Rəhbər tərəfindən verilən" / "İşlərim" alt-tabları */
 .taskssubtabs2{padding-top:0}
 .personalworkrow{grid-template-columns:1fr 1fr auto}
