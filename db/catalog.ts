@@ -887,7 +887,7 @@ export async function createOutgoingDocument(input: { outgoingDate?: string; inc
   await ensureSchema();
   // Çıxış No: one continuous sequence for every outgoing document ever created, regardless of type — never resets.
   const maxOutgoing = await db().prepare("SELECT MAX(CAST(outgoing_no AS INTEGER)) AS maxNo FROM outgoing_documents").first<{ maxNo: number | null }>();
-  const outgoingNo = String((maxOutgoing?.maxNo || 0) + 1);
+  const outgoingNo = String((maxOutgoing?.maxNo || 0) + 1).padStart(6, "0");
   // Sənədin Nömrəsi: its own sequence per document type, starting over at 1 each calendar year, shown as "N/YYYY".
   const year = new Date().getFullYear();
   const docType = input.documentType?.trim() || "";
