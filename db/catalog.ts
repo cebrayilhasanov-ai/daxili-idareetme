@@ -897,7 +897,7 @@ export async function createOutgoingDocument(input: { outgoingDate?: string; inc
     const parsed = parseInt(String(row.document_number || "").split("/")[0], 10);
     if (!isNaN(parsed) && parsed > maxDocNumber) maxDocNumber = parsed;
   }
-  const documentNumber = `${maxDocNumber + 1}/${year}`;
+  const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
   await db().prepare(`INSERT INTO outgoing_documents
     (outgoing_no, outgoing_date, incoming_no, incoming_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, attachment_key, attachment_name, attachment_size, attachment_type, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
