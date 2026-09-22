@@ -758,8 +758,19 @@ export async function togglePersonalWorkChecklistItem(input: { id: number; actor
   const item = await db().prepare("SELECT personal_work_id, delegated_task_id, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Bu addım işçiyə həvalə edilib, statusu tapşırığın təsdiqi ilə avtomatik yenilənəcək.");
+  const work = await db().prepare("SELECT status FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<{ status: string }>();
+  if (!work) throw new Error("İş tapılmadı.");
+  if (work.status !== "İcradadır") throw new Error("Yalnız icraya alınmış işdə addımlar ✓ edilə bilər.");
   await db().prepare("UPDATE personal_work_checklist_items SET done = ? WHERE id = ?").bind(Number(input.done), input.id).run();
   await recordPersonalWorkEvent(item.personal_work_id, input.actorName, input.done ? "Addım tamamlandı ✓" : "Addımdan ✓ götürüldü", item.title);
+  // Every step done finishes the work automatically — no separate "Tamamla" click needed once the checklist itself says so.
+  if (input.done) {
+    const remaining = await db().prepare("SELECT COUNT(*) AS count FROM personal_work_checklist_items WHERE personal_work_id = ? AND done = 0").bind(item.personal_work_id).first<{ count: number }>();
+    if (!remaining?.count) {
+      await db().prepare("UPDATE personal_works SET status = 'Tamamlanıb', completed_at = ? WHERE id = ?").bind(new Date().toISOString(), item.personal_work_id).run();
+      await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "İş tamamlandı", "Bütün addımlar ✓ edildiyi üçün avtomatik tamamlandı");
+    }
+  }
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
@@ -771,7 +782,7 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   const work = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<Record<string, unknown>>();
   if (!work) throw new Error("İş tapılmadı.");
   if (Number(work.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
-  if (work.status === "Tamamlanıb") throw new Error("Tamamlanmış işdə addım işçiyə həvalə edilə bilməz.");
+  if (work.status !== "İcradadır") throw new Error("Yalnız icraya alınmış işdə addım işçiyə həvalə edilə bilər.");
   if (!work.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
   if (!work.due_at) throw new Error("Həvalə etmək üçün əvvəlcə işin son tarixini təyin edin.");
   const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, work.company_id).first();
