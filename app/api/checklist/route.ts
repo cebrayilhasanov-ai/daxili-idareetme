@@ -1,4 +1,4 @@
-import { createChecklistItem, deleteChecklistItem, getChecklistItems, toggleChecklistItem } from "@/db/catalog";
+import { createChecklistItem, deleteChecklistItem, getChecklistItems, setChecklistItemAttachment, toggleChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 
@@ -44,7 +44,12 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT task_id FROM task_checklist_items WHERE id = ?").bind(id).first<{ task_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertTaskAccess(user, existing.task_id);
-    const items = await toggleChecklistItem({ id, done: Boolean(body.done) });
+    const items = body.removeAttachment || body.attachmentKey
+      ? await setChecklistItemAttachment({
+          id,
+          attachment: body.removeAttachment ? null : { key: String(body.attachmentKey), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") },
+        })
+      : await toggleChecklistItem({ id, done: Boolean(body.done) });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım yenilənmədi." }, { status: 500 }); }
 }

@@ -51,6 +51,11 @@ async function ensureSchema() {
     done INTEGER DEFAULT 0 NOT NULL,
     created_at TEXT NOT NULL
   )`).run();
+  const taskChecklistItemColumns = await db().prepare("PRAGMA table_info(task_checklist_items)").all<{ name: string }>();
+  if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_key")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_key TEXT").run();
+  if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_name TEXT").run();
+  if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_size INTEGER").run();
+  if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_type TEXT").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS document_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name TEXT NOT NULL,
@@ -569,6 +574,16 @@ export async function deleteChecklistItem(input: { id: number }) {
   const item = await db().prepare("SELECT task_id FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   await db().prepare("DELETE FROM task_checklist_items WHERE id = ?").bind(input.id).run();
+  return getChecklistItems(item.task_id);
+}
+
+export async function setChecklistItemAttachment(input: { id: number; attachment: { key: string; name: string; size: number; type: string } | null }) {
+  await ensureSchema();
+  const item = await db().prepare("SELECT task_id, attachment_key FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number; attachment_key: string | null }>();
+  if (!item) throw new Error("İş addımı tapılmadı.");
+  await db().prepare("UPDATE task_checklist_items SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
+    .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
+  if (item.attachment_key && item.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(item.attachment_key);
   return getChecklistItems(item.task_id);
 }
 
