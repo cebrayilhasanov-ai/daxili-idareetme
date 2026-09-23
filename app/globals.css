@@ -363,3 +363,16 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .historyheadright{display:flex;align-items:center;gap:10px}
 .historytoggle{padding:5px 16px;border:1px solid #7c5cd6;border-radius:8px;background:#fff;color:#5b3fb0;font-size:11px;font-weight:800;cursor:pointer}
 .historytoggle:hover{background:#7c5cd6;color:#fff}
+.structuredialog{max-width:min(96vw,900px)}
+.structuretoolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;padding-bottom:6px}
+.structuretoolbar .field{min-width:150px;flex:1}
+.structureimport{padding-bottom:6px}
+.structuretree,.structuretree ul{list-style:none;margin:0;padding-left:22px}
+.structuretree{padding-left:0}
+.structuretree li{position:relative;padding:6px 0 6px 18px;border-left:1px dashed #d6dee8}
+.structuretree>li{border-left:0;padding-left:0}
+.structurenode{display:inline-flex;align-items:center;gap:9px;padding:7px 12px;border:1px solid #e4eaf2;border-radius:10px;background:#fff}
+.structurenode b{font-size:12px}
+.structurenode small{color:#7a879b;font-size:10px;background:#f1f5f9;border-radius:8px;padding:2px 7px}
+.structurenode button{border:0;background:none;color:#94a3b8;cursor:pointer;font-size:11px}
+.structurenode button:hover{color:#dc2626}

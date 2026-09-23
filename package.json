@@ -41,6 +41,7 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "3.6.0",
     "vaul": "^1.1.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -63,5 +64,5 @@
     "wrangler": "4.92.0"
   },
   "type": "module",
-  "displayName": "Daxili \u0130dar\u0259etm\u0259"
+  "displayName": "Daxili İdarəetmə"
 }

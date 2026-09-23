@@ -21,6 +21,7 @@ type ManagedUser = { id:number; name:string; email:string; role:string; employee
 type Page = "dashboard"|"tasks"|"chat"|"employees"|"companies"|"customers"|"audit"|"documents"|"hr";
 type AuditItem = { id:number; actor_name:string; action:string; target_type:string; target_label:string|null; created_at:string };
 type Violation = { id:number; employee_id:number; employee_name:string; company_id:number|null; company_name:string|null; title:string; note:string|null; created_by_name:string|null; created_at:string };
+type StructurePosition = { id:number; company_id:number; department:string; title:string; reports_to:string|null; sort_order:number; created_at:string };
 type ChatThread = { id:number; type:"group"|"direct"; name:string; avatar_key:string|null; last_message:string|null; last_message_at:string|null; unread:number };
 type ChatMessage = { id:number; thread_id:number; sender_user_id:number; sender_name:string; sender_avatar_key:string|null; body:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string };
 type ChatUser = { id:number; name:string; email:string; avatar_key:string|null };
@@ -128,7 +129,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.92</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.93</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -629,7 +630,102 @@ function EmployeesPage({employees,tasks,onNew,onEdit,onView,onDelete}:{employees
   const savePassword=async()=>{if(!reset)return;const response=await fetch("/api/users",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:reset.id,password})});const body=await response.json();if(!response.ok){setError(body.error);return}setAccounts(body.users);setReset(null);setPassword("")};
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL VƏ GİRİŞ HESABLARI</span><h2>Personal reyestri</h2><p>Personal məlumatları və proqrama giriş icazələri vahid bölmədə idarə olunur</p></div><Button onClick={onNew}><Plus/>Yeni personal</Button></div>{error&&<div className="errorbox">{error}</div>}<div className="employeecards officialcards">{employees.length?employees.map(e=>{const own=tasks.filter(t=>t.employee_id===e.id);const done=own.filter(t=>t.status==="Təsdiqlənib");const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const rated=done.filter(t=>t.evaluation);const avg=rated.length?(rated.reduce((s,t)=>s+(t.evaluation||0),0)/rated.length).toFixed(1):"—";const account=accounts.find(a=>a.employee_id===e.id);const active=account?Boolean(account.active):Boolean(e.active);const manager=employees.find(m=>m.id===e.manager_employee_id);return <article key={e.id} className={!active?"inactivecard":""}><div className="identityblock"><i className={e.avatar_key?"hasphoto":""}>{e.avatar_key?<img src={`/api/file?key=${encodeURIComponent(e.avatar_key)}`} alt={e.name}/>:initials(e.name)}</i><div><div className="identitytitle"><h3>{e.name}</h3><span className={active?"recordstatus active":"recordstatus inactive"}>{active?"Aktiv":"Deaktiv"}</span></div><p><b>Vəzifə:</b> {e.position}</p><p><b>Səlahiyyə növü:</b> {e.authority_type||"İşçi"}</p><p><b>Tabe olduğu şəxs:</b> {manager?manager.name:"Qeyd edilməyib"}</p><p><b>E-poçt və giriş adı:</b> {e.email||"Qeyd edilməyib"}</p><p><b>Giriş hesabı:</b> {account?"Yaradılıb":"Yaradılmayıb"}</p></div></div><div className="recordmetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>İcrada</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{done.length}</b></span><span><small>Orta qiymət</small><b>{avg}</b></span></div><div className="employeeactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(e)}>Redaktə et</button>{active&&<button className="viewasbtn" onClick={()=>onView(e)}>Personal görünüşü</button>}{account&&<button className="editcompanybtn" onClick={()=>{setReset(account);setPassword("")}}>Şifrəni yenilə</button>}{account&&<button className={active?"deactivatebtn":"activatebtn"} onClick={()=>{if(!active||window.confirm(`${e.name} adlı personalı deaktiv etmək istəyirsiniz?`))void toggle(account)}}>{active?"Deaktiv et":"Aktiv et"}</button>}{!active&&own.length===0&&<button className="deleteworkerbtn" onClick={()=>onDelete(e)}>Sil</button>}</div></article>}):<Empty text="İlk personalı əlavə edin."/>}</div><Dialog open={Boolean(reset)} onOpenChange={v=>!v&&setReset(null)}><DialogContent className="businessdialog" resizable>{reset&&<FormShell title="Personalın şifrəsini yenilə" desc={`${reset.name} üçün yeni müvəqqəti şifrə təyin edin.`}><Field label="Yeni şifrə (ən az 8 simvol)" type="password" value={password} set={setPassword}/><Button disabled={password.length<8} onClick={()=>void savePassword()}>Şifrəni yenilə</Button></FormShell>}</DialogContent></Dialog></section>
 }
-function CompaniesPage({companies,tasks,onNew,onEdit,onToggle}:{companies:Company[];tasks:Task[];onNew:()=>void;onEdit:(c:Company)=>void;onToggle:(c:Company)=>void}){return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">TƏŞKİLATİ MƏLUMATLAR</span><h2>Firmalar reyestri</h2><p>Tapşırıqların aid olduğu hüquqi şəxslər və əsas rekvizitlər</p></div><Button onClick={onNew}><Plus/>Yeni firma</Button></div><div className="companylist officialcards">{companies.length?companies.map(c=>{const own=tasks.filter(t=>t.company_id===c.id);const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const completed=own.filter(t=>t.status==="Təsdiqlənib").length;return <article key={c.id} className={!c.active?"inactivecard":""}><div className="identityblock companyidentity"><i><Building2/></i><div><div className="identitytitle"><h3>{c.name}</h3><span className={c.active?"recordstatus active":"recordstatus inactive"}>{c.active?"Aktiv":"Deaktiv"}</span></div><p><b>VÖEN:</b> {c.voen||"Qeyd edilməyib"}</p><p><b>Rəhbər:</b> {c.manager||"Qeyd edilməyib"}</p></div></div><div className="recordmetrics companymetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>Aktiv iş</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{completed}</b></span></div><div className="companyactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(c)}>Məlumatları redaktə et</button><button className={c.active?"deactivatebtn":"activatebtn"} onClick={()=>onToggle(c)}>{c.active?"Deaktiv et":"Aktiv et"}</button></div></article>}):<Empty text="İlk firmanı əlavə edin."/>}</div></section>}
+function CompaniesPage({companies,tasks,onNew,onEdit,onToggle}:{companies:Company[];tasks:Task[];onNew:()=>void;onEdit:(c:Company)=>void;onToggle:(c:Company)=>void}){
+  const [structureCompany,setStructureCompany]=useState<Company|null>(null);
+  return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">TƏŞKİLATİ MƏLUMATLAR</span><h2>Firmalar reyestri</h2><p>Tapşırıqların aid olduğu hüquqi şəxslər və əsas rekvizitlər</p></div><Button onClick={onNew}><Plus/>Yeni firma</Button></div><div className="companylist officialcards">{companies.length?companies.map(c=>{const own=tasks.filter(t=>t.company_id===c.id);const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const completed=own.filter(t=>t.status==="Təsdiqlənib").length;return <article key={c.id} className={!c.active?"inactivecard":""}><div className="identityblock companyidentity"><i><Building2/></i><div><div className="identitytitle"><h3>{c.name}</h3><span className={c.active?"recordstatus active":"recordstatus inactive"}>{c.active?"Aktiv":"Deaktiv"}</span></div><p><b>VÖEN:</b> {c.voen||"Qeyd edilməyib"}</p><p><b>Rəhbər:</b> {c.manager||"Qeyd edilməyib"}</p></div></div><div className="recordmetrics companymetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>Aktiv iş</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{completed}</b></span></div><div className="companyactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(c)}>Məlumatları redaktə et</button><button className="editcompanybtn" onClick={()=>setStructureCompany(c)}>Struktur</button><button className={c.active?"deactivatebtn":"activatebtn"} onClick={()=>onToggle(c)}>{c.active?"Deaktiv et":"Aktiv et"}</button></div></article>}):<Empty text="İlk firmanı əlavə edin."/>}</div>
+  <CompanyStructureDialog company={structureCompany} onClose={()=>setStructureCompany(null)}/>
+  </section>}
+function structureTree(items:StructurePosition[]){
+  const byTitle=new Map(items.map(i=>[i.title.trim().toLocaleLowerCase("az-AZ"),i]));
+  const childrenOf=new Map<number,StructurePosition[]>();
+  const roots:StructurePosition[]=[];
+  for(const item of items){
+    let parent:StructurePosition|null=null;
+    if(item.reports_to){
+      for(const candidate of item.reports_to.split("/").map(s=>s.trim().toLocaleLowerCase("az-AZ")).filter(Boolean)){
+        const found=byTitle.get(candidate);
+        if(found&&found.id!==item.id){parent=found;break}
+      }
+    }
+    if(parent){const arr=childrenOf.get(parent.id)||[];arr.push(item);childrenOf.set(parent.id,arr)}
+    else roots.push(item);
+  }
+  return {roots,childrenOf};
+}
+function StructureNode({item,childrenOf,onDelete,busy}:{item:StructurePosition;childrenOf:Map<number,StructurePosition[]>;onDelete:(item:StructurePosition)=>void;busy:boolean}){
+  const kids=childrenOf.get(item.id)||[];
+  return <li><div className="structurenode"><b>{item.title}</b><small>{item.department}</small><button type="button" disabled={busy} title="Sil" onClick={()=>onDelete(item)}>✕</button></div>{kids.length>0&&<ul>{kids.map(k=><StructureNode key={k.id} item={k} childrenOf={childrenOf} onDelete={onDelete} busy={busy}/>)}</ul>}</li>;
+}
+function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:()=>void}){
+  const [items,setItems]=useState<StructurePosition[]>([]);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [form,setForm]=useState({department:"",title:"",reportsTo:""});
+  const [importBusy,setImportBusy]=useState(false);
+  const load=async()=>{if(!company)return;setLoading(true);setError("");try{const response=await fetch(`/api/company-structure?companyId=${company.id}`);const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Struktur açıla bilmədi.")}finally{setLoading(false)}};
+  useEffect(()=>{if(company){setForm({department:"",title:"",reportsTo:""});void load()}else setItems([])},[company?.id]);
+  const departments=Array.from(new Set(items.map(i=>i.department)));
+  const add=async()=>{
+    if(!company||!form.department.trim()||!form.title.trim())return;
+    setBusy(true);setError("");
+    try{
+      const response=await fetch("/api/company-structure",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({companyId:company.id,department:form.department,title:form.title,reportsTo:form.reportsTo||null})});
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.error);
+      setItems(body.items||[]);setForm({department:form.department,title:"",reportsTo:form.reportsTo});
+    }catch(e){setError(e instanceof Error?e.message:"Vəzifə əlavə olunmadı.")}
+    finally{setBusy(false)}
+  };
+  const remove=async(item:StructurePosition)=>{
+    if(!window.confirm(`"${item.title}" vəzifəsini silmək istəyirsiniz?`))return;
+    setBusy(true);setError("");
+    try{
+      const response=await fetch(`/api/company-structure?id=${item.id}`,{method:"DELETE"});
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.error);
+      setItems(body.items||[]);
+    }catch(e){setError(e instanceof Error?e.message:"Vəzifə silinmədi.")}
+    finally{setBusy(false)}
+  };
+  const importFile=async(file:File)=>{
+    if(!company)return;
+    setImportBusy(true);setError("");
+    try{
+      const XLSX=await import("xlsx");
+      const buffer=await file.arrayBuffer();
+      const workbook=XLSX.read(buffer,{type:"array"});
+      const sheet=workbook.Sheets[workbook.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json<(string|number|null)[]>(sheet,{header:1,defval:null});
+      const dataRows=raw.slice(1).filter(row=>row.some(cell=>cell!==null&&String(cell).trim()!==""));
+      let currentDepartment="";
+      const rows=dataRows.map(row=>{
+        const department=row[0]!==null&&row[0]!==undefined&&String(row[0]).trim()?String(row[0]).trim():currentDepartment;
+        currentDepartment=department;
+        return {department,title:String(row[1]??"").trim(),reportsTo:row[2]!==null&&row[2]!==undefined&&String(row[2]).trim()?String(row[2]).trim():null};
+      }).filter(r=>r.department&&r.title);
+      if(!rows.length)throw new Error("Fayldan oxunacaq sətir tapılmadı. Sütunlar: Şöbə, Vəzifə, Tabeçilik.");
+      const response=await fetch("/api/company-structure",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"import",companyId:company.id,rows})});
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.error);
+      setItems(body.items||[]);
+    }catch(e){setError(e instanceof Error?e.message:"Fayl idxal edilmədi.")}
+    finally{setImportBusy(false)}
+  };
+  const {roots,childrenOf}=structureTree(items);
+  return <Dialog open={Boolean(company)} onOpenChange={v=>!v&&onClose()}><DialogContent className="businessdialog structuredialog" resizable>{company&&<FormShell title={`${company.name} — Təşkilati struktur`} desc="Şöbələr, vəzifələr və tabeçilik münasibətləri. Əl ilə əlavə edin, ya da XLS-dən (Şöbə/Vəzifə/Tabeçilik sütunları) idxal edin." formClass="structureform">
+    <div className="structuretoolbar">
+      <label className="field">Şöbə<Input list="structuredepartments" value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></label>
+      <datalist id="structuredepartments">{departments.map(d=><option key={d} value={d}/>)}</datalist>
+      <label className="field">Vəzifə<Input value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label>
+      <label className="field">Tabeçilik (kimə tabedir)<select value={form.reportsTo} onChange={e=>setForm({...form,reportsTo:e.target.value})}><option value="">Ən yuxarı (heç kimə)</option>{items.map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>
+      <Button disabled={busy||!form.department.trim()||!form.title.trim()} onClick={()=>void add()}><Plus/>Əlavə et</Button>
+    </div>
+    <div className="structureimport"><label className="upload">{importBusy?"İdxal edilir...":"XLS-dən idxal et (Şöbə, Vəzifə, Tabeçilik sütunları — mövcud strukturu əvəz edir)"}<input type="file" accept=".xlsx,.xls" disabled={importBusy} onChange={e=>{const file=e.target.files?.[0];if(file)void importFile(file);e.target.value=""}}/></label></div>
+    {error&&<div className="errorbox">{error}</div>}
+    {loading?<div className="loading">Yüklənir...</div>:roots.length?<ul className="structuretree">{roots.map(r=><StructureNode key={r.id} item={r} childrenOf={childrenOf} onDelete={remove} busy={busy}/>)}</ul>:<Empty text="Bu firma üçün hələ struktur qurulmayıb."/>}
+  </FormShell>}</DialogContent></Dialog>;
+}
 const customerColumns:Array<{key:string;label:string;width:number;search:(item:Customer)=>string;render:(item:Customer)=>React.ReactNode}>=[
   {key:"status",label:"Statusu",width:130,search:i=>i.entity_type||"",render:i=><>{i.entity_type||"—"}</>},
   {key:"voen",label:"VÖEN/FİN",width:100,search:i=>i.voen||"",render:i=><>{i.voen||"—"}</>},

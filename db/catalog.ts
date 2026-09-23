@@ -185,6 +185,15 @@ async function ensureSchema() {
   if (!companyColumns.results.some((column) => column.name === "manager")) {
     await db().prepare("ALTER TABLE companies ADD COLUMN manager TEXT").run();
   }
+  await db().prepare(`CREATE TABLE IF NOT EXISTS company_structure_positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    department TEXT NOT NULL,
+    title TEXT NOT NULL,
+    reports_to TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )`).run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_definitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     title TEXT NOT NULL,
@@ -436,6 +445,56 @@ export async function updateCompany(input: { id: number; name?: string; voen?: s
   if (!current) throw new Error("Firma tapılmadı.");
   await db().prepare("UPDATE companies SET name = ?, voen = ?, manager = ?, active = ? WHERE id = ?")
     .bind(input.name?.trim() || current.name, input.voen === undefined ? current.voen : input.voen.trim() || null, input.manager === undefined ? current.manager : input.manager.trim() || null, input.active === undefined ? current.active : Number(input.active), input.id).run();
+}
+
+export async function getCompanyStructure(companyId: number) {
+  await ensureSchema();
+  return (await db().prepare("SELECT * FROM company_structure_positions WHERE company_id = ? ORDER BY sort_order, id").bind(companyId).all()).results;
+}
+
+export async function createStructurePosition(input: { companyId: number; department: string; title: string; reportsTo?: string | null }) {
+  await ensureSchema();
+  const department = input.department?.trim();
+  const title = input.title?.trim();
+  if (!department) throw new Error("Şöbənin adını yazın.");
+  if (!title) throw new Error("Vəzifənin adını yazın.");
+  const max = await db().prepare("SELECT COALESCE(MAX(sort_order), 0) AS max FROM company_structure_positions WHERE company_id = ?").bind(input.companyId).first<{ max: number }>();
+  await db().prepare("INSERT INTO company_structure_positions (company_id, department, title, reports_to, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(input.companyId, department, title, input.reportsTo?.trim() || null, (max?.max || 0) + 1, new Date().toISOString()).run();
+  return getCompanyStructure(input.companyId);
+}
+
+export async function updateStructurePosition(input: { id: number; department?: string; title?: string; reportsTo?: string | null }) {
+  await ensureSchema();
+  const current = await db().prepare("SELECT * FROM company_structure_positions WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!current) throw new Error("Vəzifə tapılmadı.");
+  await db().prepare("UPDATE company_structure_positions SET department = ?, title = ?, reports_to = ? WHERE id = ?")
+    .bind(input.department?.trim() || current.department, input.title?.trim() || current.title, input.reportsTo === undefined ? current.reports_to : (input.reportsTo?.trim() || null), input.id).run();
+  return getCompanyStructure(Number(current.company_id));
+}
+
+export async function deleteStructurePosition(id: number) {
+  const current = await db().prepare("SELECT company_id FROM company_structure_positions WHERE id = ?").bind(id).first<{ company_id: number }>();
+  if (!current) throw new Error("Vəzifə tapılmadı.");
+  await db().prepare("DELETE FROM company_structure_positions WHERE id = ?").bind(id).run();
+  return getCompanyStructure(current.company_id);
+}
+
+// Wholesale replace — used by the XLS import so re-uploading a corrected file cleanly supersedes the previous structure.
+export async function replaceCompanyStructure(companyId: number, rows: Array<{ department: string; title: string; reportsTo?: string | null }>) {
+  await ensureSchema();
+  await db().prepare("DELETE FROM company_structure_positions WHERE company_id = ?").bind(companyId).run();
+  const now = new Date().toISOString();
+  let order = 0;
+  for (const row of rows) {
+    const department = row.department?.trim();
+    const title = row.title?.trim();
+    if (!department || !title) continue;
+    order += 1;
+    await db().prepare("INSERT INTO company_structure_positions (company_id, department, title, reports_to, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(companyId, department, title, row.reportsTo?.trim() || null, order, now).run();
+  }
+  return getCompanyStructure(companyId);
 }
 
 async function setEmployeeCompanies(employeeId: number, companyIds: number[]) {
