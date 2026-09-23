@@ -495,6 +495,8 @@ export async function createStructurePosition(input: { companyId: number; depart
   const title = input.title?.trim();
   if (!department) throw new Error("Şöbənin adını yazın.");
   if (!title) throw new Error("Vəzifənin adını yazın.");
+  const duplicate = await db().prepare("SELECT 1 FROM company_structure_positions WHERE company_id = ? AND lower(title) = lower(?)").bind(input.companyId, title).first();
+  if (duplicate) throw new Error("Bu vəzifə artıq siyahıdadır — hər vəzifə yalnız bir dəfə əlavə oluna bilər.");
   const max = await db().prepare("SELECT COALESCE(MAX(sort_order), 0) AS max FROM company_structure_positions WHERE company_id = ?").bind(input.companyId).first<{ max: number }>();
   await db().prepare("INSERT INTO company_structure_positions (company_id, department, title, reports_to, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(input.companyId, department, title, input.reportsTo?.trim() || null, (max?.max || 0) + 1, new Date().toISOString()).run();
@@ -505,8 +507,11 @@ export async function updateStructurePosition(input: { id: number; department?: 
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM company_structure_positions WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Vəzifə tapılmadı.");
+  const title = input.title?.trim() || String(current.title);
+  const duplicate = await db().prepare("SELECT 1 FROM company_structure_positions WHERE company_id = ? AND id != ? AND lower(title) = lower(?)").bind(current.company_id, input.id, title).first();
+  if (duplicate) throw new Error("Bu vəzifə artıq siyahıdadır — hər vəzifə yalnız bir dəfə əlavə oluna bilər.");
   await db().prepare("UPDATE company_structure_positions SET department = ?, title = ?, reports_to = ? WHERE id = ?")
-    .bind(input.department?.trim() || current.department, input.title?.trim() || current.title, input.reportsTo === undefined ? current.reports_to : (input.reportsTo?.trim() || null), input.id).run();
+    .bind(input.department?.trim() || current.department, title, input.reportsTo === undefined ? current.reports_to : (input.reportsTo?.trim() || null), input.id).run();
   return getCompanyStructure(Number(current.company_id));
 }
 
@@ -515,23 +520,6 @@ export async function deleteStructurePosition(id: number) {
   if (!current) throw new Error("Vəzifə tapılmadı.");
   await db().prepare("DELETE FROM company_structure_positions WHERE id = ?").bind(id).run();
   return getCompanyStructure(current.company_id);
-}
-
-// Wholesale replace — used by the XLS import so re-uploading a corrected file cleanly supersedes the previous structure.
-export async function replaceCompanyStructure(companyId: number, rows: Array<{ department: string; title: string; reportsTo?: string | null }>) {
-  await ensureSchema();
-  await db().prepare("DELETE FROM company_structure_positions WHERE company_id = ?").bind(companyId).run();
-  const now = new Date().toISOString();
-  let order = 0;
-  for (const row of rows) {
-    const department = row.department?.trim();
-    const title = row.title?.trim();
-    if (!department || !title) continue;
-    order += 1;
-    await db().prepare("INSERT INTO company_structure_positions (company_id, department, title, reports_to, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(companyId, department, title, row.reportsTo?.trim() || null, order, now).run();
-  }
-  return getCompanyStructure(companyId);
 }
 
 async function setEmployeeCompanies(employeeId: number, companyIds: number[]) {

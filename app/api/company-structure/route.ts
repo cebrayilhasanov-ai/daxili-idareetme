@@ -1,4 +1,4 @@
-import { createStructurePosition, deleteStructurePosition, getCompanyStructure, replaceCompanyStructure, updateStructurePosition } from "@/db/catalog";
+import { createStructurePosition, deleteStructurePosition, getCompanyStructure, updateStructurePosition } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 
@@ -22,13 +22,6 @@ export async function POST(request: Request) {
   try {
     const user = await requireUser(request, "admin");
     const body = await request.json();
-    if (body.action === "import") {
-      const companyId = Number(body.companyId);
-      const rows = Array.isArray(body.rows) ? body.rows : [];
-      const items = await replaceCompanyStructure(companyId, rows);
-      await logAudit(user, "Firma strukturu idxal edildi", "company", `#${companyId}`);
-      return Response.json({ items });
-    }
     const items = await createStructurePosition({ companyId: Number(body.companyId), department: String(body.department || ""), title: String(body.title || ""), reportsTo: body.reportsTo });
     await logAudit(user, "Struktura vəzifə əlavə edildi", "company", `#${body.companyId}`);
     return Response.json({ items });
