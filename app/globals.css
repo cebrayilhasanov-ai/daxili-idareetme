@@ -368,4 +368,5 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .structuretable th:nth-child(1),.structuretable td:nth-child(1){width:22%}
 .structuretable th:nth-child(2),.structuretable td:nth-child(2){width:32%}
 .structuretable th:nth-child(3),.structuretable td:nth-child(3){width:26%}
-.structuredeptcell{text-align:center;vertical-align:middle;font-weight:800;color:#0f172a;background:#f8fafc;border-right:1px solid #e4eaf2}
+.structuretable thead tr{background:linear-gradient(90deg,#E3FAFD,#fff)}
+.structuredeptcell{text-align:center;vertical-align:middle;font-weight:800;font-size:15px;color:#0f172a;border-right:2px solid #d6dee8}

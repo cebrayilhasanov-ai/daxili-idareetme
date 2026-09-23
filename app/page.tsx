@@ -128,7 +128,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.98</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.99</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -703,6 +703,8 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
   const deptCounts=new Map<string,number>();
   for(const item of grouped)deptCounts.set(item.department,(deptCounts.get(item.department)||0)+1);
   const seenDept=new Set<string>();
+  const deptPalette=["#E3FAFD","#e8f8ee","#fff3d7","#f5f3ff","#feecec","#eef2ff","#fde8f0","#e6f4ea","#fdf2e9"];
+  const deptColor=(department:string)=>deptPalette[departmentOrder.indexOf(department)%deptPalette.length];
   return <Dialog open={Boolean(company)} onOpenChange={v=>!v&&onClose()}><DialogContent className="businessdialog structuredialog" resizable>{company&&<FormShell title={`${company.name} — Təşkilati struktur`} desc="Şöbələr, vəzifələr və tabeçilik münasibətləri." formClass="structureform">
     <datalist id="structuredepartments">{departments.map(d=><option key={d} value={d}/>)}</datalist>
     <div className="pageactions directoryhead"><div>{filtered.length} vəzifə göstərilir</div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Əlavə et</Button></div>
@@ -719,11 +721,11 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
       const unmerged=item.department===editingDepartment;
       const rowSpan=deptCounts.get(item.department)||1;
       if(editingId===item.id)return <tr key={item.id}>
-        {!unmerged&&firstOfGroup&&<td rowSpan={rowSpan} className="structuredeptcell">{item.department}</td>}
+        {!unmerged&&firstOfGroup&&<td rowSpan={rowSpan} className="structuredeptcell" style={{background:deptColor(item.department)}}>{item.department}</td>}
         <td colSpan={unmerged?4:3}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td>
       </tr>;
       return <tr key={item.id}>
-        {unmerged?<td className="structuredeptcell">{item.department}</td>:firstOfGroup&&<td rowSpan={rowSpan} className="structuredeptcell">{item.department}</td>}
+        {unmerged?<td className="structuredeptcell" style={{background:deptColor(item.department)}}>{item.department}</td>:firstOfGroup&&<td rowSpan={rowSpan} className="structuredeptcell" style={{background:deptColor(item.department)}}>{item.department}</td>}
         <td data-label="Vəzifə">{item.title}</td>
         <td data-label="Tabe olduğu">{item.reports_to||"Ən yuxarı vəzifə"}</td>
         <td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>
