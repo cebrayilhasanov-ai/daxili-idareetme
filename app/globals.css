@@ -369,4 +369,7 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .structuretable th:nth-child(2),.structuretable td:nth-child(2){width:32%}
 .structuretable th:nth-child(3),.structuretable td:nth-child(3){width:26%}
 .structuretable thead tr{background:linear-gradient(90deg,#E3FAFD,#fff)}
+.structurereportsto{flex:1 1 100%;min-width:0}
+.structurereportsto>span{display:block;margin-bottom:7px;color:#334155;font-size:11px;font-weight:700}
+.structurereportsto .reportstopicker{margin-top:0;max-height:160px;overflow-y:auto;padding:2px}
 .structuredeptcell{text-align:center;vertical-align:middle;font-weight:800;font-size:15px;color:#0f172a;border-right:2px solid #d6dee8}
