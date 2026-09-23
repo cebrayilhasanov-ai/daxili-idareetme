@@ -194,6 +194,43 @@ async function ensureSchema() {
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   )`).run();
+  // One-time seed: "Arsenal Construction and Engineering"'s org structure, supplied by the admin (Struktur-2V.xlsx). Runs once — skipped the moment that company already has any structure rows.
+  const arsenal = await db().prepare("SELECT id FROM companies WHERE lower(trim(name)) = lower(trim(?))").bind("Arsenal Construction and Engineering").first<{ id: number }>();
+  if (arsenal) {
+    const existing = await db().prepare("SELECT COUNT(*) AS count FROM company_structure_positions WHERE company_id = ?").bind(arsenal.id).first<{ count: number }>();
+    if (!existing?.count) {
+      const seedRows: Array<[string, string, string | null]> = [
+        ["Rəhbərlik", "Baş direktor", null],
+        ["Rəhbərlik", "İcraçı direktor", "Baş direktor"],
+        ["Maliyyə və təsərrüfat şöbəsi", "Maliyyə və təsərrüfat şöbəsinin müdiri", "Baş direktor/İcraçı direktor"],
+        ["Maliyyə və təsərrüfat şöbəsi", "Aparıcı mühasib", "Maliyyə və təsərrüfat şöbəsinin müdiri"],
+        ["Maliyyə və təsərrüfat şöbəsi", "Mühasib", "Maliyyə və təsərrüfat şöbəsinin müdiri"],
+        ["Maliyyə və təsərrüfat şöbəsi", "Baş anbardar", "Maliyyə və təsərrüfat şöbəsinin müdiri"],
+        ["Maliyyə və təsərrüfat şöbəsi", "Xadimə", "Maliyyə və təsərrüfat şöbəsinin müdiri"],
+        ["Layihələndirmə və qiymətləndirmə şöbəsi", "Layihələndirmə və qiymətləndirmə şöbəsi müdiri", "Baş direktor/İcraçı direktor"],
+        ["Layihələndirmə və qiymətləndirmə şöbəsi", "Layihələndirmə və qiymətləndirmə şöbəsinin aparıcı mütəxəssisi", "Layihələndirmə və qiymətləndirmə şöbəsi müdiri"],
+        ["Layihələndirmə və qiymətləndirmə şöbəsi", "Xarici əlaqələr şöbəsinin aparıcı mütəxəssisi", "Layihələndirmə və qiymətləndirmə şöbəsi müdiri"],
+        ["Hüquq və insan resursları şöbəsi", "Hüquq və insan resursları şöbəsi müdiri", "Baş direktor/İcraçı direktor"],
+        ["Hüquq və insan resursları şöbəsi", "Hüquqsunas", "Hüquq və insan resursları şöbəsi müdiri"],
+        ["Satış şöbəsi", "Satış şöbəsi müdiri", "Baş direktor/İcraçı direktor"],
+        ["Satış şöbəsi", "Satış üzrə menecer", "Satış şöbəsi müdiri"],
+        ["Təchizat və logistika şöbəsi", "Təchizat və logistika şöbəsi müdiri", "Baş direktor/İcraçı direktor"],
+        ["Təchizat və logistika şöbəsi", "Təchizat və logistika şöbəsinin aparıcı mütəxəssisi", "Təchizat və logistika şöbəsi müdiri"],
+        ["Ümumi şöbə", "Ümumi şöbənin müdiri", "Baş direktor/İcraçı direktor"],
+        ["Ümumi şöbə", "Ümumi şöbə üzrə aparıcı mütəxəssis", "Ümumi şöbənin müdiri"],
+        ["Ümumi şöbə", "Ümumi şöbə üzrə mütəxəssis", "Ümumi şöbənin müdiri"],
+        ["Texniki servis şöbəsi", "Texniki servis şöbəsi müdiri", "Baş direktor/İcraçı direktor"],
+        ["Texniki şöbə", "Texniki şöbə müdiri", "Rəhbərlik"],
+      ];
+      const now = new Date().toISOString();
+      let order = 0;
+      for (const [department, title, reportsTo] of seedRows) {
+        order += 1;
+        await db().prepare("INSERT INTO company_structure_positions (company_id, department, title, reports_to, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(arsenal.id, department, title, reportsTo, order, now).run();
+      }
+    }
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_definitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     title TEXT NOT NULL,
