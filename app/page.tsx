@@ -128,7 +128,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.04</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.05</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -640,7 +640,7 @@ function ReportsToPicker({candidates,value,onChange}:{candidates:StructurePositi
   const parts=value.split("/").map(s=>s.trim()).filter(Boolean);
   return <div className="reportstopickerwrap">
     <button type="button" className="reportstopickertrigger" onClick={()=>setOpen(v=>!v)}>{parts.length?parts.join(", "):"Ən yuxarı (heç kimə)"}</button>
-    {open&&<div className="reportstopickerpanel"><select multiple autoFocus size={Math.min(Math.max(candidates.length,3),8)} value={parts} onChange={e=>onChange(Array.from(e.target.selectedOptions).map(o=>o.value).join("/"))} onBlur={()=>setOpen(false)}>{candidates.map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></div>}
+    {open&&<div className="reportstopickerpanel"><select multiple autoFocus size={Math.max(candidates.length,1)} value={parts} onChange={e=>onChange(Array.from(e.target.selectedOptions).map(o=>o.value).join("/"))} onBlur={()=>setOpen(false)}>{candidates.map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></div>}
   </div>;
 }
 function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:()=>void}){
