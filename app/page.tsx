@@ -128,7 +128,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.97</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.98</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -635,17 +635,7 @@ function CompaniesPage({companies,tasks,onNew,onEdit,onToggle}:{companies:Compan
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">TƏŞKİLATİ MƏLUMATLAR</span><h2>Firmalar reyestri</h2><p>Tapşırıqların aid olduğu hüquqi şəxslər və əsas rekvizitlər</p></div><Button onClick={onNew}><Plus/>Yeni firma</Button></div><div className="companylist officialcards">{companies.length?companies.map(c=>{const own=tasks.filter(t=>t.company_id===c.id);const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const completed=own.filter(t=>t.status==="Təsdiqlənib").length;return <article key={c.id} className={!c.active?"inactivecard":""}><div className="identityblock companyidentity"><i><Building2/></i><div><div className="identitytitle"><h3>{c.name}</h3><span className={c.active?"recordstatus active":"recordstatus inactive"}>{c.active?"Aktiv":"Deaktiv"}</span></div><p><b>VÖEN:</b> {c.voen||"Qeyd edilməyib"}</p><p><b>Rəhbər:</b> {c.manager||"Qeyd edilməyib"}</p></div></div><div className="recordmetrics companymetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>Aktiv iş</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{completed}</b></span></div><div className="companyactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(c)}>Məlumatları redaktə et</button><button className="editcompanybtn" onClick={()=>setStructureCompany(c)}>Struktur</button><button className={c.active?"deactivatebtn":"activatebtn"} onClick={()=>onToggle(c)}>{c.active?"Deaktiv et":"Aktiv et"}</button></div></article>}):<Empty text="İlk firmanı əlavə edin."/>}</div>
   <CompanyStructureDialog company={structureCompany} onClose={()=>setStructureCompany(null)}/>
   </section>}
-const structureColumns:Array<{key:string;label:string;width:number;search:(item:StructurePosition)=>string;render:(item:StructurePosition)=>React.ReactNode}>=[
-  {key:"department",label:"Şöbə",width:220,search:i=>i.department,render:i=><b>{i.department}</b>},
-  {key:"title",label:"Vəzifə",width:260,search:i=>i.title,render:i=><>{i.title}</>},
-  {key:"reportsTo",label:"Tabe olduğu",width:220,search:i=>i.reports_to||"",render:i=><>{i.reports_to||"Ən yuxarı vəzifə"}</>},
-];
 function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:()=>void}){
-  const {order,widths,setWidth,moveColumn}=useTableColumns("structure2",structureColumns.map(c=>c.key));
-  const resize=useEdgeResize(setWidth,60);
-  const {dragProps}=useColumnDrag(moveColumn);
-  const columnsByKey=Object.fromEntries(structureColumns.map(c=>[c.key,c]));
-  const defaultWidths=Object.fromEntries(structureColumns.map(c=>[c.key,c.width]));
   const [items,setItems]=useState<StructurePosition[]>([]);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
@@ -655,20 +645,19 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
   const [editingId,setEditingId]=useState<number|null>(null);
   const [editForm,setEditForm]=useState<Record<string,string>>({});
   const [editBusy,setEditBusy]=useState(false);
-  const [search,setSearch]=useState<Record<string,string>>({});
-  const setQuery=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
+  const [search,setSearch]=useState({department:"",title:"",reportsTo:""});
+  const setQuery=(key:"department"|"title"|"reportsTo",value:string)=>setSearch(current=>({...current,[key]:value}));
+  const has=(value:string,query:string)=>value.toLocaleLowerCase("az-AZ").includes(query.toLocaleLowerCase("az-AZ"));
   const load=async()=>{if(!company)return;setLoading(true);setError("");try{const response=await fetch(`/api/company-structure?companyId=${company.id}`);const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Struktur açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{if(company){setCreating(false);setForm({});setEditingId(null);void load()}else setItems([])},[company?.id]);
   const departments=Array.from(new Set(items.map(i=>i.department)));
   const requiredFilled=(values:Record<string,string>)=>Boolean((values.department||"").trim()&&(values.title||"").trim());
   const isDuplicateTitle=(title:string,excludeId?:number)=>items.some(i=>i.id!==excludeId&&i.title.trim().toLocaleLowerCase("az-AZ")===title.trim().toLocaleLowerCase("az-AZ"));
-  const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
-    department:(values,set)=><label className="field" key="department">Şöbə<Input list="structuredepartments" value={values.department||""} onChange={e=>set({...values,department:e.target.value})}/></label>,
-    title:(values,set)=><label className="field" key="title">Vəzifə<Input value={values.title||""} onChange={e=>set({...values,title:e.target.value})}/></label>,
-    reportsTo:(values,set)=><label className="field" key="reportsTo">Tabe olduğu<select value={values.reportsTo||""} onChange={e=>set({...values,reportsTo:e.target.value})}><option value="">Ən yuxarı (heç kimə)</option>{items.filter(i=>String(i.id)!==values.editId).map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>,
-  };
-  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.map(key=>fieldRenderers[key](values,set))}</>;
+  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>
+    <label className="field" key="department">Şöbə<Input list="structuredepartments" value={values.department||""} onChange={e=>set({...values,department:e.target.value})}/></label>
+    <label className="field" key="title">Vəzifə<Input value={values.title||""} onChange={e=>set({...values,title:e.target.value})}/></label>
+    <label className="field" key="reportsTo">Tabe olduğu<select value={values.reportsTo||""} onChange={e=>set({...values,reportsTo:e.target.value})}><option value="">Ən yuxarı (heç kimə)</option>{items.filter(i=>String(i.id)!==values.editId).map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>
+  </>;
   const create=async()=>{
     if(!company||!requiredFilled(form))return;
     if(isDuplicateTitle(form.title)){setError("Bu vəzifə artıq siyahıdadır — hər vəzifə yalnız bir dəfə əlavə oluna bilər.");return}
@@ -705,16 +694,41 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
       setItems(body.items||[]);
     }catch(e){setError(e instanceof Error?e.message:"Vəzifə silinmədi.")}
   };
-  const filtered=items.filter(item=>structureColumns.every(c=>has(c.search(item),c.key)));
+  const filtered=items.filter(item=>has(item.department,search.department)&&has(item.title,search.title)&&has(item.reports_to||"",search.reportsTo));
+  // Group rows by şöbə (in first-seen order) so the Şöbə column can render as one merged cell per group — and grows automatically as new vəzifə join that şöbə.
+  const departmentOrder:string[]=[];
+  for(const item of items)if(!departmentOrder.includes(item.department))departmentOrder.push(item.department);
+  const grouped=filtered.slice().sort((a,b)=>{const da=departmentOrder.indexOf(a.department),db=departmentOrder.indexOf(b.department);return da!==db?da-db:a.sort_order-b.sort_order});
+  const editingDepartment=editingId?items.find(i=>i.id===editingId)?.department:null;
+  const deptCounts=new Map<string,number>();
+  for(const item of grouped)deptCounts.set(item.department,(deptCounts.get(item.department)||0)+1);
+  const seenDept=new Set<string>();
   return <Dialog open={Boolean(company)} onOpenChange={v=>!v&&onClose()}><DialogContent className="businessdialog structuredialog" resizable>{company&&<FormShell title={`${company.name} — Təşkilati struktur`} desc="Şöbələr, vəzifələr və tabeçilik münasibətləri." formClass="structureform">
     <datalist id="structuredepartments">{departments.map(d=><option key={d} value={d}/>)}</datalist>
     <div className="pageactions directoryhead"><div>{filtered.length} vəzifə göstərilir</div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Əlavə et</Button></div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">{fields(form,setForm)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!requiredFilled(form)} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>setQuery(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
-      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
-      <td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>
-    </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun vəzifə tapılmadı.":"Bu firma üçün hələ struktur qurulmayıb."}/>}</div>}
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable structuretable"><thead><tr>
+      <th><input aria-label="Şöbə üzrə axtarış" placeholder="Axtar..." value={search.department} onChange={e=>setQuery("department",e.target.value)}/><span>Şöbə</span></th>
+      <th><input aria-label="Vəzifə üzrə axtarış" placeholder="Axtar..." value={search.title} onChange={e=>setQuery("title",e.target.value)}/><span>Vəzifə</span></th>
+      <th><input aria-label="Tabe olduğu üzrə axtarış" placeholder="Axtar..." value={search.reportsTo} onChange={e=>setQuery("reportsTo",e.target.value)}/><span>Tabe olduğu</span></th>
+      <th className="opencolumn"><ActionsHeader hasSearch/></th>
+    </tr></thead><tbody>{grouped.map(item=>{
+      const firstOfGroup=!seenDept.has(item.department);
+      if(firstOfGroup)seenDept.add(item.department);
+      const unmerged=item.department===editingDepartment;
+      const rowSpan=deptCounts.get(item.department)||1;
+      if(editingId===item.id)return <tr key={item.id}>
+        {!unmerged&&firstOfGroup&&<td rowSpan={rowSpan} className="structuredeptcell">{item.department}</td>}
+        <td colSpan={unmerged?4:3}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td>
+      </tr>;
+      return <tr key={item.id}>
+        {unmerged?<td className="structuredeptcell">{item.department}</td>:firstOfGroup&&<td rowSpan={rowSpan} className="structuredeptcell">{item.department}</td>}
+        <td data-label="Vəzifə">{item.title}</td>
+        <td data-label="Tabe olduğu">{item.reports_to||"Ən yuxarı vəzifə"}</td>
+        <td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>
+      </tr>;
+    })}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun vəzifə tapılmadı.":"Bu firma üçün hələ struktur qurulmayıb."}/>}</div>}
   </FormShell>}</DialogContent></Dialog>;
 }
 const customerColumns:Array<{key:string;label:string;width:number;search:(item:Customer)=>string;render:(item:Customer)=>React.ReactNode}>=[
