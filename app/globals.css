@@ -367,12 +367,18 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .structuretoolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;padding-bottom:6px}
 .structuretoolbar .field{min-width:150px;flex:1}
 .structureimport{padding-bottom:6px}
-.structuretree,.structuretree ul{list-style:none;margin:0;padding-left:22px}
-.structuretree{padding-left:0}
-.structuretree li{position:relative;padding:6px 0 6px 18px;border-left:1px dashed #d6dee8}
-.structuretree>li{border-left:0;padding-left:0}
-.structurenode{display:inline-flex;align-items:center;gap:9px;padding:7px 12px;border:1px solid #e4eaf2;border-radius:10px;background:#fff}
-.structurenode b{font-size:12px}
-.structurenode small{color:#7a879b;font-size:10px;background:#f1f5f9;border-radius:8px;padding:2px 7px}
-.structurenode button{border:0;background:none;color:#94a3b8;cursor:pointer;font-size:11px}
-.structurenode button:hover{color:#dc2626}
+.structuredepartments{display:grid;gap:10px}
+.structuredept{border:1px solid #e4eaf2;border-radius:12px;background:#fff;overflow:hidden}
+.structuredepthead{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;border:0;background:#f8fafc;cursor:pointer;text-align:left}
+.structuredepthead b{font-size:13px;flex:1}
+.structuredepthead small{color:#7a879b;font-size:10px;background:#fff;border:1px solid #e4eaf2;border-radius:8px;padding:2px 7px}
+.structurechevron{display:inline-block;color:#7a879b;transition:transform .15s}
+.structurechevron.open{transform:rotate(90deg)}
+.structureposlist{list-style:none;margin:0;padding:6px 14px 12px}
+.structureposrow{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid #f1f5f9}
+.structureposrow:first-child{border-top:0}
+.structureposrow b{font-size:12px;min-width:220px}
+.structurereports{color:#7a879b;font-size:11px;flex:1}
+.structurereports b{font-size:11px;color:#334155;min-width:0}
+.structureposrow button{border:0;background:none;color:#94a3b8;cursor:pointer;font-size:11px}
+.structureposrow button:hover{color:#dc2626}
