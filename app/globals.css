@@ -363,7 +363,7 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .historyheadright{display:flex;align-items:center;gap:10px}
 .historytoggle{padding:5px 16px;border:1px solid #7c5cd6;border-radius:8px;background:#fff;color:#5b3fb0;font-size:11px;font-weight:800;cursor:pointer}
 .historytoggle:hover{background:#7c5cd6;color:#fff}
-.structuredialog{max-width:min(96vw,960px)}
+.structuredialog{width:min(1600px,calc(100vw - 32px))!important;max-width:min(1600px,calc(100vw - 32px))!important}
 .structuretable{table-layout:fixed}
 .structuretable th:nth-child(1),.structuretable td:nth-child(1){width:22%}
 .structuretable th:nth-child(2),.structuretable td:nth-child(2){width:32%}
