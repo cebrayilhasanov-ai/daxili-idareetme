@@ -6,7 +6,8 @@ import { logAudit } from "@/lib/audit";
 async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
   if (user.role === "admin") return data;
-  return { employees: data.employees.filter((item: any) => item.id === user.employeeId), companies: data.companies, recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
+  // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
+  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies, recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
 }
 
 function authError(error: unknown) {

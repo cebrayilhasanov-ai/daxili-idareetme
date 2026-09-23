@@ -1,4 +1,4 @@
-import { createChecklistItem, deleteChecklistItem, getChecklistItems, setChecklistItemAttachment, toggleChecklistItem } from "@/db/catalog";
+import { createChecklistItem, delegateTaskChecklistItem, deleteChecklistItem, getChecklistItems, setChecklistItemAttachment, toggleChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 
@@ -44,7 +44,9 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT task_id FROM task_checklist_items WHERE id = ?").bind(id).first<{ task_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertTaskAccess(user, existing.task_id);
-    const items = body.removeAttachment || body.attachmentKey
+    const items = body.action === "delegate"
+      ? await delegateTaskChecklistItem({ id, isAdmin: user.role === "admin", actorEmployeeId: user.employeeId, actorName: user.name, employeeId: Number(body.employeeId), comment: body.comment })
+      : body.removeAttachment || body.attachmentKey
       ? await setChecklistItemAttachment({
           id,
           attachment: body.removeAttachment ? null : { key: String(body.attachmentKey), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") },

@@ -56,6 +56,8 @@ async function ensureSchema() {
   if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_name TEXT").run();
   if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_size INTEGER").run();
   if (!taskChecklistItemColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN attachment_type TEXT").run();
+  if (!taskChecklistItemColumns.results.some((column) => column.name === "delegated_task_id")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN delegated_task_id INTEGER REFERENCES tasks(id)").run();
+  if (!taskChecklistItemColumns.results.some((column) => column.name === "delegated_employee_id")) await db().prepare("ALTER TABLE task_checklist_items ADD COLUMN delegated_employee_id INTEGER REFERENCES employees(id)").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS document_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name TEXT NOT NULL,
@@ -538,6 +540,7 @@ export async function updateTask(input: { id: number; actorName?: string; status
     ).run();
   if (status === "Təsdiqlənib") {
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
+    await db().prepare("UPDATE task_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
   }
   // A task handed over from a personal work reports its progress back into that work's history.
   if (input.status && input.status !== current.status) {
@@ -562,6 +565,7 @@ export async function deleteTask(id: number, actorName?: string) {
   if (task.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu tapşırıq silinə bilər.");
   const linked = await db().prepare("SELECT personal_work_id, title FROM personal_work_checklist_items WHERE delegated_task_id = ?").bind(id).first<{ personal_work_id: number; title: string }>();
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();
+  await db().prepare("UPDATE task_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();
   await db().prepare("DELETE FROM tasks WHERE id = ?").bind(id).run();
   if (linked) await recordPersonalWorkEvent(linked.personal_work_id, actorName, "Həvalə ləğv edildi (tapşırıq silindi)", linked.title);
   if (task.attachment_key && env.FILES) await env.FILES.delete(task.attachment_key);
@@ -569,7 +573,12 @@ export async function deleteTask(id: number, actorName?: string) {
 
 export async function getChecklistItems(taskId: number) {
   await ensureSchema();
-  return (await db().prepare("SELECT * FROM task_checklist_items WHERE task_id = ? ORDER BY id").bind(taskId).all()).results;
+  return (await db().prepare(`SELECT task_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
+    delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size
+    FROM task_checklist_items
+    LEFT JOIN employees AS delegated_employee ON delegated_employee.id = task_checklist_items.delegated_employee_id
+    LEFT JOIN tasks AS delegated_task ON delegated_task.id = task_checklist_items.delegated_task_id
+    WHERE task_id = ? ORDER BY id`).bind(taskId).all()).results;
 }
 
 export async function createChecklistItem(input: { taskId: number; title: string }) {
@@ -583,10 +592,44 @@ export async function createChecklistItem(input: { taskId: number; title: string
 
 export async function toggleChecklistItem(input: { id: number; done: boolean }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT task_id FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number }>();
+  const item = await db().prepare("SELECT task_id, delegated_task_id FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number; delegated_task_id: number | null }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Bu addım işçiyə həvalə edilib, statusu tapşırığın təsdiqi ilə avtomatik yenilənəcək.");
   await db().prepare("UPDATE task_checklist_items SET done = ? WHERE id = ?").bind(Number(input.done), input.id).run();
   return getChecklistItems(item.task_id);
+}
+
+export async function delegateTaskChecklistItem(input: { id: number; isAdmin: boolean; actorEmployeeId: number | null; actorName?: string; employeeId: number; comment?: string }) {
+  await ensureSchema();
+  const item = await db().prepare("SELECT * FROM task_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Bu addım artıq həvalə edilib.");
+  const task = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(item.task_id).first<Record<string, unknown>>();
+  if (!task) throw new Error("Tapşırıq tapılmadı.");
+  if (!input.isAdmin) {
+    if (!input.actorEmployeeId || Number(task.employee_id) !== input.actorEmployeeId) throw new Error("Bu tapşırıq sizə aid deyil.");
+    const target = await db().prepare("SELECT manager_employee_id FROM employees WHERE id = ?").bind(input.employeeId).first<{ manager_employee_id: number | null }>();
+    if (!target || target.manager_employee_id !== input.actorEmployeeId) throw new Error("Yalnız birbaşa tabeliyinizdəki personala addım ötürə bilərsiniz.");
+  }
+  if (!task.company_id) throw new Error("Həvalə etmək üçün əvvəlcə tapşırığın firması təyin olunmalıdır.");
+  const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, task.company_id).first();
+  if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
+  // The new task gets its own copy of the step's file so deleting either one never orphans the other.
+  let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
+  if (item.attachment_key && env.FILES) {
+    const source = await env.FILES.get(String(item.attachment_key));
+    if (source) {
+      const copyKey = `${crypto.randomUUID()}-${String(item.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
+      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
+      attachment = { key: copyKey, name: (item.attachment_name as string | null) ?? null, size: (item.attachment_size as number | null) ?? null, type: (item.attachment_type as string | null) ?? null };
+    }
+  }
+  const result = await db().prepare(`INSERT INTO tasks
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
+    .bind(input.employeeId, task.company_id, `${task.title} — ${item.title}`, input.comment?.trim() || null, task.due_at, task.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
+  const newTaskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  await db().prepare("UPDATE task_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(newTaskId, input.employeeId, input.id).run();
+  return getChecklistItems(Number(item.task_id));
 }
 
 export async function deleteChecklistItem(input: { id: number }) {
