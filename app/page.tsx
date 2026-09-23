@@ -128,7 +128,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.0</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.01</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -653,11 +653,20 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
   const departments=Array.from(new Set(items.map(i=>i.department)));
   const requiredFilled=(values:Record<string,string>)=>Boolean((values.department||"").trim()&&(values.title||"").trim());
   const isDuplicateTitle=(title:string,excludeId?:number)=>items.some(i=>i.id!==excludeId&&i.title.trim().toLocaleLowerCase("az-AZ")===title.trim().toLocaleLowerCase("az-AZ"));
-  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>
-    <label className="field" key="department">Şöbə<Input list="structuredepartments" value={values.department||""} onChange={e=>set({...values,department:e.target.value})}/></label>
-    <label className="field" key="title">Vəzifə<Input value={values.title||""} onChange={e=>set({...values,title:e.target.value})}/></label>
-    <label className="field" key="reportsTo">Tabe olduğu<select value={values.reportsTo||""} onChange={e=>set({...values,reportsTo:e.target.value})}><option value="">Ən yuxarı (heç kimə)</option>{items.filter(i=>String(i.id)!==values.editId).map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>
-  </>;
+  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
+    const reportsToParts=(values.reportsTo||"").split("/").map(s=>s.trim()).filter(Boolean);
+    const first=reportsToParts[0]||"";
+    const second=reportsToParts[1]||"";
+    const candidates=items.filter(i=>String(i.id)!==values.editId);
+    const setFirst=(next:string)=>set({...values,reportsTo:[next,second].filter(Boolean).join("/")});
+    const setSecond=(next:string)=>set({...values,reportsTo:[first,next].filter(Boolean).join("/")});
+    return <>
+      <label className="field" key="department">Şöbə<Input list="structuredepartments" value={values.department||""} onChange={e=>set({...values,department:e.target.value})}/></label>
+      <label className="field" key="title">Vəzifə<Input value={values.title||""} onChange={e=>set({...values,title:e.target.value})}/></label>
+      <label className="field" key="reportsTo1">Tabe olduğu<select value={first} onChange={e=>setFirst(e.target.value)}><option value="">Ən yuxarı (heç kimə)</option>{candidates.filter(i=>i.title!==second).map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>
+      <label className="field" key="reportsTo2">Tabe olduğu (2-ci, istəyə bağlı)<select value={second} onChange={e=>setSecond(e.target.value)} disabled={!first}><option value="">Seçilməyib</option>{candidates.filter(i=>i.title!==first).map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>
+    </>;
+  };
   const create=async()=>{
     if(!company||!requiredFilled(form))return;
     if(isDuplicateTitle(form.title)){setError("Bu vəzifə artıq siyahıdadır — hər vəzifə yalnız bir dəfə əlavə oluna bilər.");return}
