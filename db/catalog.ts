@@ -293,6 +293,38 @@ async function ensureRecurringTasks() {
   }
 }
 
+// For each task, walks the delegation chain backwards (task_checklist_items → personal_work_checklist_items)
+// and returns the full "who gave it" chain, root first — e.g. ["Direktor", "Şöbə müdiri"] for a twice-delegated task.
+async function attachAssignerChains(taskRows: Array<Record<string, unknown>>) {
+  const fromTaskChecklist = (await db().prepare(`SELECT tci.delegated_task_id AS child_id, tci.task_id AS parent_task_id, e.name AS assigner_name
+    FROM task_checklist_items tci
+    JOIN tasks t ON t.id = tci.task_id
+    JOIN employees e ON e.id = t.employee_id
+    WHERE tci.delegated_task_id IS NOT NULL`).all<{ child_id: number; parent_task_id: number; assigner_name: string }>()).results;
+  const fromPersonalWork = (await db().prepare(`SELECT pwci.delegated_task_id AS child_id, u.name AS assigner_name
+    FROM personal_work_checklist_items pwci
+    JOIN personal_works pw ON pw.id = pwci.personal_work_id
+    JOIN app_users u ON u.id = pw.user_id
+    WHERE pwci.delegated_task_id IS NOT NULL`).all<{ child_id: number; assigner_name: string }>()).results;
+  const chainLink = new Map<number, { name: string; parent: number | null }>();
+  for (const row of fromTaskChecklist) chainLink.set(row.child_id, { name: row.assigner_name, parent: row.parent_task_id });
+  for (const row of fromPersonalWork) if (!chainLink.has(row.child_id)) chainLink.set(row.child_id, { name: row.assigner_name, parent: null });
+  const resolve = (taskId: number) => {
+    const names: string[] = [];
+    const seen = new Set<number>();
+    let cursor: number | null = taskId;
+    while (cursor !== null && !seen.has(cursor) && names.length < 30) {
+      seen.add(cursor);
+      const link = chainLink.get(cursor);
+      if (!link) break;
+      names.unshift(link.name);
+      cursor = link.parent;
+    }
+    return names.join(", ") || null;
+  };
+  return taskRows.map((row) => ({ ...row, assigned_by: resolve(Number(row.id)) }));
+}
+
 export async function getAllData() {
   await ensureSchema();
   await ensureRecurringTasks();
@@ -330,7 +362,7 @@ export async function getAllData() {
     const currentPeriod = periodKey({ frequency: String(item.frequency) });
     return { ...item, period_key: currentPeriod, is_completed: Number(completedKeys.has(`${item.id}:${currentPeriod}`)) };
   });
-  return { employees: employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, tasks: tasks.results, dateRequests: dateRequests.results };
+  return { employees: employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
 }
 
 export async function createWorkItem(input: { title: string; description?: string; frequency?: string }) {
