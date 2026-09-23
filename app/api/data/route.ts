@@ -7,7 +7,8 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
   if (user.role === "admin") return data;
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
-  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies, recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
+  const ownCompanyIds = new Set((data.employees.find((item: any) => item.id === user.employeeId)?.company_ids || "").split(",").filter(Boolean).map(Number));
+  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
 }
 
 function authError(error: unknown) {
