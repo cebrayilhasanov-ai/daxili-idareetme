@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     let employeeId = existing?.id;
     const companyIds: number[] = Array.isArray(body.companyIds) ? body.companyIds.map(Number).filter(Boolean) : [];
     if (!employeeId) {
-      employeeId = await createEmployee({ name: body.name, position: body.position || "Personal", email, companyIds, avatarKey: body.avatarKey || undefined });
+      employeeId = await createEmployee({ name: body.name, position: body.position || "Personal", email, companyIds, avatarKey: body.avatarKey || undefined, managerEmployeeId: body.managerEmployeeId ? Number(body.managerEmployeeId) : null, authorityType: body.authorityType || "İşçi" });
     }
     await createUser({ name: body.name, email, password: body.password, role: "employee", employeeId });
     await logAudit(user, "İstifadəçi hesabı yaradıldı", "user", email);

@@ -170,6 +170,12 @@ async function ensureSchema() {
   if (!employeeColumns.results.some((column) => column.name === "avatar_key")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN avatar_key TEXT").run();
   }
+  if (!employeeColumns.results.some((column) => column.name === "manager_employee_id")) {
+    await db().prepare("ALTER TABLE employees ADD COLUMN manager_employee_id INTEGER REFERENCES employees(id)").run();
+  }
+  if (!employeeColumns.results.some((column) => column.name === "authority_type")) {
+    await db().prepare("ALTER TABLE employees ADD COLUMN authority_type TEXT DEFAULT 'İşçi' NOT NULL").run();
+  }
   const companyColumns = await db().prepare("PRAGMA table_info(companies)").all<{ name: string }>();
   if (!companyColumns.results.some((column) => column.name === "voen")) {
     await db().prepare("ALTER TABLE companies ADD COLUMN voen TEXT").run();
@@ -405,21 +411,33 @@ async function setEmployeeCompanies(employeeId: number, companyIds: number[]) {
   }
 }
 
-export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; avatarKey?: string }) {
+export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; avatarKey?: string; managerEmployeeId?: number | null; authorityType?: string }) {
   await ensureSchema();
-  const result = await db().prepare("INSERT INTO employees (name, position, email, active, avatar_key, created_at) VALUES (?, ?, ?, 1, ?, ?)")
-    .bind(input.name, input.position || "Personal", input.email || null, input.avatarKey || null, new Date().toISOString()).run();
+  const result = await db().prepare("INSERT INTO employees (name, position, email, active, avatar_key, manager_employee_id, authority_type, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)")
+    .bind(input.name, input.position || "Personal", input.email || null, input.avatarKey || null, input.managerEmployeeId || null, input.authorityType || "İşçi", new Date().toISOString()).run();
   const employeeId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds);
   return employeeId;
 }
 
-export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; avatarKey?: string | null }) {
+export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; avatarKey?: string | null; managerEmployeeId?: number | null; authorityType?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Personal tapılmadı.");
-  await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, active = ?, avatar_key = ? WHERE id = ?")
-    .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
+  if (input.managerEmployeeId) {
+    if (input.managerEmployeeId === input.id) throw new Error("Personal öz-özünə tabe ola bilməz.");
+    let cursor: number | null = input.managerEmployeeId;
+    const seen = new Set<number>();
+    while (cursor) {
+      if (cursor === input.id) throw new Error("Bu seçim dövrü bağlantı yaradır (A B-yə, B A-ya tabe ola bilməz).");
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      const row: { manager_employee_id: number | null } | null = await db().prepare("SELECT manager_employee_id FROM employees WHERE id = ?").bind(cursor).first<{ manager_employee_id: number | null }>();
+      cursor = row?.manager_employee_id ?? null;
+    }
+  }
+  await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, active = ?, avatar_key = ?, manager_employee_id = ?, authority_type = ? WHERE id = ?")
+    .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.managerEmployeeId === undefined ? current.manager_employee_id : input.managerEmployeeId, input.authorityType ?? current.authority_type, input.id).run();
   if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds);
 }
 
