@@ -504,33 +504,21 @@ async function setEmployeeCompanies(employeeId: number, companyIds: number[]) {
   }
 }
 
-export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; avatarKey?: string; managerEmployeeId?: number | null; authorityType?: string }) {
+export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; avatarKey?: string }) {
   await ensureSchema();
-  const result = await db().prepare("INSERT INTO employees (name, position, email, active, avatar_key, manager_employee_id, authority_type, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)")
-    .bind(input.name, input.position || "Personal", input.email || null, input.avatarKey || null, input.managerEmployeeId || null, input.authorityType || "İşçi", new Date().toISOString()).run();
+  const result = await db().prepare("INSERT INTO employees (name, position, email, active, avatar_key, created_at) VALUES (?, ?, ?, 1, ?, ?)")
+    .bind(input.name, input.position || "Personal", input.email || null, input.avatarKey || null, new Date().toISOString()).run();
   const employeeId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds);
   return employeeId;
 }
 
-export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; avatarKey?: string | null; managerEmployeeId?: number | null; authorityType?: string }) {
+export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; avatarKey?: string | null }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Personal tapılmadı.");
-  if (input.managerEmployeeId) {
-    if (input.managerEmployeeId === input.id) throw new Error("Personal öz-özünə tabe ola bilməz.");
-    let cursor: number | null = input.managerEmployeeId;
-    const seen = new Set<number>();
-    while (cursor) {
-      if (cursor === input.id) throw new Error("Bu seçim dövrü bağlantı yaradır (A B-yə, B A-ya tabe ola bilməz).");
-      if (seen.has(cursor)) break;
-      seen.add(cursor);
-      const row: { manager_employee_id: number | null } | null = await db().prepare("SELECT manager_employee_id FROM employees WHERE id = ?").bind(cursor).first<{ manager_employee_id: number | null }>();
-      cursor = row?.manager_employee_id ?? null;
-    }
-  }
-  await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, active = ?, avatar_key = ?, manager_employee_id = ?, authority_type = ? WHERE id = ?")
-    .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.managerEmployeeId === undefined ? current.manager_employee_id : input.managerEmployeeId, input.authorityType ?? current.authority_type, input.id).run();
+  await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, active = ?, avatar_key = ? WHERE id = ?")
+    .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
   if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds);
 }
 
@@ -697,11 +685,8 @@ export async function delegateTaskChecklistItem(input: { id: number; isAdmin: bo
   if (item.delegated_task_id) throw new Error("Bu addım artıq həvalə edilib.");
   const task = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(item.task_id).first<Record<string, unknown>>();
   if (!task) throw new Error("Tapşırıq tapılmadı.");
-  if (!input.isAdmin) {
-    if (!input.actorEmployeeId || Number(task.employee_id) !== input.actorEmployeeId) throw new Error("Bu tapşırıq sizə aid deyil.");
-    const target = await db().prepare("SELECT manager_employee_id FROM employees WHERE id = ?").bind(input.employeeId).first<{ manager_employee_id: number | null }>();
-    if (!target || target.manager_employee_id !== input.actorEmployeeId) throw new Error("Yalnız birbaşa tabeliyinizdəki personala addım ötürə bilərsiniz.");
-  }
+  // Delegating a task step is admin-only for now, until firma-structure positions are linked to real employees.
+  if (!input.isAdmin) throw new Error("İcazə yoxdur.");
   if (!task.company_id) throw new Error("Həvalə etmək üçün əvvəlcə tapşırığın firması təyin olunmalıdır.");
   const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, task.company_id).first();
   if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
