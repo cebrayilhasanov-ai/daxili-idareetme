@@ -128,7 +128,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.03</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.04</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -635,6 +635,14 @@ function CompaniesPage({companies,tasks,onNew,onEdit,onToggle}:{companies:Compan
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><span className="sectioneyebrow">TƏŞKİLATİ MƏLUMATLAR</span><h2>Firmalar reyestri</h2><p>Tapşırıqların aid olduğu hüquqi şəxslər və əsas rekvizitlər</p></div><Button onClick={onNew}><Plus/>Yeni firma</Button></div><div className="companylist officialcards">{companies.length?companies.map(c=>{const own=tasks.filter(t=>t.company_id===c.id);const activeCount=own.filter(t=>t.status!=="Təsdiqlənib").length;const completed=own.filter(t=>t.status==="Təsdiqlənib").length;return <article key={c.id} className={!c.active?"inactivecard":""}><div className="identityblock companyidentity"><i><Building2/></i><div><div className="identitytitle"><h3>{c.name}</h3><span className={c.active?"recordstatus active":"recordstatus inactive"}>{c.active?"Aktiv":"Deaktiv"}</span></div><p><b>VÖEN:</b> {c.voen||"Qeyd edilməyib"}</p><p><b>Rəhbər:</b> {c.manager||"Qeyd edilməyib"}</p></div></div><div className="recordmetrics companymetrics"><span><small>Ümumi tapşırıq</small><b>{own.length}</b></span><span><small>Aktiv iş</small><b>{activeCount}</b></span><span><small>Tamamlanıb</small><b>{completed}</b></span></div><div className="companyactions recordactions"><button className="editcompanybtn" onClick={()=>onEdit(c)}>Məlumatları redaktə et</button><button className="editcompanybtn" onClick={()=>setStructureCompany(c)}>Struktur</button><button className={c.active?"deactivatebtn":"activatebtn"} onClick={()=>onToggle(c)}>{c.active?"Deaktiv et":"Aktiv et"}</button></div></article>}):<Empty text="İlk firmanı əlavə edin."/>}</div>
   <CompanyStructureDialog company={structureCompany} onClose={()=>setStructureCompany(null)}/>
   </section>}
+function ReportsToPicker({candidates,value,onChange}:{candidates:StructurePosition[];value:string;onChange:(next:string)=>void}){
+  const [open,setOpen]=useState(false);
+  const parts=value.split("/").map(s=>s.trim()).filter(Boolean);
+  return <div className="reportstopickerwrap">
+    <button type="button" className="reportstopickertrigger" onClick={()=>setOpen(v=>!v)}>{parts.length?parts.join(", "):"Ən yuxarı (heç kimə)"}</button>
+    {open&&<div className="reportstopickerpanel"><select multiple autoFocus size={Math.min(Math.max(candidates.length,3),8)} value={parts} onChange={e=>onChange(Array.from(e.target.selectedOptions).map(o=>o.value).join("/"))} onBlur={()=>setOpen(false)}>{candidates.map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></div>}
+  </div>;
+}
 function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:()=>void}){
   const [items,setItems]=useState<StructurePosition[]>([]);
   const [loading,setLoading]=useState(false);
@@ -654,12 +662,11 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
   const requiredFilled=(values:Record<string,string>)=>Boolean((values.department||"").trim()&&(values.title||"").trim());
   const isDuplicateTitle=(title:string,excludeId?:number)=>items.some(i=>i.id!==excludeId&&i.title.trim().toLocaleLowerCase("az-AZ")===title.trim().toLocaleLowerCase("az-AZ"));
   const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
-    const reportsToParts=(values.reportsTo||"").split("/").map(s=>s.trim()).filter(Boolean);
     const candidates=items.filter(i=>String(i.id)!==values.editId);
     return <>
       <label className="field" key="department">Şöbə<Input list="structuredepartments" value={values.department||""} onChange={e=>set({...values,department:e.target.value})}/></label>
       <label className="field" key="title">Vəzifə<Input value={values.title||""} onChange={e=>set({...values,title:e.target.value})}/></label>
-      <label className="field" key="reportsTo">Tabe olduğu (bir neçəsini seçmək üçün Şift basılı saxlayıb klikləyin)<select multiple size={Math.min(Math.max(candidates.length,3),6)} value={reportsToParts} onChange={e=>set({...values,reportsTo:Array.from(e.target.selectedOptions).map(o=>o.value).join("/")})}>{candidates.map(i=><option key={i.id} value={i.title}>{i.title}</option>)}</select></label>
+      <label className="field" key="reportsTo">Tabe olduğu<ReportsToPicker candidates={candidates} value={values.reportsTo||""} onChange={next=>set({...values,reportsTo:next})}/></label>
     </>;
   };
   const create=async()=>{
