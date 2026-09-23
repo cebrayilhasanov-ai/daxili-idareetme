@@ -111,7 +111,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.82</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 1.84</small></div></div>
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{isAdmin&&!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={()=>setTasksMenuOpen(v=>!v)}><Icon/>{label}{unseenOverdue.length>0&&<em>{unseenOverdue.length}</em>}</button>{tasksMenuOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button></div>}</Fragment>;
@@ -120,7 +120,7 @@ export default function Home(){
         return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}{id==="chat"&&chatUnread>0&&<em>{chatUnread}</em>}</button></Fragment>;
       })}</nav>
       </div>
-      <div className="admin"><span>{initials(user.name)}</span><div><b>{user.name}</b><small>{isAdmin?"Baş administrator":"İstifadəçi"}</small></div><button className="logoutbtn" title="Çıxış" onClick={()=>void signOut()}><LogOut/></button></div>
+      <div className="admin"><span>{initials(user.name)}</span><div><b>{user.name}</b><small>{isAdmin?"Baş administrator":"İstifadəçi"}</small><small>{user.email}</small></div><button className="logoutbtn" title="Çıxış" onClick={()=>void signOut()}><LogOut/></button></div>
     </aside>
     <main style={user.backgroundKey?{backgroundImage:`linear-gradient(rgba(246,248,255,.88),rgba(242,246,251,.88)), url(/api/file?key=${encodeURIComponent(user.backgroundKey)})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:undefined}>
       <header><button className="hamb" onClick={()=>setMenu(true)}><Menu/></button><div><h1>{title[page]}</h1><p>{effectiveView?`${effectiveView.name} tapşırıqları`:"Personalı, tapşırıqları və nəticələri vahid sistemdə idarə edin"}</p></div><div className="actions"><button onClick={()=>void load()} title="Yenilə"><RefreshCw/></button><div className="bellwrap">{notifOpen&&<button className="notifshade" aria-label="Bağla" onClick={()=>setNotifOpen(false)}/>}<button className="bellbtn" title="Bildirişlər" onClick={()=>setNotifOpen(v=>!v)}><Bell/>{(chatUnread+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0))>0&&<em className="headerbadge">{chatUnread+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0)}</em>}</button>{notifOpen&&<div className="notifpanel"><div className="notifsection"><b>Oxunmamış mesajlar</b><button onClick={()=>{setNotifOpen(false);setPage("chat")}}>{chatUnread>0?`${chatUnread} yeni mesaj`:"Yeni mesaj yoxdur"}</button></div><div className="notifsection"><b>Gecikən tapşırıqlar</b>{overdue.length?<>{overdue.slice(0,5).map(t=><button key={t.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{t.title} — {t.employee_name}</button>)}{overdue.length>5&&<small>+{overdue.length-5} daha</small>}</>:<small>Gecikən tapşırıq yoxdur</small>}</div>{isAdmin&&!viewAs&&<div className="notifsection"><b>Tarix dəyişikliyi tələbləri</b>{pendingDateRequests.length?<>{pendingDateRequests.slice(0,5).map(r=><button key={r.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{r.task_title} — {r.employee_name} → {formatDate(r.proposed_due_at)}</button>)}{pendingDateRequests.length>5&&<small>+{pendingDateRequests.length-5} daha</small>}</>:<small>Gözləyən tələb yoxdur</small>}</div>}</div>}</div></div></header>
@@ -970,38 +970,42 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
       <label className="field filefield">Doldurulmuş sənəd (istəyə bağlı)<Input type="file" onChange={e=>setFileValue(e.target.files?.[0]||null)}/>{fileValue&&<small>{fileValue.name} • {formatFileSize(fileValue.size)}</small>}</label>
     </>;
   };
-  const outgoingColumns:Array<{key:string;label:string;width:number;render:(item:OutgoingDocument)=>React.ReactNode}>=[
-    {key:"outgoingNo",label:"Çıxış No",width:110,render:item=><b>{item.outgoing_no}</b>},
-    {key:"outgoingDate",label:"Çıxış tarixi",width:110,render:item=><>{formatDateOnly(item.outgoing_date)}</>},
-    {key:"incomingNo",label:"Daxil olma No",width:130,render:item=><>{item.incoming_no||"—"}</>},
-    {key:"incomingDate",label:"Daxil olma tarixi",width:130,render:item=><>{formatDateOnly(item.incoming_date)}</>},
-    {key:"sendingDepartment",label:"Göndərən şöbə",width:150,render:item=><>{item.sending_department||"—"}</>},
-    {key:"documentType",label:"Sənədin tipi",width:130,render:item=><>{item.document_type||"—"}</>},
-    {key:"sendingMethod",label:"Göndərilmə Şəkli",width:140,render:item=><>{item.sending_method||"—"}</>},
-    {key:"deliveredBy",label:"Sənədi Götürən Şəxs",width:160,render:item=><>{item.delivered_by||"—"}</>},
-    {key:"copies",label:"Sənədin nüsxəsi",width:110,render:item=><>{item.copies||"—"}</>},
-    {key:"documentNumber",label:"Sənədin Nömrəsi",width:130,render:item=><>{item.document_number||"—"}</>},
-    {key:"documentDate",label:"Sənədin tarixi",width:110,render:item=><>{formatDateOnly(item.document_date)}</>},
-    {key:"voen",label:"Voeni",width:100,render:item=><>{item.voen||"—"}</>},
-    {key:"organizationName",label:"Təşkilatın adı",width:170,render:item=><>{item.organization_name||"—"}</>},
-    {key:"phone",label:"Müştərinin Telefonu",width:140,render:item=><>{item.phone||"—"}</>},
-    {key:"note",label:"Əlavə Qeydlər",width:180,render:item=><>{item.note||"—"}</>},
-    {key:"file",label:"Sənəd faylı",width:150,render:item=>item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yoxdur</span>},
+  const outgoingColumns:Array<{key:string;label:string;width:number;search:(item:OutgoingDocument)=>string;render:(item:OutgoingDocument)=>React.ReactNode}>=[
+    {key:"outgoingNo",label:"Çıxış No",width:110,search:item=>item.outgoing_no,render:item=><b>{item.outgoing_no}</b>},
+    {key:"outgoingDate",label:"Çıxış tarixi",width:110,search:item=>formatDateOnly(item.outgoing_date),render:item=><>{formatDateOnly(item.outgoing_date)}</>},
+    {key:"incomingNo",label:"Daxil olma No",width:130,search:item=>item.incoming_no||"",render:item=><>{item.incoming_no||"—"}</>},
+    {key:"incomingDate",label:"Daxil olma tarixi",width:130,search:item=>formatDateOnly(item.incoming_date),render:item=><>{formatDateOnly(item.incoming_date)}</>},
+    {key:"sendingDepartment",label:"Göndərən şöbə",width:150,search:item=>item.sending_department||"",render:item=><>{item.sending_department||"—"}</>},
+    {key:"documentType",label:"Sənədin tipi",width:130,search:item=>item.document_type||"",render:item=><>{item.document_type||"—"}</>},
+    {key:"sendingMethod",label:"Göndərilmə Şəkli",width:140,search:item=>item.sending_method||"",render:item=><>{item.sending_method||"—"}</>},
+    {key:"deliveredBy",label:"Sənədi Götürən Şəxs",width:160,search:item=>item.delivered_by||"",render:item=><>{item.delivered_by||"—"}</>},
+    {key:"copies",label:"Sənədin nüsxəsi",width:110,search:item=>item.copies||"",render:item=><>{item.copies||"—"}</>},
+    {key:"documentNumber",label:"Sənədin Nömrəsi",width:130,search:item=>item.document_number||"",render:item=><>{item.document_number||"—"}</>},
+    {key:"documentDate",label:"Sənədin tarixi",width:110,search:item=>formatDateOnly(item.document_date),render:item=><>{formatDateOnly(item.document_date)}</>},
+    {key:"voen",label:"Voeni",width:100,search:item=>item.voen||"",render:item=><>{item.voen||"—"}</>},
+    {key:"organizationName",label:"Təşkilatın adı",width:170,search:item=>item.organization_name||"",render:item=><>{item.organization_name||"—"}</>},
+    {key:"phone",label:"Müştərinin Telefonu",width:140,search:item=>item.phone||"",render:item=><>{item.phone||"—"}</>},
+    {key:"note",label:"Əlavə Qeydlər",width:180,search:item=>item.note||"",render:item=><>{item.note||"—"}</>},
+    {key:"file",label:"Sənəd faylı",width:150,search:item=>item.attachment_name||"Sənəd yoxdur",render:item=>item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yoxdur</span>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("outgoing2",outgoingColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(outgoingColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(outgoingColumns.map(c=>[c.key,c.width]));
+  const [outgoingSearch,setOutgoingSearch]=useState<Record<string,string>>({});
+  const setOutgoingFilter=(key:string,value:string)=>setOutgoingSearch(current=>({...current,[key]:value}));
+  const matchesOutgoingFilter=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((outgoingSearch[key]||"").toLocaleLowerCase("az-AZ"));
+  const filteredOutgoing=items.filter(item=>outgoingColumns.every(c=>matchesOutgoingFilter(c.search(item),c.key)));
   return <section className="panel pagepanel directorypanel">
     <datalist id="documentTypeOptions">{templates.map(t=><option key={t.id} value={t.name}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan Sənədlər</h2><p>Təşkilatdan göndərilən sənədlərin qeydiyyatı</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields(form,setForm)}{templateAndFileBlock(form,newFile,setNewFile)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={outgoingSearch[key]||""} onChange={e=>setOutgoingFilter(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th>}</tr></thead><tbody>{filteredOutgoing.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
-    </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ çıxan sənəd qeydə alınmayıb."/>}</div>}
+    </tr>)}</tbody></table>{!filteredOutgoing.length&&<Empty text={items.length?"Axtarışa uyğun sənəd tapılmadı.":"Hələ çıxan sənəd qeydə alınmayıb."}/>}</div>}
   </section>;
 }
 function PlaceholderPage({title,text}:{title:string;text:string}){
