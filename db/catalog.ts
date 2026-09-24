@@ -644,8 +644,6 @@ export async function updateTask(input: { id: number; actorName?: string; status
   const current = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Tapşırıq tapılmadı.");
   if (input.userMode) {
-    if (current.status !== "Geri qaytarılıb" && new Date(String(current.due_at)).getTime() <= Date.now())
-      throw new Error("Tapşırığın son icra tarixi bitib. Status dəyişdirilə bilməz.");
     const changeCount = Number(current.employee_status_changed || 0);
     if (changeCount >= 2) throw new Error("Bu tapşırıq artıq təqdim edilib və status dəyişdirilə bilməz.");
     const validTransition = (current.status === "Yeni" && input.status === "İcradadır") ||
