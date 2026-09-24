@@ -399,7 +399,9 @@ export async function getAllData() {
       JOIN companies c ON c.id = a.company_id
       ORDER BY a.id DESC`).all(),
     db().prepare("SELECT work_assignment_id, period_key FROM work_assignment_completions").all<{work_assignment_id:number;period_key:string}>(),
-    db().prepare(`SELECT tasks.*, employees.name AS employee_name, employees.position AS employee_position,
+    db().prepare(`SELECT tasks.*, employees.name AS employee_name,
+      COALESCE((SELECT p.title FROM employee_companies ec JOIN company_structure_positions p ON p.id = ec.position_id
+        WHERE ec.employee_id = tasks.employee_id AND ec.company_id = tasks.company_id), '') AS employee_position,
       companies.name AS company_name
       FROM tasks JOIN employees ON employees.id = tasks.employee_id
       LEFT JOIN companies ON companies.id = tasks.company_id
