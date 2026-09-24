@@ -231,6 +231,28 @@ async function ensureSchema() {
       }
     }
   }
+  // One-time copy (requested by the admin): Arsenal's current structure is duplicated as-is into the companies below. Companies that already have structure rows are left untouched; the flag keeps it from re-running.
+  await db().prepare("CREATE TABLE IF NOT EXISTS app_flags (key TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL)").run();
+  const copyFlag = "structure-copy-from-arsenal-v1";
+  if (!(await db().prepare("SELECT 1 FROM app_flags WHERE key = ?").bind(copyFlag).first())) {
+    const normalize = (name: string) => name.trim().replace(/\s+mmc$/i, "").toLocaleLowerCase("az");
+    const allCompanies = (await db().prepare("SELECT id, name FROM companies").all<{ id: number; name: string }>()).results;
+    const source = allCompanies.find((company) => normalize(company.name) === normalize("Arsenal Construction and Engineering"));
+    const sourceRows = source ? (await db().prepare("SELECT department, title, reports_to, sort_order FROM company_structure_positions WHERE company_id = ? ORDER BY sort_order, id").bind(source.id).all<{ department: string; title: string; reports_to: string | null; sort_order: number }>()).results : [];
+    if (sourceRows.length) {
+      const targetNames = ["Grand Fortune MMC", "Güvən Construction and Engineering", "Güvən Mühəndislik MMC", "Monotech Az MMC", "Safe Net MMC", "Zirə Sera MMC"].map(normalize);
+      const now = new Date().toISOString();
+      for (const target of allCompanies.filter((company) => targetNames.includes(normalize(company.name)))) {
+        const existing = await db().prepare("SELECT COUNT(*) AS count FROM company_structure_positions WHERE company_id = ?").bind(target.id).first<{ count: number }>();
+        if (existing?.count) continue;
+        for (const row of sourceRows) {
+          await db().prepare("INSERT INTO company_structure_positions (company_id, department, title, reports_to, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(target.id, row.department, row.title, row.reports_to, row.sort_order, now).run();
+        }
+      }
+      await db().prepare("INSERT OR IGNORE INTO app_flags (key, created_at) VALUES (?, ?)").bind(copyFlag, now).run();
+    }
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_definitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     title TEXT NOT NULL,
