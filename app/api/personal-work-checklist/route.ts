@@ -1,4 +1,4 @@
-import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
+import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const user = await requireUser(request);
     const personalWorkId = Number(new URL(request.url).searchParams.get("personalWorkId"));
     await assertAccess(user, personalWorkId);
-    return Response.json({ items: await getPersonalWorkChecklist(personalWorkId) });
+    return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: await getPersonalWorkDelegateCandidates(personalWorkId) });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 

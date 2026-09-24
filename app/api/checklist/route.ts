@@ -1,4 +1,4 @@
-import { createChecklistItem, delegateTaskChecklistItem, deleteChecklistItem, getChecklistItems, setChecklistItemAttachment, toggleChecklistItem } from "@/db/catalog";
+import { createChecklistItem, delegateTaskChecklistItem, deleteChecklistItem, getChecklistItems, getTaskDelegateCandidates, setChecklistItemAttachment, toggleChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const user = await requireUser(request);
     const taskId = Number(new URL(request.url).searchParams.get("taskId"));
     await assertTaskAccess(user, taskId);
-    return Response.json({ items: await getChecklistItems(taskId) });
+    return Response.json({ items: await getChecklistItems(taskId), candidates: await getTaskDelegateCandidates(taskId) });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 

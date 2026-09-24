@@ -741,6 +741,55 @@ export async function toggleChecklistItem(input: { id: number; done: boolean }) 
   return getChecklistItems(item.task_id);
 }
 
+export type DelegateCandidate = { id: number; name: string; position_title: string | null };
+
+// Who the owner of a work/task may hand a step to inside one company, following that company's structure:
+// walk down from the owner's position; a position held by someone yields those people, a vacant one is skipped
+// and its own subordinates are offered instead (e.g. no "şöbə müdiri" on staff → the director sees that department's staff).
+// ownerEmployeeId = null (the admin account, which has no personnel record) keeps the old behaviour: everyone in the company.
+export async function getDelegateCandidates(companyId: number | null, ownerEmployeeId: number | null): Promise<DelegateCandidate[]> {
+  await ensureSchema();
+  if (!companyId) return [];
+  const members = (await db().prepare(`SELECT e.id, e.name, ec.position_id, p.title AS position_title
+    FROM employee_companies ec JOIN employees e ON e.id = ec.employee_id
+    LEFT JOIN company_structure_positions p ON p.id = ec.position_id AND p.company_id = ec.company_id
+    WHERE ec.company_id = ? AND e.active = 1 ORDER BY e.name`).bind(companyId).all<{ id: number; name: string; position_id: number | null; position_title: string | null }>()).results;
+  const toCandidate = (m: (typeof members)[number]) => ({ id: m.id, name: m.name, position_title: m.position_title });
+  if (!ownerEmployeeId) return members.map(toCandidate);
+  const own = await db().prepare("SELECT position_id FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(ownerEmployeeId, companyId).first<{ position_id: number | null }>();
+  if (!own?.position_id) return [];
+  const positions = (await db().prepare("SELECT id, department, title, reports_to FROM company_structure_positions WHERE company_id = ?").bind(companyId).all<{ id: number; department: string; title: string; reports_to: string | null }>()).results;
+  const titles = new Set(positions.map((p) => p.title.trim()));
+  // "reports_to" holds one or more superiors split by "/"; a department name there (e.g. "Rəhbərlik") means every position of that department.
+  const reportsTo = (child: (typeof positions)[number], parent: (typeof positions)[number]) =>
+    (child.reports_to || "").split("/").map((part) => part.trim()).filter(Boolean)
+      .some((part) => part === parent.title.trim() || (!titles.has(part) && part === parent.department.trim()));
+  const start = positions.find((p) => p.id === own.position_id);
+  if (!start) return [];
+  const result = new Map<number, DelegateCandidate>();
+  const visited = new Set<number>([start.id]);
+  const queue = positions.filter((p) => p.id !== start.id && reportsTo(p, start));
+  while (queue.length) {
+    const position = queue.shift()!;
+    if (visited.has(position.id)) continue;
+    visited.add(position.id);
+    const holders = members.filter((m) => m.position_id === position.id && m.id !== ownerEmployeeId);
+    if (holders.length) holders.forEach((m) => result.set(m.id, toCandidate(m)));
+    else queue.push(...positions.filter((p) => !visited.has(p.id) && reportsTo(p, position)));
+  }
+  return [...result.values()].sort((a, b) => a.name.localeCompare(b.name, "az"));
+}
+
+export async function getTaskDelegateCandidates(taskId: number) {
+  const task = await db().prepare("SELECT employee_id, company_id FROM tasks WHERE id = ?").bind(taskId).first<{ employee_id: number; company_id: number | null }>();
+  return task ? getDelegateCandidates(task.company_id, task.employee_id) : [];
+}
+
+export async function getPersonalWorkDelegateCandidates(personalWorkId: number) {
+  const work = await db().prepare("SELECT w.company_id, u.employee_id FROM personal_works w LEFT JOIN app_users u ON u.id = w.user_id WHERE w.id = ?").bind(personalWorkId).first<{ company_id: number | null; employee_id: number | null }>();
+  return work ? getDelegateCandidates(work.company_id, work.employee_id) : [];
+}
+
 export async function delegateTaskChecklistItem(input: { id: number; isAdmin: boolean; actorEmployeeId: number | null; actorName?: string; employeeId: number; comment?: string }) {
   await ensureSchema();
   const item = await db().prepare("SELECT * FROM task_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
@@ -748,11 +797,9 @@ export async function delegateTaskChecklistItem(input: { id: number; isAdmin: bo
   if (item.delegated_task_id) throw new Error("Bu addım artıq həvalə edilib.");
   const task = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(item.task_id).first<Record<string, unknown>>();
   if (!task) throw new Error("Tapşırıq tapılmadı.");
-  // Delegating a task step is admin-only for now, until firma-structure positions are linked to real employees.
-  if (!input.isAdmin) throw new Error("İcazə yoxdur.");
   if (!task.company_id) throw new Error("Həvalə etmək üçün əvvəlcə tapşırığın firması təyin olunmalıdır.");
-  const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, task.company_id).first();
-  if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
+  const candidates = await getDelegateCandidates(Number(task.company_id), Number(task.employee_id));
+  if (!candidates.some((c) => c.id === input.employeeId)) throw new Error("Bu işçi firmanın strukturuna görə sizə tabe deyil.");
   // The new task gets its own copy of the step's file so deleting either one never orphans the other.
   let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
   if (item.attachment_key && env.FILES) {
@@ -987,8 +1034,7 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   if (work.status !== "İcradadır") throw new Error("Yalnız icraya alınmış işdə addım işçiyə həvalə edilə bilər.");
   if (!work.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
   if (!work.due_at) throw new Error("Həvalə etmək üçün əvvəlcə işin son tarixini təyin edin.");
-  const allowed = await db().prepare("SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id = ?").bind(input.employeeId, work.company_id).first();
-  if (!allowed) throw new Error("Bu işçi bu firma üzrə səlahiyyətli deyil.");
+  if (!(await getPersonalWorkDelegateCandidates(Number(work.id))).some((c) => c.id === input.employeeId)) throw new Error("Bu işçi firmanın strukturuna görə sizə tabe deyil.");
   // The task gets its own copy of the step's file so deleting either one never orphans the other.
   let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
   if (item.attachment_key && env.FILES) {
