@@ -169,6 +169,9 @@ async function ensureSchema() {
     created_at TEXT NOT NULL
   )`).run();
   const employeeColumns = await db().prepare("PRAGMA table_info(employees)").all<{ name: string }>();
+  if (!employeeColumns.results.some((column) => column.name === "main_company_id")) {
+    await db().prepare("ALTER TABLE employees ADD COLUMN main_company_id INTEGER REFERENCES companies(id)").run();
+  }
   if (!employeeColumns.results.some((column) => column.name === "avatar_key")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN avatar_key TEXT").run();
   }
@@ -564,21 +567,21 @@ async function setEmployeeCompanies(employeeId: number, companyIds: number[], co
   }
 }
 
-export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string }) {
+export async function createEmployee(input: { name: string; position?: string; email?: string; mainCompanyId?: number | null; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string }) {
   await ensureSchema();
-  const result = await db().prepare("INSERT INTO employees (name, position, email, active, avatar_key, created_at) VALUES (?, ?, ?, 1, ?, ?)")
-    .bind(input.name, input.position || "Personal", input.email || null, input.avatarKey || null, new Date().toISOString()).run();
+  const result = await db().prepare("INSERT INTO employees (name, position, email, main_company_id, active, avatar_key, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)")
+    .bind(input.name, input.position || "Personal", input.email || null, Number(input.mainCompanyId) || null, input.avatarKey || null, new Date().toISOString()).run();
   const employeeId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds, input.companyPositions);
   return employeeId;
 }
 
-export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null }) {
+export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Personal tapılmadı.");
-  await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, active = ?, avatar_key = ? WHERE id = ?")
-    .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
+  await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, main_company_id = ?, active = ?, avatar_key = ? WHERE id = ?")
+    .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.mainCompanyId === undefined ? current.main_company_id : (Number(input.mainCompanyId) || null), input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
   if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds, input.companyPositions);
 }
 
