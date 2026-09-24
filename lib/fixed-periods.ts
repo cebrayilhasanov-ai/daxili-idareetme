@@ -7,7 +7,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 // Midnight (start of day) in Baku; month is 0-based and may overflow (e.g. 12 → January next year).
 const bakuMidnight = (year: number, month: number, day: number) => Date.UTC(year, month, day) - BAKU_OFFSET_MS;
 
-export type FixedWorkRule = { frequency: string; due_day: number | null; due_month_offset: number | null };
+export type FixedWorkRule = { frequency: string; due_day: number | null };
 export type PeriodState = "future" | "active" | "overdue" | "done" | "late-done";
 
 export const MONTH_NAMES = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun", "İyul", "Avqust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
@@ -15,7 +15,6 @@ export const WEEKDAY_NAMES = ["Bazar ertəsi", "Çərşənbə axşamı", "Çər�
 
 // Defaults: a monthly work is due on the 10th of the following month, a weekly one on Friday of its week.
 export function dueDay(rule: FixedWorkRule) { return rule.due_day || (rule.frequency === "weekly" ? 5 : 10); }
-export function dueMonthOffset(rule: FixedWorkRule) { return rule.due_month_offset === 0 ? 0 : 1; }
 
 export function bakuToday(now = Date.now()) {
   const d = new Date(now + BAKU_OFFSET_MS);
@@ -36,15 +35,14 @@ export function weeksOfMonth(year: number, month: number) {
   return weeks;
 }
 
-// When a period can be worked on: monthly works whose deadline is in the next month open once their month has ended
-// (January's work: 1 Feb → 10 Feb); a deadline inside the same month opens on the 1st. Weekly works open on the Monday.
-// `due` is the end of the deadline day.
+// When a period can be worked on: a monthly work opens once its month has ended and is due on the given day of the
+// following month (January's work: 1 Feb → 10 Feb). Weekly works open on the Monday. `due` is the end of the deadline day.
 export function periodWindow(rule: FixedWorkRule, key: string): { start: number; due: number } | null {
   const monthly = key.match(/^monthly:(\d{4})-(\d{2})$/);
   if (monthly && rule.frequency === "monthly") {
-    const year = Number(monthly[1]), month = Number(monthly[2]) - 1, offset = dueMonthOffset(rule);
-    const daysInDueMonth = new Date(Date.UTC(year, month + offset + 1, 0)).getUTCDate();
-    return { start: bakuMidnight(year, month + offset, 1), due: bakuMidnight(year, month + offset, Math.min(dueDay(rule), daysInDueMonth) + 1) };
+    const year = Number(monthly[1]), dueMonth = Number(monthly[2]);
+    const daysInDueMonth = new Date(Date.UTC(year, dueMonth + 1, 0)).getUTCDate();
+    return { start: bakuMidnight(year, dueMonth, 1), due: bakuMidnight(year, dueMonth, Math.min(dueDay(rule), daysInDueMonth) + 1) };
   }
   const weekly = key.match(/^weekly:(\d{4})-(\d{2})-(\d{2})$/);
   if (weekly && rule.frequency === "weekly") {
@@ -73,5 +71,5 @@ export function formatBakuDate(ms: number) {
 
 export function dueLabel(rule: FixedWorkRule) {
   if (rule.frequency === "weekly") return WEEKDAY_NAMES[Math.min(Math.max(dueDay(rule), 1), 7) - 1];
-  return `${dueDay(rule)} — ${dueMonthOffset(rule) ? "növbəti ay" : "həmin ay"}`;
+  return String(dueDay(rule));
 }
