@@ -18,7 +18,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser(request, "admin");
+    // Any signed-in user may add a customer; editing and deleting remain admin-only.
+    const user = await requireUser(request);
     const body = await request.json();
     await createCustomer(body);
     await logAudit(user, "Müştəri yaradıldı", "customer", body.name);
