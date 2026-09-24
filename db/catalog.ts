@@ -260,6 +260,10 @@ async function ensureSchema() {
     company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     PRIMARY KEY(employee_id, company_id)
   )`).run();
+  const employeeCompanyColumns = await db().prepare("PRAGMA table_info(employee_companies)").all<{ name: string }>();
+  if (!employeeCompanyColumns.results.some((column) => column.name === "position_id")) {
+    await db().prepare("ALTER TABLE employee_companies ADD COLUMN position_id INTEGER REFERENCES company_structure_positions(id) ON DELETE SET NULL").run();
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS employee_violations (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
@@ -376,7 +380,10 @@ export async function getAllData() {
   await ensureRecurringTasks();
   const [employees, companies, recurring, workItems, workAssignments, workCompletions, tasks, dateRequests] = await Promise.all([
     db().prepare(`SELECT employees.*,
-      (SELECT group_concat(company_id) FROM employee_companies WHERE employee_id = employees.id) AS company_ids
+      (SELECT group_concat(company_id) FROM employee_companies WHERE employee_id = employees.id) AS company_ids,
+      (SELECT json_group_array(json_object('company_id', ec.company_id, 'position_id', p.id, 'position_title', p.title))
+        FROM employee_companies ec LEFT JOIN company_structure_positions p ON p.id = ec.position_id AND p.company_id = ec.company_id
+        WHERE ec.employee_id = employees.id) AS company_positions
       FROM employees ORDER BY active DESC, name`).all(),
     db().prepare("SELECT * FROM companies ORDER BY active DESC, name").all(),
     db().prepare(`SELECT recurring_tasks.*, employees.name AS employee_name
@@ -518,33 +525,37 @@ export async function updateStructurePosition(input: { id: number; department?: 
 export async function deleteStructurePosition(id: number) {
   const current = await db().prepare("SELECT company_id FROM company_structure_positions WHERE id = ?").bind(id).first<{ company_id: number }>();
   if (!current) throw new Error("Vəzifə tapılmadı.");
+  await db().prepare("UPDATE employee_companies SET position_id = NULL WHERE position_id = ?").bind(id).run();
   await db().prepare("DELETE FROM company_structure_positions WHERE id = ?").bind(id).run();
   return getCompanyStructure(current.company_id);
 }
 
-async function setEmployeeCompanies(employeeId: number, companyIds: number[]) {
+// companyPositions: { [companyId]: structurePositionId } — the employee's position inside each company's structure. When omitted, existing positions are kept.
+async function setEmployeeCompanies(employeeId: number, companyIds: number[], companyPositions?: Record<string, number | null>) {
+  const previous = new Map(((await db().prepare("SELECT company_id, position_id FROM employee_companies WHERE employee_id = ?").bind(employeeId).all<{ company_id: number; position_id: number | null }>()).results).map((row) => [row.company_id, row.position_id]));
   await db().prepare("DELETE FROM employee_companies WHERE employee_id = ?").bind(employeeId).run();
   for (const companyId of companyIds) {
-    await db().prepare("INSERT OR IGNORE INTO employee_companies (employee_id, company_id) VALUES (?, ?)").bind(employeeId, companyId).run();
+    const positionId = companyPositions ? Number(companyPositions[String(companyId)]) || null : previous.get(companyId) ?? null;
+    await db().prepare("INSERT OR IGNORE INTO employee_companies (employee_id, company_id, position_id) VALUES (?, ?, (SELECT id FROM company_structure_positions WHERE id = ? AND company_id = ?))").bind(employeeId, companyId, positionId, companyId).run();
   }
 }
 
-export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; avatarKey?: string }) {
+export async function createEmployee(input: { name: string; position?: string; email?: string; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string }) {
   await ensureSchema();
   const result = await db().prepare("INSERT INTO employees (name, position, email, active, avatar_key, created_at) VALUES (?, ?, ?, 1, ?, ?)")
     .bind(input.name, input.position || "Personal", input.email || null, input.avatarKey || null, new Date().toISOString()).run();
   const employeeId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
-  if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds);
+  if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds, input.companyPositions);
   return employeeId;
 }
 
-export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; avatarKey?: string | null }) {
+export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Personal tapılmadı.");
   await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, active = ?, avatar_key = ? WHERE id = ?")
     .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
-  if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds);
+  if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds, input.companyPositions);
 }
 
 export async function deleteEmployee(id: number) {
