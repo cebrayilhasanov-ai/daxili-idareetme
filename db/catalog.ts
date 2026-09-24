@@ -1,4 +1,5 @@
 import { env } from "@/lib/runtime";
+import { periodWindow } from "@/lib/fixed-periods";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -267,6 +268,13 @@ async function ensureSchema() {
   if (!workDefinitionColumns.results.some((column) => column.name === "description")) {
     await db().prepare("ALTER TABLE work_definitions ADD COLUMN description TEXT").run();
   }
+  // Per-work deadline: monthly → day of month + whether it falls in the same (0) or the following (1) month; weekly → weekday 1–7. NULL = default (10th of next month / Friday).
+  if (!workDefinitionColumns.results.some((column) => column.name === "due_day")) {
+    await db().prepare("ALTER TABLE work_definitions ADD COLUMN due_day INTEGER").run();
+  }
+  if (!workDefinitionColumns.results.some((column) => column.name === "due_month_offset")) {
+    await db().prepare("ALTER TABLE work_definitions ADD COLUMN due_month_offset INTEGER").run();
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     work_definition_id INTEGER NOT NULL REFERENCES work_definitions(id) ON DELETE CASCADE,
@@ -417,13 +425,13 @@ export async function getAllData() {
     db().prepare(`SELECT work_definitions.*,
       (SELECT group_concat(company_id) FROM work_definition_companies WHERE work_definition_id = work_definitions.id) AS company_ids
       FROM work_definitions ORDER BY id DESC`).all(),
-    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, e.name AS employee_name, c.name AS company_name
+    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, d.due_day, d.due_month_offset, e.name AS employee_name, c.name AS company_name
       FROM work_assignments a
       JOIN work_definitions d ON d.id = a.work_definition_id
       JOIN employees e ON e.id = a.employee_id
       JOIN companies c ON c.id = a.company_id
       ORDER BY a.id DESC`).all(),
-    db().prepare("SELECT work_assignment_id, period_key FROM work_assignment_completions").all<{work_assignment_id:number;period_key:string}>(),
+    db().prepare("SELECT work_assignment_id, period_key, completed_at FROM work_assignment_completions").all<{work_assignment_id:number;period_key:string;completed_at:string}>(),
     db().prepare(`SELECT tasks.*, employees.name AS employee_name,
       COALESCE((SELECT p.title FROM employee_companies ec JOIN company_structure_positions p ON p.id = ec.position_id
         WHERE ec.employee_id = tasks.employee_id AND ec.company_id = tasks.company_id), '') AS employee_position,
@@ -442,24 +450,35 @@ export async function getAllData() {
     const currentPeriod = periodKey({ frequency: String(item.frequency) });
     return { ...item, period_key: currentPeriod, is_completed: Number(completedKeys.has(`${item.id}:${currentPeriod}`)) };
   });
-  return { employees: employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
+  return { employees: employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
 }
 
-export async function createWorkItem(input: { title: string; description?: string; frequency?: string }) {
+function normalizeDue(frequency: string, dueDay: unknown, dueMonthOffset: unknown) {
+  const day = Number(dueDay);
+  const max = frequency === "weekly" ? 7 : 31;
+  if (dueDay !== undefined && dueDay !== null && (!Number.isInteger(day) || day < 1 || day > max)) throw new Error("Son tarix düzgün deyil.");
+  return { day: dueDay === undefined || dueDay === null ? null : day, offset: frequency === "monthly" && dueMonthOffset !== undefined && dueMonthOffset !== null ? (Number(dueMonthOffset) ? 1 : 0) : null };
+}
+
+export async function createWorkItem(input: { title: string; description?: string; frequency?: string; dueDay?: number; dueMonthOffset?: number }) {
   const title = input.title?.trim();
   const frequency = input.frequency || "monthly";
   if (!title) throw new Error("İşin adını yazın.");
   if (!["monthly", "weekly", "daily"].includes(frequency)) throw new Error("Dövr seçimi düzgün deyil.");
-  await db().prepare("INSERT INTO work_definitions (title, description, frequency, created_at) VALUES (?, ?, ?, ?)")
-    .bind(title, input.description?.trim() || null, frequency, new Date().toISOString()).run();
+  const due = normalizeDue(frequency, input.dueDay, input.dueMonthOffset);
+  await db().prepare("INSERT INTO work_definitions (title, description, frequency, due_day, due_month_offset, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(title, input.description?.trim() || null, frequency, due.day, due.offset, new Date().toISOString()).run();
 }
 
-export async function updateWorkItem(input: { id: number; frequency?: string }) {
-  const current = await db().prepare("SELECT frequency FROM work_definitions WHERE id = ?").bind(input.id).first<{frequency:string}>();
+export async function updateWorkItem(input: { id: number; frequency?: string; dueDay?: number | null; dueMonthOffset?: number | null }) {
+  const current = await db().prepare("SELECT frequency, due_day, due_month_offset FROM work_definitions WHERE id = ?").bind(input.id).first<{frequency:string;due_day:number|null;due_month_offset:number|null}>();
   if (!current) throw new Error("İş tapılmadı.");
   const frequency = input.frequency || current.frequency;
   if (!["monthly", "weekly", "daily"].includes(frequency)) throw new Error("Dövr seçimi düzgün deyil.");
-  await db().prepare("UPDATE work_definitions SET frequency = ? WHERE id = ?").bind(frequency, input.id).run();
+  // Switching monthly <-> weekly resets the deadline to that frequency's default, since the numbers mean different things.
+  const keep = frequency === current.frequency;
+  const due = normalizeDue(frequency, input.dueDay !== undefined ? input.dueDay : keep ? current.due_day : null, input.dueMonthOffset !== undefined ? input.dueMonthOffset : keep ? current.due_month_offset : null);
+  await db().prepare("UPDATE work_definitions SET frequency = ?, due_day = ?, due_month_offset = ? WHERE id = ?").bind(frequency, due.day, due.offset, input.id).run();
 }
 
 export async function toggleWorkDefinitionCompany(input: { id:number; companyId:number; selected:boolean }) {
@@ -491,15 +510,21 @@ export async function toggleWorkAssignment(input: { workDefinitionId:number; emp
   }
 }
 
-export async function completeWorkAssignment(input: { assignmentId:number }, employeeId:number|null) {
+// Marks one period (a month or a week column) done. A period can be ticked once its window has opened, also after the deadline
+// (it then shows as done late); future periods stay closed.
+export async function completeWorkAssignment(input: { assignmentId:number; periodKey?:string }, employeeId:number|null) {
   if (!input.assignmentId) throw new Error("Sabit iş seçilməyib.");
   const statement = employeeId
-    ? db().prepare(`SELECT a.id, d.frequency FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ? AND a.employee_id = ?`).bind(input.assignmentId, employeeId)
-    : db().prepare(`SELECT a.id, d.frequency FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?`).bind(input.assignmentId);
-  const assignment = await statement.first<{id:number;frequency:string}>();
+    ? db().prepare(`SELECT a.id, d.frequency, d.due_day, d.due_month_offset FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ? AND a.employee_id = ?`).bind(input.assignmentId, employeeId)
+    : db().prepare(`SELECT a.id, d.frequency, d.due_day, d.due_month_offset FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?`).bind(input.assignmentId);
+  const assignment = await statement.first<{id:number;frequency:string;due_day:number|null;due_month_offset:number|null}>();
   if (!assignment) throw new Error("Bu sabit iş sizə təyin edilməyib.");
+  const key = String(input.periodKey || "");
+  const window = periodWindow(assignment, key);
+  if (!window) throw new Error("Dövr seçimi düzgün deyil.");
+  if (Date.now() < window.start) throw new Error("Bu dövr hələ açılmayıb.");
   await db().prepare("INSERT OR IGNORE INTO work_assignment_completions (work_assignment_id, period_key, completed_at) VALUES (?, ?, ?)")
-    .bind(assignment.id, periodKey({frequency:assignment.frequency}), new Date().toISOString()).run();
+    .bind(assignment.id, key, new Date().toISOString()).run();
 }
 
 export async function createCompany(input: { name: string; voen?: string; manager?: string }) {

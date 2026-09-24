@@ -8,7 +8,7 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   if (user.role === "admin") return data;
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
   const ownCompanyIds = new Set((data.employees.find((item: any) => item.id === user.employeeId)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
+  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
 }
 
 function authError(error: unknown) {
@@ -56,14 +56,14 @@ export async function PATCH(request: Request) {
     }
     if (user.role !== "admin") {
       if (body.action === "work-completion") {
-        await completeWorkAssignment({assignmentId:Number(body.assignmentId)}, user.employeeId);
+        await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
         return Response.json(await scopedData(user));
       }
       if (body.action !== "task" || !body.userMode) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
       const task = await env.DB.prepare("SELECT employee_id FROM tasks WHERE id = ?").bind(Number(body.id)).first<{ employee_id: number }>();
       if (!task || task.employee_id !== user.employeeId) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
     }
-    if (body.action === "work-completion") await completeWorkAssignment({assignmentId:Number(body.assignmentId)}, null);
+    if (body.action === "work-completion") await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, null);
     else if (body.action === "employee") {
       await updateEmployee(body);
       if (user.role === "admin") {
