@@ -1,5 +1,6 @@
 import { countActionableRequests, createRequest, deleteRequest, getRequestEvents, listRequests, updateRequest } from "@/db/requests";
 import { requireUser } from "@/lib/auth";
+import { requireSection } from "@/lib/permissions";
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -10,7 +11,7 @@ function authError(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.requests");
     const params = new URL(request.url).searchParams;
     if (params.get("summary")) return Response.json({ actionable: await countActionableRequests(user) });
     const eventsFor = Number(params.get("events"));
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.requests");
     const body = await request.json();
     await createRequest(user, {
       companyId: Number(body.companyId),
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.requests");
     const body = await request.json();
     await updateRequest(user, { id: Number(body.id), action: String(body.action || ""), assigneeId: body.assigneeId ? Number(body.assigneeId) : undefined, agreedDueAt: body.agreedDueAt, text: body.text, score: body.score });
     return Response.json({ ...(await listRequests(user)), events: await getRequestEvents(user, Number(body.id)) });
@@ -49,7 +50,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.requests");
     await deleteRequest(user, Number(new URL(request.url).searchParams.get("id")));
     return Response.json(await listRequests(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sorğu silinmədi." }, { status: 400 }); }

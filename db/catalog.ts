@@ -1,6 +1,7 @@
 import { env } from "@/lib/runtime";
 import { periodWindow } from "@/lib/fixed-periods";
-import { ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
+import { departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
+import { parseHiddenSections } from "@/lib/permissions";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -181,6 +182,10 @@ async function ensureSchema() {
   }
   if (!employeeColumns.results.some((column) => column.name === "manager_employee_id")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN manager_employee_id INTEGER REFERENCES employees(id)").run();
+  }
+  // Sections hidden from this employee (JSON array of keys, see lib/permissions.ts); NULL = sees everything.
+  if (!employeeColumns.results.some((column) => column.name === "hidden_sections")) {
+    await db().prepare("ALTER TABLE employees ADD COLUMN hidden_sections TEXT").run();
   }
   if (!employeeColumns.results.some((column) => column.name === "authority_type")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN authority_type TEXT DEFAULT 'İşçi' NOT NULL").run();
@@ -452,12 +457,14 @@ export async function getAllData() {
       JOIN employees ON employees.id = tasks.employee_id
       ORDER BY task_date_requests.created_at DESC`).all(),
   ]);
+  const heads = await departmentHeadIds();
+  const employeeRows = (employees.results as Array<Record<string, unknown>>).map((item) => ({ ...item, is_department_head: Number(heads.has(Number(item.id))) }));
   const completedKeys = new Set(workCompletions.results.map((item) => `${item.work_assignment_id}:${item.period_key}`));
   const currentAssignments = (workAssignments.results as Array<Record<string, unknown>>).map((item) => {
     const currentPeriod = periodKey({ frequency: String(item.frequency) });
     return { ...item, period_key: currentPeriod, is_completed: Number(completedKeys.has(`${item.id}:${currentPeriod}`)) };
   });
-  return { employees: employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
+  return { employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
 }
 
 function normalizeDueDay(frequency: string, dueDay: unknown) {
@@ -597,22 +604,27 @@ async function setEmployeeCompanies(employeeId: number, companyIds: number[], co
   }
 }
 
-export async function createEmployee(input: { name: string; position?: string; email?: string; mainCompanyId?: number | null; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string }) {
+export async function createEmployee(input: { name: string; position?: string; email?: string; mainCompanyId?: number | null; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string; hiddenSections?: unknown }) {
   await ensureSchema();
-  const result = await db().prepare("INSERT INTO employees (name, position, email, main_company_id, active, avatar_key, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)")
-    .bind(input.name, input.position || "Personal", input.email || null, Number(input.mainCompanyId) || null, input.avatarKey || null, new Date().toISOString()).run();
+  const hidden = parseHiddenSections(input.hiddenSections);
+  const result = await db().prepare("INSERT INTO employees (name, position, email, main_company_id, active, avatar_key, hidden_sections, created_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)")
+    .bind(input.name, input.position || "Personal", input.email || null, Number(input.mainCompanyId) || null, input.avatarKey || null, hidden.length ? JSON.stringify(hidden) : null, new Date().toISOString()).run();
   const employeeId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds, input.companyPositions);
   return employeeId;
 }
 
-export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null }) {
+export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null; hiddenSections?: unknown }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Personal tapılmadı.");
   await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, main_company_id = ?, active = ?, avatar_key = ? WHERE id = ?")
     .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.mainCompanyId === undefined ? current.main_company_id : (Number(input.mainCompanyId) || null), input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
   if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds, input.companyPositions);
+  if (input.hiddenSections !== undefined) {
+    const hidden = parseHiddenSections(input.hiddenSections);
+    await db().prepare("UPDATE employees SET hidden_sections = ? WHERE id = ?").bind(hidden.length ? JSON.stringify(hidden) : null, input.id).run();
+  }
 }
 
 export async function deleteEmployee(id: number) {

@@ -1,5 +1,6 @@
 import { createViolation, deleteViolation, listViolations, listViolationsForEmployee } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
+import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 function authError(error: unknown) {
@@ -11,7 +12,7 @@ function authError(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "hr.violations");
     if (user.role === "admin") return Response.json({ items: await listViolations() });
     if (!user.employeeId) return Response.json({ items: [] });
     return Response.json({ items: await listViolationsForEmployee(user.employeeId) });

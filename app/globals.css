@@ -448,3 +448,21 @@ nav button>em+.navcaret{margin-left:6px}
 .navcaret:hover{background:#ffffff1f;color:#fff}
 .navcaret:not(.open) svg{transform:rotate(-90deg)}
 .navchildren button em{margin-left:auto}
+/* Giriş icazələri (Personal pəncərəsi) */
+.permissiontree{display:grid;gap:8px;padding:12px 14px;border:1px solid #d9e2ee;border-radius:12px;background:#f8fbff}
+.permissionhead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.permissionhead b{font-size:13px;color:#172237}
+.permissionhead span{display:flex;gap:6px;flex-wrap:wrap}
+.permissionhead select,.permissionhead button{height:30px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;padding:0 8px;font-size:11px;color:#334155}
+.permissionhead button{font-weight:800;cursor:pointer}
+.permissionhead button:disabled{opacity:.45;cursor:not-allowed}
+.permissionnote{color:#64748b;font-size:10px}
+.permissiongroups{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.permissiongroup{padding:8px 10px;border:1px solid #e2e8f0;border-radius:9px;background:#fff}
+.permissiongroup label{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12px;color:#172237;cursor:pointer}
+.permissiongroup input{width:14px;height:14px;flex:none;accent-color:#0C8599}
+.permissiongroup small{margin-left:auto;color:#94a3b8;font-size:9px;white-space:nowrap}
+.permissionparent{font-weight:800}
+.permissionchildren{display:grid;margin:2px 0 0 10px;padding-left:10px;border-left:1px solid #e2e8f0}
+.permissionchildren label.locked{color:#94a3b8;cursor:default}
+.permissionwarning{padding:8px 10px;border:1px solid #fcd9a5;border-radius:8px;background:#fff7e8;color:#9a5b00;font-size:11px;font-weight:700}

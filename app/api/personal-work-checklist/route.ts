@@ -1,5 +1,6 @@
 import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
+import { requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
@@ -18,7 +19,7 @@ function authError(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const personalWorkId = Number(new URL(request.url).searchParams.get("personalWorkId"));
     await assertAccess(user, personalWorkId);
     return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: await getPersonalWorkDelegateCandidates(personalWorkId) });
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const body = await request.json();
     const personalWorkId = Number(body.personalWorkId);
     await assertAccess(user, personalWorkId);
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const body = await request.json();
     const id = Number(body.id);
     const existing = await env.DB.prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(id).first<{ personal_work_id: number }>();
@@ -59,7 +60,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const id = Number(new URL(request.url).searchParams.get("id"));
     const existing = await env.DB.prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(id).first<{ personal_work_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });

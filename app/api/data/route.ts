@@ -1,14 +1,17 @@
 import { completeWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, resolveDateChangeRequest, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
+import { hiddenSections, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
   if (user.role === "admin") return data;
+  const hidden = await hiddenSections(user);
+  const frequencyVisible = (frequency: unknown) => !(frequency === "monthly" && hidden.has("tasks.monthly")) && !(frequency === "weekly" && hidden.has("tasks.weekly"));
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
   const ownCompanyIds = new Set((data.employees.find((item: any) => item.id === user.employeeId)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
+  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && frequencyVisible(item.frequency)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId) };
 }
 
 function authError(error: unknown) {
@@ -56,6 +59,9 @@ export async function PATCH(request: Request) {
     }
     if (user.role !== "admin") {
       if (body.action === "work-completion") {
+        const assignment = await env.DB.prepare("SELECT d.frequency FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?").bind(Number(body.assignmentId)).first<{ frequency: string }>();
+        if (assignment?.frequency === "monthly") await requireSection(user, "tasks.monthly");
+        if (assignment?.frequency === "weekly") await requireSection(user, "tasks.weekly");
         await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
         return Response.json(await scopedData(user));
       }

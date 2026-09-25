@@ -1,11 +1,13 @@
 import { env } from "@/lib/runtime";
 import { requireUser } from "@/lib/auth";
+import { requireSection } from "@/lib/permissions";
 
 type User = Awaited<ReturnType<typeof requireUser>>;
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (message === "AUTH_REQUIRED") return Response.json({ error: "Giriş tələb olunur." }, { status: 401 });
+  if (message === "FORBIDDEN") return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
   return null;
 }
 
@@ -62,7 +64,7 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "chat");
     const params = new URL(request.url).searchParams;
     return Response.json(await chatData(user, Number(params.get("threadId") || 0), params.get("summary") === "1"));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Çat açıla bilmədi." }, { status: 500 }); }
@@ -70,7 +72,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "chat");
     const body = await request.json();
     await ensureGeneral(user);
     if (body.action === "direct") {
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "chat");
     const body = await request.json();
     const threadId = Number(body.threadId);
     if (!await isMember(threadId,user.id)) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });

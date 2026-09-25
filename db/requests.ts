@@ -97,6 +97,14 @@ async function loadStructure() {
 }
 
 type Structure = Awaited<ReturnType<typeof loadStructure>>;
+
+// Employees heading at least one department of any company (used to warn the admin before hiding Sorğular from them).
+export async function departmentHeadIds() {
+  const structure = await loadStructure();
+  const ids = new Set<number>();
+  for (const dept of structure.departments.values()) dept.heads.forEach((id) => ids.add(id));
+  return ids;
+}
 type RequestRow = Record<string, unknown> & { id: number; company_id: number; from_user_id: number; from_department: string | null; to_department: string; assignee_employee_id: number | null; status: string; task_id: number | null; task_status: string | null };
 
 function roles(row: RequestRow, user: SessionUser, structure: Structure) {

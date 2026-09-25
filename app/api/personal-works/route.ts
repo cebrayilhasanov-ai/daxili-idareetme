@@ -1,5 +1,6 @@
 import { createPersonalWork, deletePersonalWork, getPersonalWorks, updatePersonalWork, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
+import { requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 function authError(error: unknown) {
@@ -22,7 +23,7 @@ async function scopeUserId(user: Awaited<ReturnType<typeof requireUser>>, reques
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const items = await getPersonalWorks(await scopeUserId(user, request));
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const body = await request.json();
     await createPersonalWork({
       userId: user.id,
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const body = await request.json();
     if (body.status) {
       await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
@@ -78,7 +79,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const params = new URL(request.url).searchParams;
     await deletePersonalWork({ id: Number(params.get("id")), userId: user.id });
     const items = await getPersonalWorks(await scopeUserId(user, request));

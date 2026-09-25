@@ -1,10 +1,11 @@
 import { getPersonalWorkHistory } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
+import { requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
+    const user = await requireSection(await requireUser(request), "tasks.mine");
     const personalWorkId = Number(new URL(request.url).searchParams.get("personalWorkId"));
     if (!personalWorkId) throw new Error("İş seçilməyib.");
     if (user.role !== "admin") {
