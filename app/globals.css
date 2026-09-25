@@ -233,7 +233,7 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .customerrow .statusfield{flex:0 0 15ch}
 .customerrow .voenfield{flex:0 0 10ch}
 .customerrow .addressfield{flex:2 1 240px}
-.customerrow .field:not(.statusfield):not(.voenfield):not(.addressfield){flex:1 1 160px}
+.customerrow .field:not(.statusfield):not(.voenfield):not(.addressfield):not(.countryfield){flex:1 1 160px}
 .customerrow .inlineactions{flex:0 0 auto}
 .customertable{table-layout:fixed;min-width:0}
 .customertable td{overflow-wrap:break-word}
@@ -437,3 +437,7 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .sharedname.own{color:#0C8599}
 .sharedname.own.done{color:#1e3a8a}
 .sharedname em{font-style:normal;font-size:10px;font-weight:700;opacity:.8}
+.customerrow .statusfield{flex:0 0 18ch}
+.customerrow .countryfield{flex:0 0 22ch}
+.customerrow .voenfield.wide{flex:0 0 26ch}
+.voenhint.bad{color:#dc2626;font-weight:700}

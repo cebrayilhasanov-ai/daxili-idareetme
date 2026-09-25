@@ -31,7 +31,7 @@ type StructurePosition = { id:number; company_id:number; department:string; titl
 type ChatThread = { id:number; type:"group"|"direct"; name:string; avatar_key:string|null; last_message:string|null; last_message_at:string|null; unread:number };
 type ChatMessage = { id:number; thread_id:number; sender_user_id:number; sender_name:string; sender_avatar_key:string|null; body:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string };
 type ChatUser = { id:number; name:string; email:string; avatar_key:string|null };
-type Customer = { id:number; entity_type:string|null; voen:string|null; name:string; legal_address:string|null; legal_address2:string|null; manager:string|null; created_at:string };
+type Customer = { id:number; entity_type:string|null; country:string|null; voen:string|null; name:string; legal_address:string|null; legal_address2:string|null; manager:string|null; created_at:string };
 type ChecklistItem = { id:number; task_id:number; title:string; done:number; created_at:string; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
 type ChecklistLikeItem = { id:number; title:string; done:number; delegated_task_id?:number|null; delegated_employee_name?:string|null; delegated_task_status?:string|null; attachment_key?:string|null; attachment_name?:string|null; attachment_size?:number|null; delegated_submission_attachment_key?:string|null; delegated_submission_attachment_name?:string|null; delegated_submission_attachment_size?:number|null };
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
@@ -139,7 +139,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.25</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.26</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="requests"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -763,9 +763,50 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
     })}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun vəzifə tapılmadı.":"Bu firma üçün hələ struktur qurulmayıb."}/>}</div>}
   </FormShell>}</DialogContent></Dialog>;
 }
+const FOREIGN_SUPPLIER="Xarici təchizatçı";
+// Every country except Azərbaycan (local customers are Hüquqi şəxs / Fərdi sahibkar / Fiziki şəxs), sorted the Azerbaijani way.
+const COUNTRIES:string[]=["Əfqanıstan","Albaniya","Əlcəzair","Andorra","Anqola","Antiqua və Barbuda","Argentina","Ermənistan","Avstraliya","Avstriya","Baham adaları","Bəhreyn","Banqladeş","Barbados","Belarus","Belçika","Beliz","Benin","Butan","Boliviya","Bosniya və Herseqovina","Botsvana","Braziliya","Bruney","Bolqarıstan","Burkina-Faso","Burundi","Kabo-Verde","Kamboca","Kamerun","Kanada","Mərkəzi Afrika Respublikası","Çad","Çili","Çin","Kolumbiya","Komor adaları","Konqo Respublikası","Konqo Demokratik Respublikası","Kosta-Rika","Kot-d'İvuar","Xorvatiya","Kuba","Kipr","Çexiya","Danimarka","Cibuti","Dominika","Dominikan Respublikası","Ekvador","Misir","Salvador","Ekvatorial Qvineya","Eritreya","Estoniya","Esvatini","Efiopiya","Fici","Finlandiya","Fransa","Qabon","Qambiya","Gürcüstan","Almaniya","Qana","Yunanıstan","Qrenada","Qvatemala","Qvineya","Qvineya-Bisau","Qayana","Haiti","Honduras","Honq Konq","Macarıstan","İslandiya","Hindistan","İndoneziya","İran","İraq","İrlandiya","İsrail","İtaliya","Yamayka","Yaponiya","İordaniya","Qazaxıstan","Keniya","Kiribati","Kosovo","Küveyt","Qırğızıstan","Laos","Latviya","Livan","Lesoto","Liberiya","Liviya","Lixtenşteyn","Litva","Lüksemburq","Madaqaskar","Malavi","Malayziya","Maldiv adaları","Mali","Malta","Marşall adaları","Mavritaniya","Mavriki","Meksika","Mikroneziya","Moldova","Monako","Monqolustan","Monteneqro","Mərakeş","Mozambik","Myanma","Namibiya","Nauru","Nepal","Niderland","Yeni Zelandiya","Nikaraqua","Niger","Nigeriya","Şimali Koreya","Şimali Makedoniya","Norveç","Oman","Pakistan","Palau","Fələstin","Panama","Papua-Yeni Qvineya","Paraqvay","Peru","Filippin","Polşa","Portuqaliya","Qətər","Rumıniya","Rusiya","Ruanda","Sent-Kits və Nevis","Sent-Lusiya","Sent-Vinsent və Qrenadinlər","Samoa","San-Marino","San-Tome və Prinsipi","Səudiyyə Ərəbistanı","Seneqal","Serbiya","Seyşel adaları","Syerra-Leone","Sinqapur","Slovakiya","Sloveniya","Solomon adaları","Somali","Cənubi Afrika Respublikası","Cənubi Koreya","Cənubi Sudan","İspaniya","Şri-Lanka","Sudan","Surinam","İsveç","İsveçrə","Suriya","Tayvan","Tacikistan","Tanzaniya","Tailand","Şərqi Timor","Toqo","Tonqa","Trinidad və Tobaqo","Tunis","Türkiyə","Türkmənistan","Tuvalu","Uqanda","Ukrayna","Birləşmiş Ərəb Əmirlikləri","Böyük Britaniya","Amerika Birləşmiş Ştatları","Uruqvay","Özbəkistan","Vanuatu","Vatikan","Venesuela","Vyetnam","Yəmən","Zambiya","Zimbabve"].sort((a,b)=>a.localeCompare(b,"az"));
+// Company tax-number formats checked exactly; every other country accepts 5–20 letters, digits or dashes.
+type TaxRule={chars:RegExp;lengths:number[];hint:string;prefix?:string};
+const digits=(lengths:number[],hint:string):TaxRule=>({chars:/[0-9]/,lengths,hint});
+const COUNTRY_TAX_RULES:Record<string,TaxRule>={
+  "Türkiyə":digits([10],"VKN — 10 rəqəm"),
+  "Rusiya":digits([10,12],"ИНН — 10 rəqəm (fərdi sahibkar 12)"),
+  "Gürcüstan":digits([9,11],"9 rəqəm (fiziki şəxs 11)"),
+  "Qazaxıstan":digits([12],"BİN — 12 rəqəm"),
+  "Özbəkistan":digits([9],"STIR — 9 rəqəm"),
+  "Ukrayna":digits([8,10],"ЄДРПОУ — 8 rəqəm (fiziki şəxs 10)"),
+  "Belarus":digits([9],"УНП — 9 rəqəm"),
+  "Qırğızıstan":digits([14],"İNN — 14 rəqəm"),
+  "Tacikistan":digits([9],"İNN — 9 rəqəm"),
+  "Moldova":digits([13],"IDNO — 13 rəqəm"),
+  "İran":digits([11],"Şenase-ye melli — 11 rəqəm"),
+  "Birləşmiş Ərəb Əmirlikləri":digits([15],"TRN — 15 rəqəm"),
+  "Səudiyyə Ərəbistanı":digits([15],"ƏDV nömrəsi — 15 rəqəm"),
+  "İtaliya":digits([11],"Partita IVA — 11 rəqəm"),
+  "Polşa":digits([10],"NIP — 10 rəqəm"),
+  "Fransa":digits([9],"SIREN — 9 rəqəm"),
+  "Amerika Birləşmiş Ştatları":digits([9],"EIN — 9 rəqəm"),
+  "Kanada":digits([9],"BN — 9 rəqəm"),
+  "Avstraliya":digits([11],"ABN — 11 rəqəm"),
+  "Braziliya":digits([14],"CNPJ — 14 rəqəm"),
+  "Yaponiya":digits([13],"Korporativ nömrə — 13 rəqəm"),
+  "Cənubi Koreya":digits([10],"10 rəqəm"),
+  "İsrail":digits([9],"9 rəqəm"),
+  "Misir":digits([9],"9 rəqəm"),
+  "Çin":{chars:/[0-9A-Z]/,lengths:[18],hint:"USCC — 18 simvol (hərf və rəqəm)"},
+  "Hindistan":{chars:/[0-9A-Z]/,lengths:[15],hint:"GSTIN — 15 simvol (hərf və rəqəm)"},
+  "İspaniya":{chars:/[0-9A-Z]/,lengths:[9],hint:"NIF — 9 simvol"},
+  "Almaniya":{chars:/[0-9A-Z]/,lengths:[11],hint:"DE + 9 rəqəm",prefix:"DE"},
+  "Böyük Britaniya":{chars:/[0-9A-Z]/,lengths:[11,14],hint:"GB + 9 rəqəm",prefix:"GB"},
+  "Avstriya":{chars:/[0-9A-Z]/,lengths:[11],hint:"ATU + 8 rəqəm",prefix:"ATU"},
+  "İsveçrə":{chars:/[0-9A-Z]/,lengths:[12],hint:"CHE + 9 rəqəm",prefix:"CHE"},
+};
+const GENERIC_TAX_RULE:TaxRule={chars:/[0-9A-Z-]/,lengths:[5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],hint:"5–20 simvol (hərf, rəqəm, tire)"};
 const customerColumns:Array<{key:string;label:string;width:number;search:(item:Customer)=>string;render:(item:Customer)=>React.ReactNode}>=[
   {key:"status",label:"Statusu",width:130,search:i=>i.entity_type||"",render:i=><>{i.entity_type||"—"}</>},
-  {key:"voen",label:"VÖEN/FİN",width:100,search:i=>i.voen||"",render:i=><>{i.voen||"—"}</>},
+  {key:"country",label:"Ölkə",width:130,search:i=>i.country||(i.entity_type?"Azərbaycan":""),render:i=><>{i.country||(i.entity_type?"Azərbaycan":"—")}</>},
+  {key:"voen",label:"VÖEN/FİN / Vergi nömrəsi",width:130,search:i=>i.voen||"",render:i=><>{i.voen||"—"}</>},
   {key:"name",label:"Müştərinin adı",width:200,search:i=>i.name||"",render:i=><b>{i.name}</b>},
   {key:"address",label:"Hüquqi ünvan",width:340,search:i=>i.legal_address||"",render:i=><>{i.legal_address||"—"}</>},
   {key:"manager",label:"Rəhbər",width:160,search:i=>i.manager||"",render:i=><>{i.manager||"—"}</>},
@@ -788,7 +829,13 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
   const [editBusy,setEditBusy]=useState(false);
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/customers");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
-  const requiredFilled=(values:Record<string,string>)=>Boolean((values.entityType||"").trim()&&(values.voen||"").trim()&&(values.name||"").trim()&&(values.legalAddress||"").trim()&&(values.manager||"").trim());
+  // A foreign supplier needs its country; its tax number is optional, but when given it must fit that country's format.
+  const requiredFilled=(values:Record<string,string>)=>{
+    const foreign=values.entityType===FOREIGN_SUPPLIER;
+    const common=Boolean((values.entityType||"").trim()&&(values.name||"").trim()&&(values.legalAddress||"").trim()&&(values.manager||"").trim());
+    if(!foreign)return common&&Boolean((values.voen||"").trim());
+    return common&&Boolean(values.country)&&taxNumberError(values)===null;
+  };
   const create=async()=>{
     if(!requiredFilled(form))return;
     setBusy(true);setError("");
@@ -800,7 +847,7 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
     }catch(e){setError(e instanceof Error?e.message:"Müştəri əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:Customer)=>{setEditingId(item.id);setEditForm({entityType:item.entity_type||"",voen:item.voen||"",name:item.name||"",legalAddress:item.legal_address||"",manager:item.manager||""})};
+  const startEdit=(item:Customer)=>{setEditingId(item.id);setEditForm({entityType:item.entity_type||"",country:item.country||"",voen:item.voen||"",name:item.name||"",legalAddress:item.legal_address||"",manager:item.manager||""})};
   const cancelEdit=()=>{setEditingId(null);setEditForm({})};
   const saveEdit=async(id:number)=>{
     if(!requiredFilled(editForm))return;
@@ -823,7 +870,16 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
       setItems(result.items||[]);
     }catch(e){setError(e instanceof Error?e.message:"Müştəri silinmədi.")}
   };
-  const entityTypeOptions=["Hüquqi şəxs","Fərdi sahibkar","Fiziki şəxs"];
+  const entityTypeOptions=["Hüquqi şəxs","Fərdi sahibkar","Fiziki şəxs",FOREIGN_SUPPLIER];
+  const taxRule=(country:string)=>COUNTRY_TAX_RULES[country]||GENERIC_TAX_RULE;
+  const sanitizeTaxNumber=(value:string,country:string)=>{const rule=taxRule(country);return value.toUpperCase().split("").filter(ch=>rule.chars.test(ch)).join("").slice(0,Math.max(...rule.lengths))};
+  const taxNumberError=(values:Record<string,string>)=>{
+    const value=(values.voen||"").trim();
+    if(!value)return null;
+    const rule=taxRule(values.country||"");
+    if(rule.prefix&&!value.startsWith(rule.prefix))return `${rule.prefix} ilə başlamalıdır`;
+    return rule.lengths.includes(value.length)?null:rule.hint;
+  };
   const voenRule=(entityType:string):{length:number;charPattern:RegExp;hint:string}|null=>{
     if(entityType==="Hüquqi şəxs"||entityType==="Fərdi sahibkar")return {length:10,charPattern:/[0-9]/,hint:"10 rəqəm"};
     if(entityType==="Fiziki şəxs")return {length:7,charPattern:/[A-Za-z0-9]/,hint:"7 simvol (hərf və rəqəm)"};
@@ -835,8 +891,9 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
     return value.split("").filter(ch=>rule.charPattern.test(ch)).join("").slice(0,rule.length);
   };
   const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
-    status:(values,set)=><label className="field statusfield" key="status">Statusu<select value={values.entityType||""} onChange={e=>set({...values,entityType:e.target.value,voen:sanitizeVoen(values.voen||"",e.target.value)})}><option value="">Seçin</option>{entityTypeOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
-    voen:(values,set)=>{const rule=voenRule(values.entityType||"");return <label className="field voenfield" key="voen">VÖEN/FİN{rule&&<small className="voenhint">{rule.hint}</small>}<Input value={values.voen||""} maxLength={rule?.length} onChange={e=>set({...values,voen:sanitizeVoen(e.target.value,values.entityType||"")})}/></label>},
+    status:(values,set)=><label className="field statusfield" key="status">Statusu<select value={values.entityType||""} onChange={e=>{const entityType=e.target.value;const wasForeign=values.entityType===FOREIGN_SUPPLIER,isForeign=entityType===FOREIGN_SUPPLIER;set({...values,entityType,country:isForeign?values.country||"":"",voen:wasForeign!==isForeign?"":isForeign?values.voen||"":sanitizeVoen(values.voen||"",entityType)})}}><option value="">Seçin</option>{entityTypeOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
+    country:(values,set)=>values.entityType===FOREIGN_SUPPLIER?<label className="field countryfield" key="country">Ölkə<select value={values.country||""} onChange={e=>set({...values,country:e.target.value,voen:sanitizeTaxNumber(values.voen||"",e.target.value)})}><option value="">Ölkəni seçin</option>{COUNTRIES.map(c=><option key={c} value={c}>{c}</option>)}</select></label>:<label className="field countryfield" key="country">Ölkə<Input value={values.entityType?"Azərbaycan":""} disabled/></label>,
+    voen:(values,set)=>{if(values.entityType===FOREIGN_SUPPLIER){const rule=taxRule(values.country||"");const problem=taxNumberError(values);return <label className="field voenfield wide" key="voen">Vergi nömrəsi<small className={problem?"voenhint bad":"voenhint"}>{rule.hint} • istəyə bağlı</small><Input value={values.voen||""} disabled={!values.country} placeholder={values.country?rule.prefix||"":"Əvvəlcə ölkəni seçin"} onChange={e=>set({...values,voen:sanitizeTaxNumber(e.target.value,values.country||"")})}/></label>}const rule=voenRule(values.entityType||"");return <label className="field voenfield" key="voen">VÖEN/FİN{rule&&<small className="voenhint">{rule.hint}</small>}<Input value={values.voen||""} maxLength={rule?.length} onChange={e=>set({...values,voen:sanitizeVoen(e.target.value,values.entityType||"")})}/></label>},
     name:(values,set)=><label className="field" key="name">Müştərinin adı<Input value={values.name||""} onChange={e=>set({...values,name:e.target.value})}/></label>,
     address:(values,set)=><label className="field addressfield" key="address">Hüquqi ünvan<Input value={values.legalAddress||""} onChange={e=>set({...values,legalAddress:e.target.value})} onBlur={e=>set({...values,legalAddress:properCase(e.target.value)})}/></label>,
     manager:(values,set)=><label className="field" key="manager">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>,

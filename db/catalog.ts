@@ -109,6 +109,8 @@ async function ensureSchema() {
     manager TEXT,
     created_at TEXT NOT NULL
   )`).run();
+  const customerColumns = await db().prepare("PRAGMA table_info(customers)").all<{ name: string }>();
+  if (!customerColumns.results.some((column) => column.name === "country")) await db().prepare("ALTER TABLE customers ADD COLUMN country TEXT").run();
   const outgoingColumns = await db().prepare("PRAGMA table_info(outgoing_documents)").all<{ name: string }>();
   if (!outgoingColumns.results.some((column) => column.name === "attachment_key")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_key TEXT").run();
   if (!outgoingColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_name TEXT").run();
@@ -1222,32 +1224,37 @@ export async function deleteOutgoingDocument(id: number) {
   await db().prepare("DELETE FROM outgoing_documents WHERE id = ?").bind(id).run();
 }
 
+const FOREIGN_SUPPLIER = "Xarici təchizatçı";
+
 export async function getCustomers() {
   await ensureSchema();
   return (await db().prepare("SELECT * FROM customers ORDER BY name").all()).results;
 }
 
-export async function createCustomer(input: { entityType?: string; voen?: string; name: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
+export async function createCustomer(input: { entityType?: string; country?: string; voen?: string; name: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Müştərinin adını yazın.");
   const entityType = input.entityType?.trim();
   if (!entityType) throw new Error("Statusu seçin.");
+  const foreign = entityType === FOREIGN_SUPPLIER;
+  const country = foreign ? input.country?.trim() || null : null;
+  if (foreign && !country) throw new Error("Xarici təchizatçının ölkəsini seçin.");
   const voen = input.voen?.trim() || null;
-  if (!voen) throw new Error("VÖEN/FİN daxil edin.");
+  if (!voen && !foreign) throw new Error("VÖEN/FİN daxil edin.");
   const legalAddress = input.legalAddress?.trim();
   if (!legalAddress) throw new Error("Hüquqi ünvanı yazın.");
   const manager = input.manager?.trim();
   if (!manager) throw new Error("Rəhbəri yazın.");
-  const duplicate = await db().prepare("SELECT id, name FROM customers WHERE voen = ?").bind(voen).first<{ id: number; name: string }>();
+  const duplicate = voen ? await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND COALESCE(country, '') = COALESCE(?, '')").bind(voen, country).first<{ id: number; name: string }>() : null;
   if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
   await db().prepare(`INSERT INTO customers
-    (entity_type, voen, name, legal_address, legal_address2, manager, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .bind(entityType, voen, name, legalAddress, input.legalAddress2 || null, manager, new Date().toISOString()).run();
+    (entity_type, country, voen, name, legal_address, legal_address2, manager, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(entityType, country, voen, name, legalAddress, input.legalAddress2 || null, manager, new Date().toISOString()).run();
 }
 
-export async function updateCustomer(input: { id: number; entityType?: string; voen?: string; name?: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
+export async function updateCustomer(input: { id: number; entityType?: string; country?: string; voen?: string; name?: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM customers WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Müştəri tapılmadı.");
@@ -1255,17 +1262,21 @@ export async function updateCustomer(input: { id: number; entityType?: string; v
   if (!name) throw new Error("Müştərinin adını yazın.");
   const entityType = input.entityType === undefined ? (current.entity_type as string | null) : input.entityType.trim();
   if (!entityType) throw new Error("Statusu seçin.");
+  const foreign = entityType === FOREIGN_SUPPLIER;
+  const country = foreign ? (input.country === undefined ? (current.country as string | null) : input.country.trim() || null) : null;
+  if (foreign && !country) throw new Error("Xarici təchizatçının ölkəsini seçin.");
   const voen = input.voen === undefined ? (current.voen as string | null) : (input.voen.trim() || null);
-  if (!voen) throw new Error("VÖEN/FİN daxil edin.");
+  if (!voen && !foreign) throw new Error("VÖEN/FİN daxil edin.");
   const legalAddress = input.legalAddress === undefined ? (current.legal_address as string | null) : input.legalAddress.trim();
   if (!legalAddress) throw new Error("Hüquqi ünvanı yazın.");
   const manager = input.manager === undefined ? (current.manager as string | null) : input.manager.trim();
   if (!manager) throw new Error("Rəhbəri yazın.");
-  const duplicate = await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND id != ?").bind(voen, input.id).first<{ id: number; name: string }>();
+  const duplicate = voen ? await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND COALESCE(country, '') = COALESCE(?, '') AND id != ?").bind(voen, country, input.id).first<{ id: number; name: string }>() : null;
   if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
-  await db().prepare("UPDATE customers SET entity_type = ?, voen = ?, name = ?, legal_address = ?, legal_address2 = ?, manager = ? WHERE id = ?")
+  await db().prepare("UPDATE customers SET entity_type = ?, country = ?, voen = ?, name = ?, legal_address = ?, legal_address2 = ?, manager = ? WHERE id = ?")
     .bind(
       entityType,
+      country,
       voen,
       name,
       legalAddress,
