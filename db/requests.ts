@@ -148,6 +148,8 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
     || (can.evaluate && leadsTarget);
   return {
     visible: isAdmin || isRequester || isTargetHead || (isAssignee && !linked) || isSourceHead,
+    // The score is the handling department's internal matter: the requesting side (requester, its head) never sees it.
+    seesEvaluation: manages || isAssignee,
     box: isRequester ? "outgoing" : isTargetHead || isAssignee || (isAdmin && !isSourceHead) ? "incoming" : "oversight",
     can,
     actionable,
@@ -236,7 +238,11 @@ export async function listRequests(user: SessionUser) {
   const structure = await loadStructure();
   const items = (await allRows()).flatMap((row) => {
     const r = roles(row, user, structure);
-    return r.visible ? [{ ...row, box: r.box, can: r.can, actionable: r.actionable }] : [];
+    if (!r.visible) return [];
+    if (r.seesEvaluation) return [{ ...row, box: r.box, can: r.can, actionable: r.actionable }];
+    // For the requesting side the request is over once they accepted the answer, so the pending score shows as "Bağlandı".
+    const awaiting = row.status === AWAITING_EVALUATION;
+    return [{ ...row, status: awaiting ? "Bağlandı" : row.status, task_evaluation: null, task_evaluation_note: null, box: r.box, can: awaiting ? { ...r.can, comment: false } : r.can, actionable: r.actionable }];
   });
   // The departments a request can be sent to, and — for departments this user manages — who a request can be handed to.
   const companyIds = new Set(await userCompanyIds(user));
@@ -262,8 +268,9 @@ export async function countActionableRequests(user: SessionUser) {
 
 export async function getRequestEvents(user: SessionUser, id: number) {
   await ensureRequestSchema();
-  await requireRow(user, id);
-  return (await db().prepare("SELECT id, actor_name, kind, action, detail, created_at FROM work_request_events WHERE request_id = ? ORDER BY created_at, id").bind(id).all()).results;
+  const { seesEvaluation } = await requireRow(user, id);
+  const events = (await db().prepare("SELECT id, actor_name, kind, action, detail, created_at FROM work_request_events WHERE request_id = ? ORDER BY created_at, id").bind(id).all<{ action: string }>()).results;
+  return seesEvaluation ? events : events.filter((event) => !/qiymətləndiril|qiymətləndirmə/i.test(event.action));
 }
 
 async function logEvent(requestId: number, actorName: string, action: string, detail?: string | null, kind: "event" | "comment" = "event") {
@@ -364,7 +371,7 @@ export async function updateRequest(user: SessionUser, input: { id: number; acti
       // A request worked as a task still needs the head's score; a request without a task closes right away.
       if (row.task_id && row.task_status === "Təqdim edilib") {
         await set("status = ?, closed_at = ?", AWAITING_EVALUATION, now);
-        await logEvent(row.id, user.name, "Cavab təsdiqləndi — rəisin qiymətləndirməsi gözlənilir", text);
+        await logEvent(row.id, user.name, "Cavab təsdiqləndi ✓", text);
       } else {
         await set("status = 'Bağlandı', closed_at = ?", now);
         await logEvent(row.id, user.name, "Sorğu bağlandı ✓", text);

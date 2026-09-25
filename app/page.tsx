@@ -150,7 +150,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.30</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.31</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?can("hr.violations"):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -269,7 +269,7 @@ function Dashboard({showDocuments=true,showViolations=true,userName,avatarKey,on
 function TaskStatusChart({tasks,onViewAll}:{tasks:Task[];onViewAll:()=>void}){
   const order:[string,string][]=[["Yeni","#64748b"],["İcradadır","#0C8599"],["Geri qaytarılıb","#7c3aed"],["Təqdim edilib","#f59e0b"],["Qiymətləndirmə gözləyir","#ea580c"],["Təsdiqlənib","#16a34a"],["Gecikib","#dc2626"]];
   const counts=Object.fromEntries(order.map(([label])=>[label,0])) as Record<string,number>;
-  tasks.forEach(t=>{const label=displayStatus(t);if(label in counts)counts[label]++});
+  tasks.forEach(t=>{const shown=displayStatus(t);const label=shown==="Bağlandı"?"Təsdiqlənib":shown;if(label in counts)counts[label]++});
   const rows=order.filter(([label])=>counts[label]>0);
   const max=Math.max(...rows.map(([label])=>counts[label]),1);
   return <section className="panel modulepanel"><div className="head"><div><h3>Tapşırıqlar</h3><p>Status üzrə paylanma</p></div><button onClick={onViewAll}>Hamısına bax</button></div>
@@ -1253,7 +1253,7 @@ const requestColumns:Array<{key:string;label:string;width:number;search:(item:Wo
   {key:"company",label:"Firma",width:150,search:i=>i.company_name,render:i=>i.company_name},
   {key:"due",label:"Tarix",width:120,search:i=>formatDateOnly(requestDue(i)),sort:i=>requestDue(i),render:i=><>{formatDateOnly(requestDue(i))}{!["Bağlandı","İmtina edildi","Cavablandı","Qiymətləndirmə gözləyir"].includes(i.status)&&<LateDays due={requestDue(i)?`${requestDue(i)}T23:59:59`:null}/>}</>},
   {key:"status",label:"Status",width:150,search:i=>i.status,render:i=><span className={`tablestatus ${requestStatusTone(i.status)}`}>{i.status}</span>},
-  {key:"score",label:"Qiymət",width:110,search:i=>i.task_evaluation?`${i.task_evaluation}/10`:i.status==="Qiymətləndirmə gözləyir"?"Gözləyir":"—",sort:i=>i.task_evaluation??null,render:i=>i.task_evaluation?<b className="requestscore">{i.task_evaluation}/10</b>:i.status==="Qiymətləndirmə gözləyir"?<span className="tablestatus awaiting">Gözləyir</span>:<span className="nodocument">—</span>},
+  {key:"score",label:"Qiymət",width:110,search:i=>i.task_evaluation?`${i.task_evaluation}/10`:i.status==="Qiymətləndirmə gözləyir"?"Gözləyir":"—",sort:i=>i.task_evaluation??null,render:i=>i.task_evaluation?<RatingCell evaluation={i.task_evaluation} note={i.task_evaluation_note} compact twoRows/>:i.status==="Qiymətləndirmə gözləyir"?<span className="tablestatus awaiting">Gözləyir</span>:<span className="nodocument">—</span>},
 ];
 function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:boolean;companies:Company[];activeCompanyId:number|null;onActionable:(n:number)=>void}){
   const {order,widths,setWidth,moveColumn}=useTableColumns("requests1",requestColumns.map(c=>c.key));
@@ -1283,7 +1283,7 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const excel=useExcelFilters("requests",requestColumns,scoped.filter(i=>i.box===box));
   const filtered=excel.rows;
   // Employees work inside one chosen firma, so the firma column only matters in the admin's all-firma view.
-  const shownOrder=order.filter(k=>columnsByKey[k]&&(isAdmin||k!=="company"));
+  const shownOrder=order.filter(k=>columnsByKey[k]&&(isAdmin||k!=="company")&&(k!=="score"||box==="incoming"));
   const formCompanyId=Number(form.companyId||activeCompanyId||companies[0]?.id||0);
   const myDepartment=data.myDepartments[String(formCompanyId)]||null;
   const departmentOptions=(data.departments[String(formCompanyId)]||[]).filter(d=>d!==myDepartment);
@@ -1366,7 +1366,8 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
         {current.description&&<p><b>Təsvir</b><span className="requesttext">{current.description}</span></p>}
         <p><b>İstənilən tarix</b><span>{formatDateOnly(current.desired_due_at)}{current.agreed_due_at&&current.agreed_due_at!==current.desired_due_at?` → razılaşdırılmış: ${formatDateOnly(current.agreed_due_at)}`:""}</span></p>
         {current.attachment_key&&<p><b>Əlavə olunan fayl</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}<small>{formatFileSize(current.attachment_size||0)}</small></a></span></p>}
-        {current.task_id&&<p><b>İcraçının tapşırığı</b><span>{current.assignee_name} — {current.task_status||"—"}{current.task_evaluation?` • qiymət ${current.task_evaluation}/10`:""}</span></p>}
+        {current.task_id&&<p><b>İcraçının tapşırığı</b><span>{current.assignee_name} — {current.task_status||"—"}</span></p>}
+        {current.task_evaluation?<p><b>Qiymət</b><span><RatingCell evaluation={current.task_evaluation} note={current.task_evaluation_note}/></span></p>:null}
         {current.submission_attachment_key&&<p><b>Cavab faylı</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.submission_attachment_key)}`}>{current.submission_attachment_name}<small>{formatFileSize(current.submission_attachment_size||0)}</small></a></span></p>}
         {current.reject_reason&&<p><b>İmtinanın səbəbi</b><span className="requesttext">{current.reject_reason}</span></p>}
         <p><b>Göndərilib</b><span>{formatDate(current.created_at)}</span></p>
@@ -1788,7 +1789,7 @@ function formatDateOnly(value:string|null){if(!value)return "—";const m=value.
 function properCase(value:string){return value.toLocaleLowerCase("az-AZ").replace(/(^|[^\p{L}])(\p{L})/gu,(_,sep,ch)=>sep+ch.toLocaleUpperCase("az-AZ"))}
 function awaitingEvaluation(t:Task){return t.status==="Təqdim edilib"&&t.request_status==="Qiymətləndirmə gözləyir"}
 function statusClass(t:Task){if(awaitingEvaluation(t))return "awaiting";if(t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at)<new Date())return "late";if(t.status==="Təsdiqlənib")return "done";if(t.status==="Geri qaytarılıb")return "returned";if(t.status==="Təqdim edilib")return "review";return "progress"}
-function displayStatus(t:Task){return awaitingEvaluation(t)?"Qiymətləndirmə gözləyir":statusClass(t)==="late"?"Gecikib":t.status}
+function displayStatus(t:Task){return t.request_id&&t.status==="Təsdiqlənib"?"Bağlandı":awaitingEvaluation(t)?"Qiymətləndirmə gözləyir":statusClass(t)==="late"?"Gecikib":t.status}
 // Overdue never locks a task or work — it only shows "Gecikib" with how many days past the deadline it is.
 // Who works on a personal work: the owner (steps kept, not handed over) first, then everyone steps were handed to.
 function workExecutors(w:PersonalWork){
