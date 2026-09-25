@@ -448,21 +448,30 @@ nav button>em+.navcaret{margin-left:6px}
 .navcaret:hover{background:#ffffff1f;color:#fff}
 .navcaret:not(.open) svg{transform:rotate(-90deg)}
 .navchildren button em{margin-left:auto}
-/* Giriş icazələri (Personal pəncərəsi) */
-.permissiontree{display:grid;gap:8px;padding:12px 14px;border:1px solid #d9e2ee;border-radius:12px;background:#f8fbff}
-.permissionhead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.permissionhead b{font-size:13px;color:#172237}
-.permissionhead span{display:flex;gap:6px;flex-wrap:wrap}
-.permissionhead select,.permissionhead button{height:30px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;padding:0 8px;font-size:11px;color:#334155}
-.permissionhead button{font-weight:800;cursor:pointer}
-.permissionhead button:disabled{opacity:.45;cursor:not-allowed}
-.permissionnote{color:#64748b;font-size:10px}
-.permissiongroups{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
-.permissiongroup{padding:8px 10px;border:1px solid #e2e8f0;border-radius:9px;background:#fff}
-.permissiongroup label{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12px;color:#172237;cursor:pointer}
-.permissiongroup input{width:14px;height:14px;flex:none;accent-color:#0C8599}
-.permissiongroup small{margin-left:auto;color:#94a3b8;font-size:9px;white-space:nowrap}
-.permissionparent{font-weight:800}
-.permissionchildren{display:grid;margin:2px 0 0 10px;padding-left:10px;border-left:1px solid #e2e8f0}
+/* Giriş icazələri (Personal pəncərəsi) — açılıb-bağlanan siyahı */
+.permissiontree{display:grid;gap:10px;padding:14px 16px;border:1px solid #d9e2ee;border-radius:12px;background:#f8fbff}
+.permissionhead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.permissionhead b{font-size:14px;color:#172237}
+.permissionhead span{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.businessform .permissionhead select{width:220px!important;height:34px!important;padding:0 10px!important;font-size:12px!important}
+.permissionhead button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:0 12px;font-size:12px;font-weight:800;color:#0C8599;cursor:pointer}
+.permissionhead button:disabled{color:#94a3b8;opacity:.6;cursor:not-allowed}
+.permissionnote{color:#64748b;font-size:11px;line-height:1.4}
+.permissiongroups{display:grid;gap:6px}
+.permissiongroup{border:1px solid #e2e8f0;border-radius:10px;background:#fff;overflow:hidden}
+.permissiongroup.open{border-color:#b9dfe6}
+.permissionrow{display:flex;align-items:center;gap:10px;padding:8px 12px}
+.businessform .permissiontree input[type=checkbox]{width:17px!important;height:17px!important;min-width:17px;padding:0!important;margin:0!important;border-radius:4px!important;box-shadow:none!important;flex:none;accent-color:#0C8599;cursor:pointer}
+.businessform .permissiontree input[type=checkbox]:disabled{cursor:default;opacity:.6}
+.permissiontoggle{flex:1;display:flex;align-items:center;gap:7px;min-width:0;border:0;background:transparent;padding:4px 0;font-size:13px;font-weight:800;color:#172237;text-align:left;cursor:pointer}
+.permissiontoggle svg{width:16px;height:16px;flex:none;color:#64748b;transform:rotate(-90deg);transition:transform .15s}
+.permissiongroup.open .permissiontoggle svg{transform:none}
+.permissiontoggle.plain{cursor:default;padding-left:23px}
+.permissioncount{flex:none;border-radius:10px;padding:3px 8px;background:#fff4d8;color:#b76a00;font-size:10px;font-weight:800;white-space:nowrap}
+.permissioncount.all{background:#e8f8ee;color:#16a34a}
+.permissioncount.none{background:#feecec;color:#dc2626}
+.permissionchildren{display:grid;gap:2px;padding:4px 12px 10px 50px;border-top:1px solid #eef2f7;background:#fbfdff}
+.permissionchildren label{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12px;color:#172237;cursor:pointer}
 .permissionchildren label.locked{color:#94a3b8;cursor:default}
-.permissionwarning{padding:8px 10px;border:1px solid #fcd9a5;border-radius:8px;background:#fff7e8;color:#9a5b00;font-size:11px;font-weight:700}
+.permissionchildren label small{margin-left:auto;color:#94a3b8;font-size:10px;white-space:nowrap}
+.permissionwarning{padding:9px 12px;border:1px solid #fcd9a5;border-radius:8px;background:#fff7e8;color:#9a5b00;font-size:12px;font-weight:700}

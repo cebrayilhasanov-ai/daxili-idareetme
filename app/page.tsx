@@ -150,7 +150,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.28</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.29</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?can("hr.violations"):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1387,6 +1387,9 @@ const SECTION_TREE:{key:string;label:string;children:SectionNode[]}[]=[
 const parseHiddenSections=(raw:string|null|undefined):string[]=>{try{const list=JSON.parse(raw||"[]");return Array.isArray(list)?list.map(String):[]}catch{return []}};
 function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:string[];onChange:(next:string[])=>void;employee:Employee|null;assignments:WorkAssignment[];copyFrom:Employee[]}){
   const hiddenSet=new Set(hidden);
+  // Groups start closed so the list stays short; a closed group still shows how many of its items are open.
+  const [openGroups,setOpenGroups]=useState<Set<string>>(new Set());
+  const toggleGroup=(key:string)=>setOpenGroups(current=>{const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next});
   const setKeys=(keys:string[],visible:boolean)=>{const next=new Set(hiddenSet);for(const key of keys){if(visible)next.delete(key);else next.add(key)}onChange([...next])};
   const own=employee?assignments.filter(a=>a.employee_id===employee.id):[];
   const monthly=own.filter(a=>a.frequency==="monthly").length,weekly=own.filter(a=>a.frequency==="weekly").length;
@@ -1396,15 +1399,22 @@ function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:
   if(hiddenSet.has("tasks.requests")&&employee?.is_department_head)warnings.push("Bu işçi şöbə rəisidir — “Sorğular” bağlı olsa, şöbəsinə gələn sorğuları qəbul edə bilməyəcək, onları yalnız admin idarə edəcək.");
   return <div className="permissiontree">
     <div className="permissionhead"><b>Giriş icazələri</b><span><select value="" onChange={e=>{const source=copyFrom.find(x=>String(x.id)===e.target.value);if(source)onChange(parseHiddenSections(source.hidden_sections))}}><option value="">Başqa işçidən köçür...</option>{copyFrom.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><button type="button" disabled={!hidden.length} onClick={()=>onChange([])}>Hamısını aç</button></span></div>
-    <small className="permissionnote">İşarəsi götürülən bölmə bu işçinin menyusunda görünməyəcək və serverdə də bağlanacaq. 🔒 olan bəndlər həmişə açıqdır.</small>
+    <small className="permissionnote">İşarəsi götürülən bölmə bu işçinin menyusunda görünməyəcək və serverdə də bağlanacaq. 🔒 olan bəndlər həmişə açıqdır. Alt başlıqları görmək üçün bölmənin adına klikləyin.</small>
     <div className="permissiongroups">{SECTION_TREE.map(group=>{
       const toggleable=group.children.length?group.children.filter(c=>!c.locked).map(c=>c.key):[group.key];
       const visibleCount=toggleable.filter(key=>!hiddenSet.has(key)).length;
       const hasLocked=group.children.some(c=>c.locked);
       const allVisible=visibleCount===toggleable.length;
-      return <div key={group.key} className="permissiongroup">
-        <label className="permissionparent"><input type="checkbox" checked={allVisible||hasLocked&&visibleCount>0} ref={el=>{if(el)el.indeterminate=visibleCount>0&&!allVisible}} onChange={()=>setKeys(toggleable,!allVisible)}/><span>{group.label}</span>{hasLocked&&<small>🔒 qismən</small>}</label>
-        {group.children.length>0&&<div className="permissionchildren">{group.children.map(child=><label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||!hiddenSet.has(child.key)} disabled={child.locked} onChange={e=>setKeys([child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}</label>)}</div>}
+      const total=group.children.length||1;
+      const shown=group.children.length?group.children.filter(c=>c.locked||!hiddenSet.has(c.key)).length:visibleCount;
+      const expanded=openGroups.has(group.key);
+      return <div key={group.key} className={`permissiongroup${expanded?" open":""}`}>
+        <div className="permissionrow">
+          <input type="checkbox" aria-label={`${group.label}: hamısı`} checked={allVisible||hasLocked&&visibleCount>0} ref={el=>{if(el)el.indeterminate=visibleCount>0&&!allVisible}} onChange={()=>setKeys(toggleable,!allVisible)}/>
+          {group.children.length>0?<button type="button" className="permissiontoggle" aria-expanded={expanded} onClick={()=>toggleGroup(group.key)}><ChevronDown/><span>{group.label}</span></button>:<span className="permissiontoggle plain"><span>{group.label}</span></span>}
+          <small className={shown===total?"permissioncount all":shown===0?"permissioncount none":"permissioncount"}>{shown===total?"hamısı açıq":shown===0?"bağlı":`${shown}/${total} açıq`}</small>
+        </div>
+        {expanded&&group.children.length>0&&<div className="permissionchildren">{group.children.map(child=><label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||!hiddenSet.has(child.key)} disabled={child.locked} onChange={e=>setKeys([child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}</label>)}</div>}
       </div>;
     })}</div>
     {warnings.map(w=><div key={w} className="permissionwarning">⚠ {w}</div>)}
