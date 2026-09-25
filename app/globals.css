@@ -383,3 +383,21 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 
 /* Aktiv firma: seçilmiş firmanın adı qırmızı, göz önündə olsun */
 .companyswitcher select{color:#ff4d4f;font-weight:800;border-color:#ff4d4f80}
+
+/* Sorğular (şöbələrarası müraciətlər) */
+.requestrow{grid-template-columns:repeat(4,minmax(0,1fr))}
+.requestrow .requestdesc,.requestrow .filefield{grid-column:span 2}
+.requestrow textarea{min-height:40px;background:#fff}
+.requestrow>small{grid-column:1/-1}
+.requestrow .inlineactions{grid-column:1/-1}
+@media(max-width:900px){.requestrow{grid-template-columns:1fr}.requestrow .requestdesc,.requestrow .filefield{grid-column:auto}}
+.requestsub{display:block;margin-top:3px;color:#64748b;font-size:10px}
+.requestdot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:#dc2626;vertical-align:middle}
+.requesttable tr.requestpending td{background:#fff7f7}
+.requestbadge{display:inline-grid;place-items:center;min-width:17px;height:17px;margin-left:6px;padding:0 5px;border-radius:9px;background:#dc2626;color:#fff;font-size:9px;font-style:normal}
+.requestblock{display:grid;gap:9px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+.requestblock select,.requestblock input{width:100%;height:38px;border:1px solid #b9c8da;border-radius:8px;background:#fff;padding:0 10px}
+.requestbuttons{display:flex;flex-wrap:wrap;gap:8px}
+.requestbuttons>*{flex:1 1 auto}
+.requestbuttons .inlinecancel{height:36px}
+.requesttext{white-space:pre-wrap}
