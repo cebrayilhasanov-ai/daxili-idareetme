@@ -34,7 +34,7 @@ type ChatUser = { id:number; name:string; email:string; avatar_key:string|null }
 type Customer = { id:number; entity_type:string|null; voen:string|null; name:string; legal_address:string|null; legal_address2:string|null; manager:string|null; created_at:string };
 type ChecklistItem = { id:number; task_id:number; title:string; done:number; created_at:string; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
 type ChecklistLikeItem = { id:number; title:string; done:number; delegated_task_id?:number|null; delegated_employee_name?:string|null; delegated_task_status?:string|null; attachment_key?:string|null; attachment_name?:string|null; attachment_size?:number|null; delegated_submission_attachment_key?:string|null; delegated_submission_attachment_name?:string|null; delegated_submission_attachment_size?:number|null };
-type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[] };
+type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
 type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; created_at:string };
@@ -139,7 +139,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.24</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.25</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="requests"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -315,7 +315,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const [checklistError,setChecklistError]=useState("");
   const [checklistAttachBusy,setChecklistAttachBusy]=useState<number|null>(null);
   const [history,setHistory]=useState<{workId:number;events:WorkHistoryEvent[]}|null>(null);
-  // Quiet refresh (no loading flash) so the "Paylaşılıb" column updates right after a step is handed over.
+  // Quiet refresh (no loading flash) so the "İcraçılar" column updates right after a step is added, ticked or handed over.
   const reloadItems=async()=>{try{const response=await fetch(worksUrl());const body=await response.json();if(response.ok)setItems(body.items||[])}catch{}};
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch(worksUrl());const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
@@ -389,7 +389,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     }catch(e){setError(e instanceof Error?e.message:"İş yenilənmədi.")}
     finally{setBusy(false)}
   };
-  const personalWorkColumns:Array<{key:string;label:string;width:number;search:(item:PersonalWork)=>string;sort?:(item:PersonalWork)=>string|number|null;render:(item:PersonalWork)=>React.ReactNode}>=[
+  const personalWorkColumns:Array<{key:string;label:string;width:number;search:(item:PersonalWork)=>string;values?:(item:PersonalWork)=>string[];sort?:(item:PersonalWork)=>string|number|null;render:(item:PersonalWork)=>React.ReactNode}>=[
     {key:"status",label:"Status",width:120,search:i=>i.status,render:i=>workLate(i)?<><span className="tablestatus late">Gecikib</span><LateDays due={i.due_at}/></>:<span className={`tablestatus ${statusTone(i.status)}`}>{i.status}</span>},
     {key:"company",label:"Firma",width:140,search:i=>i.company_name||"",render:i=><b>{i.company_name||"—"}</b>},
     {key:"title",label:"İş",width:170,search:i=>i.title,render:i=><button className="taskdetailbtn" onClick={()=>openDetail(i)}>{i.title}</button>},
@@ -397,7 +397,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     {key:"document",label:"Əlavə olunan sənəd",width:150,search:i=>i.attachment_name||"Sənəd yoxdur",render:i=>i.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(i.attachment_key)}`}>{i.attachment_name}<small>{formatFileSize(i.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
     {key:"created",label:"Yaranma tarixi",width:140,search:i=>formatDate(i.created_at),sort:i=>new Date(i.created_at).getTime(),render:i=><time>{formatDate(i.created_at)}</time>},
     {key:"due",label:"Son tarix",width:150,search:i=>i.due_at?formatDate(i.due_at):"—",sort:i=>i.due_at?new Date(i.due_at).getTime():null,render:i=>i.due_at?<time>{formatDate(i.due_at)}</time>:"—"},
-    {key:"shared",label:"Paylaşılıb",width:180,search:i=>(i.shared||[]).map(s=>s.name).join(" ")||"—",render:i=>i.shared?.length?<div className="sharedlist">{i.shared.map(s=><span key={s.employee_id} className={s.done>=s.total?"sharedname done":"sharedname"} title={s.done>=s.total?"Tamamlayıb, ✓ qoyulub":"İcra edir"}>{s.name}{s.total>1&&<small> ({s.done}/{s.total})</small>}</span>)}</div>:<span className="nodocument">—</span>},
+    {key:"shared",label:"İcraçılar",width:200,search:i=>workExecutors(i).map(x=>x.label).join(", ")||"—",values:i=>workExecutors(i).map(x=>x.label),render:i=>{const people=workExecutors(i);return people.length?<div className="sharedlist">{people.map(x=><span key={x.key} className={`sharedname${x.own?" own":""}${x.done>=x.total?" done":""}`} title={x.done>=x.total?"Bütün addımlar tamamlanıb":"İcra edir"}>{x.name}{x.own&&<em> (özüm)</em>}<small> {x.done}/{x.total}</small></span>)}</div>:<span className="nodocument">—</span>}},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("personalworks2",personalWorkColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
@@ -423,6 +423,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);setChecklistTitle("");
+      void reloadItems();
     }catch(e){setChecklistError(e instanceof Error?e.message:"Addım əlavə olunmadı.")}
     finally{setChecklistBusy(false)}
   };
@@ -440,7 +441,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     try{
       const response=await fetch(`/api/personal-work-checklist?id=${item.id}`,{method:"DELETE"});
       const body=await response.json();
-      if(response.ok)setChecklist(body.items||[]);
+      if(response.ok){setChecklist(body.items||[]);void reloadItems()}
     }catch{}
   };
   const delegateChecklistItem=async(item:ChecklistLikeItem,employeeId:string,comment:string)=>{
@@ -1447,7 +1448,8 @@ function useColumnSort(storageKey:string){
 // Excel-like column filters: every header gets a ▾ button that opens a panel with A→Z / Z→A sorting, a value search and a
 // checkbox list of the column's distinct values (with counts). Values offered for one column follow the filters set on the
 // others, like in Excel. The chosen sort is remembered per table; filters last until the page is reloaded.
-type ExcelColumn<T>={key:string;label:string;search?:(row:T)=>string;sort?:(row:T)=>string|number|null};
+// `values` lets one cell hold several filter values (e.g. every executor of a work); the row stays visible while any of them is ticked.
+type ExcelColumn<T>={key:string;label:string;search?:(row:T)=>string;values?:(row:T)=>string[];sort?:(row:T)=>string|number|null};
 type ExcelValue={value:string;count:number;order:string|number|null};
 const EMPTY_VALUE="(Boş)";
 function compareSortValues(x:string|number|null,y:string|number|null){
@@ -1461,10 +1463,11 @@ function useExcelFilters<T>(storageKey:string,columns:ExcelColumn<T>[],rows:T[],
   const [excluded,setExcluded]=useState<Record<string,string[]>>({});
   const byKey=new Map(columns.map(c=>[c.key,c]));
   const cellText=(col:ExcelColumn<T>,row:T)=>{const text=(col.search?col.search(row):"").trim();return text&&text!=="—"?text:EMPTY_VALUE};
+  const cellValues=(col:ExcelColumn<T>,row:T)=>{if(!col.values)return [cellText(col,row)];const list=col.values(row).map(v=>v.trim()).filter(Boolean);return list.length?list:[EMPTY_VALUE]};
   const passes=(row:T,skipKey?:string)=>Object.entries(excluded).every(([key,values])=>{
     if(key===skipKey||!values.length)return true;
     const col=byKey.get(key);
-    return !col||!values.includes(cellText(col,row));
+    return !col||cellValues(col,row).some(value=>!values.includes(value));
   });
   const visible=rows.filter(row=>passes(row));
   const sorted=sortable?applySort(visible,(key,row)=>{const col=byKey.get(key);return col?(col.sort?col.sort(row):col.search?col.search(row):null):null}):visible;
@@ -1472,9 +1475,10 @@ function useExcelFilters<T>(storageKey:string,columns:ExcelColumn<T>[],rows:T[],
     const counts=new Map<string,ExcelValue>();
     for(const row of rows){
       if(!passes(row,col.key))continue;
-      const value=cellText(col,row);
-      const entry=counts.get(value);
-      if(entry)entry.count+=1;else counts.set(value,{value,count:1,order:value===EMPTY_VALUE?null:col.sort?col.sort(row):value});
+      for(const value of cellValues(col,row)){
+        const entry=counts.get(value);
+        if(entry)entry.count+=1;else counts.set(value,{value,count:1,order:value===EMPTY_VALUE?null:col.sort&&!col.values?col.sort(row):value});
+      }
     }
     const values=[...counts.values()].sort((a,b)=>compareSortValues(a.order,b.order));
     return <ExcelFilterHeader label={col.label} values={values} excluded={excluded[col.key]||[]} sortable={sortable} sortDir={sortable&&sort?.key===col.key?sort.dir:null}
@@ -1664,6 +1668,13 @@ function properCase(value:string){return value.toLocaleLowerCase("az-AZ").replac
 function statusClass(t:Task){if(t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at)<new Date())return "late";if(t.status==="Təsdiqlənib")return "done";if(t.status==="Geri qaytarılıb")return "returned";if(t.status==="Təqdim edilib")return "review";return "progress"}
 function displayStatus(t:Task){return statusClass(t)==="late"?"Gecikib":t.status}
 // Overdue never locks a task or work — it only shows "Gecikib" with how many days past the deadline it is.
+// Who works on a personal work: the owner (steps kept, not handed over) first, then everyone steps were handed to.
+function workExecutors(w:PersonalWork){
+  const list:{key:string;name:string;label:string;own:boolean;total:number;done:number}[]=[];
+  if(w.own&&w.own.total>0)list.push({key:"own",name:w.owner_name,label:w.owner_name,own:true,total:w.own.total,done:w.own.done});
+  for(const s of w.shared||[])list.push({key:`e${s.employee_id}`,name:s.name,label:s.name,own:false,total:s.total,done:s.done});
+  return list;
+}
 function lateDayCount(due:string|null){if(!due)return 0;const diff=Date.now()-new Date(due).getTime();return diff>0?Math.ceil(diff/86400000):0}
 function workLate(w:{status:string;due_at:string|null}){return w.status!=="Tamamlanıb"&&lateDayCount(w.due_at)>0}
 function LateDays({due}:{due:string|null}){const days=lateDayCount(due);return days?<small className="latedays">{days} gün gecikib</small>:null}

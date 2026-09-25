@@ -894,7 +894,11 @@ export async function getPersonalWorks(userId: number | null) {
     people.set(row.employee_id, person);
     sharedByWork.set(row.work_id, people);
   }
-  return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []) }));
+  // The owner's own share: the steps not handed to anyone, shown first in the "İcraçılar" column.
+  const ownSteps = (await db().prepare(`SELECT personal_work_id AS work_id, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
+    FROM personal_work_checklist_items WHERE delegated_task_id IS NULL GROUP BY personal_work_id`).all<{ work_id: number; total: number; done: number }>()).results;
+  const ownByWork = new Map(ownSteps.map((row) => [row.work_id, { total: Number(row.total), done: Number(row.done) }]));
+  return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []), own: ownByWork.get(work.id) ?? null }));
 }
 
 // Per-work history shown in the "Aç" dialog. Purely informational, so a failed write never blocks the action itself.
