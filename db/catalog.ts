@@ -445,6 +445,7 @@ export async function getAllData() {
         WHERE ec.employee_id = tasks.employee_id AND ec.company_id = tasks.company_id), '') AS employee_position,
       companies.name AS company_name,
       (SELECT id FROM work_requests WHERE work_requests.task_id = tasks.id) AS request_id,
+      (SELECT status FROM work_requests WHERE work_requests.task_id = tasks.id) AS request_status,
       (SELECT u.name || COALESCE(' (' || r.from_department || ')', '') FROM work_requests r LEFT JOIN app_users u ON u.id = r.from_user_id WHERE r.task_id = tasks.id) AS request_from,
       (SELECT ev.actor_name FROM work_request_events ev JOIN work_requests r ON r.id = ev.request_id
         WHERE r.task_id = tasks.id AND ev.action IN ('Sorğu qəbul edildi', 'İcraçı dəyişdirildi') ORDER BY ev.id DESC LIMIT 1) AS request_accepted_by
@@ -697,7 +698,7 @@ export async function updateTask(input: { id: number; actorName?: string; status
   } else if (input.status === "Təsdiqlənib") {
     const score = Number(input.evaluation);
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq təsdiqlənə bilər.");
-    if (linkedRequest && linkedRequest.status !== "Bağlandı") throw new Error("Sorğudan yaranan tapşırıq yalnız sorğunu göndərən onu bağladıqdan sonra qiymətləndirilə bilər.");
+    if (linkedRequest && linkedRequest.status !== "Qiymətləndirmə gözləyir") throw new Error("Sorğudan yaranan tapşırıq yalnız sorğunu göndərən onu bağladıqdan sonra qiymətləndirilə bilər.");
     if (!(score >= 1 && score <= 10)) throw new Error("Qiymət 1 ilə 10 arasında olmalıdır.");
   } else if (input.status === "Geri qaytarılıb") {
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq geri qaytarıla bilər.");

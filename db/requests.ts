@@ -11,7 +11,9 @@ function db() {
   return env.DB;
 }
 
-export const REQUEST_STATUSES = ["Yeni", "Qəbul edildi", "İcra olunur", "Cavablandı", "Bağlandı", "İmtina edildi"] as const;
+// "Qiymətləndirmə gözləyir": the requester accepted the answer, the head still has to score the assignee's task; only then is it "Bağlandı".
+export const AWAITING_EVALUATION = "Qiymətləndirmə gözləyir";
+export const REQUEST_STATUSES = ["Yeni", "Qəbul edildi", "İcra olunur", "Cavablandı", AWAITING_EVALUATION, "Bağlandı", "İmtina edildi"] as const;
 const CLOSED = new Set(["Bağlandı", "İmtina edildi"]);
 
 let schemaReady = false;
@@ -50,6 +52,8 @@ export async function ensureRequestSchema() {
   )`).run();
   const columns = await db().prepare("PRAGMA table_info(work_requests)").all<{ name: string }>();
   if (!columns.results.some((column) => column.name === "task_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN task_id INTEGER REFERENCES tasks(id)").run();
+  // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
+  await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
   schemaReady = true;
 }
 
@@ -135,7 +139,7 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
     remove: status === "Yeni" && (isRequester || isAdmin),
     comment: !CLOSED.has(status),
     // The head scores the assignee's work only after the requester has closed the request.
-    evaluate: status === "Bağlandı" && linked && row.task_status === "Təqdim edilib" && manages,
+    evaluate: status === AWAITING_EVALUATION && linked && row.task_status === "Təqdim edilib" && manages,
   };
   const leadsTarget = isTargetHead || (isAdmin && !targetHasHead);
   const actionable = (status === "Yeni" && leadsTarget)
@@ -209,13 +213,14 @@ export async function syncRequestFromTask(taskId: number, taskStatus: string, ac
   if (taskStatus === "İcradadır" && request.status === "Qəbul edildi") {
     await move("İcra olunur");
     await logEvent(request.id, actorName || "İcraçı", "İcraçı işi icraya aldı");
-  } else if (taskStatus === "Təqdim edilib" && request.status !== "Bağlandı") {
+  } else if (taskStatus === "Təqdim edilib" && !CLOSED.has(request.status) && request.status !== AWAITING_EVALUATION) {
     await move("Cavablandı");
     await logEvent(request.id, actorName || "İcraçı", "Sorğu cavablandı", detail);
-  } else if (taskStatus === "Geri qaytarılıb" && request.status !== "Bağlandı") {
+  } else if (taskStatus === "Geri qaytarılıb" && !CLOSED.has(request.status) && request.status !== AWAITING_EVALUATION) {
     await move("İcra olunur");
     await logEvent(request.id, actorName || "Rəhbər", "İş icraçıya geri qaytarıldı", detail);
   } else if (taskStatus === "Təsdiqlənib") {
+    if (request.status === AWAITING_EVALUATION) await move("Bağlandı");
     await logEvent(request.id, actorName || "Rəhbər", "İcraçının işi qiymətləndirildi ✓", detail);
   }
 }
@@ -356,8 +361,14 @@ export async function updateRequest(user: SessionUser, input: { id: number; acti
       return;
     case "close":
       if (!can.close) throw new Error("Bu sorğunu bağlaya bilməzsiniz.");
-      await set("status = 'Bağlandı', closed_at = ?", now);
-      await logEvent(row.id, user.name, "Sorğu bağlandı ✓", text);
+      // A request worked as a task still needs the head's score; a request without a task closes right away.
+      if (row.task_id && row.task_status === "Təqdim edilib") {
+        await set("status = ?, closed_at = ?", AWAITING_EVALUATION, now);
+        await logEvent(row.id, user.name, "Cavab təsdiqləndi — rəisin qiymətləndirməsi gözlənilir", text);
+      } else {
+        await set("status = 'Bağlandı', closed_at = ?", now);
+        await logEvent(row.id, user.name, "Sorğu bağlandı ✓", text);
+      }
       return;
     case "reopen":
       if (!can.reopen) throw new Error("Bu sorğunu yenidən aça bilməzsiniz.");
@@ -371,8 +382,8 @@ export async function updateRequest(user: SessionUser, input: { id: number; acti
       const score = Number(input.score);
       if (!(Number.isInteger(score) && score >= 1 && score <= 10)) throw new Error("Qiymət 1 ilə 10 arasında olmalıdır.");
       await db().prepare("UPDATE tasks SET status = 'Təsdiqlənib', evaluation = ?, evaluation_note = ?, completed_at = ? WHERE id = ?").bind(score, text || null, now, row.task_id).run();
-      await set("status = status");
-      await logEvent(row.id, user.name, "İcraçının işi qiymətləndirildi ✓", `${score}/10${text ? `\n${text}` : ""}`);
+      await set("status = 'Bağlandı'");
+      await logEvent(row.id, user.name, "İcraçının işi qiymətləndirildi, sorğu bağlandı ✓", `${score}/10${text ? `\n${text}` : ""}`);
       return;
     }
     case "comment":
