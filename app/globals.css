@@ -402,3 +402,8 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .requestbuttons .inlinecancel{height:36px}
 .requesttext{white-space:pre-wrap}
 .requestblocktitle{color:#172237;font-size:12px}
+.sortlabel{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.sortlabel i{font-style:normal;font-size:9px;color:#94a3b8}
+.sortlabel.on i,.sortlabel:hover i{color:#0C8599}
+.tasktype{display:inline-block;border-radius:12px;padding:4px 8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:800}
+.tasktype.request{background:#fff4e5;color:#c2410c}

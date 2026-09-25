@@ -405,7 +405,8 @@ async function attachAssignerChains(taskRows: Array<Record<string, unknown>>) {
     }
     return names.join(", ") || null;
   };
-  return taskRows.map((row) => ({ ...row, assigned_by: resolve(Number(row.id)) }));
+  // A task created from a request was given by the department head who accepted it and picked the assignee.
+  return taskRows.map((row) => ({ ...row, assigned_by: resolve(Number(row.id)) || (row.request_accepted_by as string | null) || null }));
 }
 
 export async function getAllData() {
@@ -436,7 +437,10 @@ export async function getAllData() {
       COALESCE((SELECT p.title FROM employee_companies ec JOIN company_structure_positions p ON p.id = ec.position_id
         WHERE ec.employee_id = tasks.employee_id AND ec.company_id = tasks.company_id), '') AS employee_position,
       companies.name AS company_name,
-      (SELECT id FROM work_requests WHERE work_requests.task_id = tasks.id) AS request_id
+      (SELECT id FROM work_requests WHERE work_requests.task_id = tasks.id) AS request_id,
+      (SELECT u.name || COALESCE(' (' || r.from_department || ')', '') FROM work_requests r LEFT JOIN app_users u ON u.id = r.from_user_id WHERE r.task_id = tasks.id) AS request_from,
+      (SELECT ev.actor_name FROM work_request_events ev JOIN work_requests r ON r.id = ev.request_id
+        WHERE r.task_id = tasks.id AND ev.action IN ('Sorğu qəbul edildi', 'İcraçı dəyişdirildi') ORDER BY ev.id DESC LIMIT 1) AS request_accepted_by
       FROM tasks JOIN employees ON employees.id = tasks.employee_id
       LEFT JOIN companies ON companies.id = tasks.company_id
       ORDER BY tasks.created_at DESC, tasks.id DESC`).all(),
