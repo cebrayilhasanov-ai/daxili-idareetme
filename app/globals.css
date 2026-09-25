@@ -441,3 +441,10 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .customerrow .countryfield{flex:0 0 22ch}
 .customerrow .voenfield.wide{flex:0 0 26ch}
 .voenhint.bad{color:#dc2626;font-weight:700}
+.navcaret{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:6px;border-radius:5px;color:#9fb0c7;flex:none;cursor:pointer}
+nav button>.navcaret{margin-left:auto}
+nav button>em+.navcaret{margin-left:6px}
+.navcaret svg{width:14px;height:14px;transition:transform .15s}
+.navcaret:hover{background:#ffffff1f;color:#fff}
+.navcaret:not(.open) svg{transform:rotate(-90deg)}
+.navchildren button em{margin-left:auto}
