@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Bell, Briefcase, Inbox, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowDownAZ, ArrowDownZA, Bell, Briefcase, ChevronDown, Funnel, Inbox, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -138,7 +139,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.22</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.24</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="requests"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -302,7 +303,6 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const [form,setForm]=useState<Record<string,string>>({title:"",description:"",companyId:"",dueAt:""});
   const [file,setFile]=useState<File|null>(null);
   const [busy,setBusy]=useState(false);
-  const [search,setSearch]=useState<Record<string,string>>({});
   const [detailItem,setDetailItem]=useState<PersonalWork|null>(null);
   const [editingWork,setEditingWork]=useState(false);
   const [editFile,setEditFile]=useState<File|null>(null);
@@ -389,16 +389,14 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     }catch(e){setError(e instanceof Error?e.message:"İş yenilənmədi.")}
     finally{setBusy(false)}
   };
-  const set=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
-  const personalWorkColumns:Array<{key:string;label:string;width:number;search:(item:PersonalWork)=>string;render:(item:PersonalWork)=>React.ReactNode}>=[
+  const personalWorkColumns:Array<{key:string;label:string;width:number;search:(item:PersonalWork)=>string;sort?:(item:PersonalWork)=>string|number|null;render:(item:PersonalWork)=>React.ReactNode}>=[
     {key:"status",label:"Status",width:120,search:i=>i.status,render:i=>workLate(i)?<><span className="tablestatus late">Gecikib</span><LateDays due={i.due_at}/></>:<span className={`tablestatus ${statusTone(i.status)}`}>{i.status}</span>},
     {key:"company",label:"Firma",width:140,search:i=>i.company_name||"",render:i=><b>{i.company_name||"—"}</b>},
     {key:"title",label:"İş",width:170,search:i=>i.title,render:i=><button className="taskdetailbtn" onClick={()=>openDetail(i)}>{i.title}</button>},
     {key:"description",label:"Açıqlama",width:220,search:i=>i.description||"—",render:i=><>{i.description||"—"}</>},
     {key:"document",label:"Əlavə olunan sənəd",width:150,search:i=>i.attachment_name||"Sənəd yoxdur",render:i=>i.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(i.attachment_key)}`}>{i.attachment_name}<small>{formatFileSize(i.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
-    {key:"created",label:"Yaranma tarixi",width:140,search:i=>formatDate(i.created_at),render:i=><time>{formatDate(i.created_at)}</time>},
-    {key:"due",label:"Son tarix",width:150,search:i=>i.due_at?formatDate(i.due_at):"—",render:i=>i.due_at?<time>{formatDate(i.due_at)}</time>:"—"},
+    {key:"created",label:"Yaranma tarixi",width:140,search:i=>formatDate(i.created_at),sort:i=>new Date(i.created_at).getTime(),render:i=><time>{formatDate(i.created_at)}</time>},
+    {key:"due",label:"Son tarix",width:150,search:i=>i.due_at?formatDate(i.due_at):"—",sort:i=>i.due_at?new Date(i.due_at).getTime():null,render:i=>i.due_at?<time>{formatDate(i.due_at)}</time>:"—"},
     {key:"shared",label:"Paylaşılıb",width:180,search:i=>(i.shared||[]).map(s=>s.name).join(" ")||"—",render:i=>i.shared?.length?<div className="sharedlist">{i.shared.map(s=><span key={s.employee_id} className={s.done>=s.total?"sharedname done":"sharedname"} title={s.done>=s.total?"Tamamlayıb, ✓ qoyulub":"İcra edir"}>{s.name}{s.total>1&&<small> ({s.done}/{s.total})</small>}</span>)}</div>:<span className="nodocument">—</span>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("personalworks2",personalWorkColumns.map(c=>c.key));
@@ -407,7 +405,8 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const columnsByKey=Object.fromEntries(personalWorkColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(personalWorkColumns.map(c=>[c.key,c.width]));
   const scopeCompany=!isAdmin||Boolean(viewAsEmployeeId);
-  const filtered=items.filter(item=>(!scopeCompany||!activeCompanyId||item.company_id===activeCompanyId)&&personalWorkColumns.every(c=>has(c.search(item),c.key)));
+  const excel=useExcelFilters("personalworks",personalWorkColumns,items.filter(item=>!scopeCompany||!activeCompanyId||item.company_id===activeCompanyId));
+  const filtered=excel.rows;
   const current=detailItem&&items.find(i=>i.id===detailItem.id)||detailItem;
   const currentOwn=Boolean(current&&isOwn(current));
   const unfinishedSteps=checklist.filter(i=>!i.done).length;
@@ -483,7 +482,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     <div className="pageactions"><div><h2>İşlərim</h2><p>{viewAsEmployeeId?`${employees.find(e=>e.id===viewAsEmployeeId)?.name||"Personal"} adına ${filtered.length} iş göstərilir`:`${filtered.length} iş göstərilir`}</p></div><Button onClick={()=>{if(!creating&&activeCompanyId)setForm(f=>({...f,companyId:f.companyId||String(activeCompanyId)}));setCreating(v=>!v)}}><Plus/>Yeni iş</Button></div>
     {creating&&<div className="inlinetaskrow personalworkrow"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/><label className="field filefield">Əlavə fayl (istəyə bağlı, maks. 25 MB)<Input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file&&<small>{file.name} • {formatFileSize(file.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable personalworktable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable personalworktable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(item)}>Aç</button></td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun iş tapılmadı.":"Hələ öz işinizi əlavə etməmisiniz."}/>}</div>}
@@ -491,7 +490,6 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   </section>;
 }
 function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,onRequestDate,onResolveDateRequest,employees,isAdmin}:{tasks:Task[];employeeView:boolean;onStatus:(t:Task,s:string,extra?:Record<string,unknown>)=>void;onEvaluate:(t:Task)=>void;onDelete:(t:Task)=>void;dateRequests:DateRequest[];onRequestDate:(taskId:number,proposedDueAt:string,reason:string)=>void;onResolveDateRequest:(id:number,approve:boolean,adminNote:string,finalDueAt:string)=>void;employees:Employee[];isAdmin:boolean}){
-  const [search,setSearch]=useState<Record<string,string>>({});
   const [dateOpen,setDateOpen]=useState(false);
   const [dateForm,setDateForm]=useState({proposedDueAt:"",reason:""});
   const [resolveNote,setResolveNote]=useState("");
@@ -507,8 +505,6 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const [checklistBusy,setChecklistBusy]=useState(false);
   const [checklistError,setChecklistError]=useState("");
   const [checklistAttachBusy,setChecklistAttachBusy]=useState<number|null>(null);
-  const set=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
   const hasPendingRequest=(t:Task)=>dateRequests.some(r=>r.task_id===t.id&&r.status==="Gözləyir");
   const rowStatusLabel=(t:Task)=>hasPendingRequest(t)?"Dəyişiklik tələb olunur":displayStatus(t);
   const rowStatusClass=(t:Task)=>hasPendingRequest(t)?"changerequested":statusClass(t);
@@ -532,10 +528,10 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(taskColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(taskColumns.map(c=>[c.key,c.width]));
-  const {sort,toggleSort,applySort}=useColumnSort("tasks");
-  const filtered=applySort(tasks.filter(t=>taskColumns.every(c=>has(c.search(t),c.key))),(key,t)=>{const c=columnsByKey[key];return c?(c.sort?c.sort(t):c.search(t)):null});
-  // Employees work inside one chosen firma, so the firma column only matters in the admin's all-firma view.
-  const shownOrder=order.filter(k=>columnsByKey[k]&&!(employeeView&&k==="company"));
+  const excel=useExcelFilters("tasks",taskColumns,tasks);
+  const filtered=excel.rows;
+  // An employee sees only their own tasks inside one chosen firma, so firma, name and position add nothing there.
+  const shownOrder=order.filter(k=>columnsByKey[k]&&!(employeeView&&["company","employee","position"].includes(k)));
   const current=detailTask&&tasks.find(t=>t.id===detailTask.id)||detailTask;
   useEffect(()=>{if(!current){setChecklist([]);setChecklistError("");return}let cancelled=false;setChecklistLoading(true);void fetch(`/api/checklist?taskId=${current.id}`).then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled){setChecklist(body.items||[]);setDelegateCandidates(body.candidates||[])}}).finally(()=>{if(!cancelled)setChecklistLoading(false)});return()=>{cancelled=true}},[current?.id]);
   const nextStatus=current?.status==="Yeni"?"İcradadır":(current?.status==="İcradadır"||current?.status==="Geri qaytarılıb")?"Təqdim edilib":null;
@@ -628,7 +624,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   };
   // The task's owner hands steps to their subordinates (per the company structure); the admin can do it on the owner's behalf.
   const canDelegateTask=isAdmin||employeeView;
-    return <><div className="tasktablewrap"><table className="tasktable"><ColGroup order={shownOrder} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{shownOrder.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>set(key,e.target.value)}/><SortLabel label={col.label} colKey={key} sort={sort} onToggle={toggleSort}/></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(t=><tr key={t.id}>
+    return <><div className="tasktablewrap"><table className="tasktable"><ColGroup order={shownOrder} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{shownOrder.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(t=><tr key={t.id}>
       {shownOrder.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(t)}</td>})}
       <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(t)}>Aç</button></td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={tasks.length?"Axtarışa uyğun tapşırıq tapılmadı.":"Hələ tapşırıq yaradılmayıb."}/>}</div>
@@ -677,9 +673,6 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
   const [editingId,setEditingId]=useState<number|null>(null);
   const [editForm,setEditForm]=useState<Record<string,string>>({});
   const [editBusy,setEditBusy]=useState(false);
-  const [search,setSearch]=useState({department:"",title:"",reportsTo:""});
-  const setQuery=(key:"department"|"title"|"reportsTo",value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string,query:string)=>value.toLocaleLowerCase("az-AZ").includes(query.toLocaleLowerCase("az-AZ"));
   const load=async()=>{if(!company)return;setLoading(true);setError("");try{const response=await fetch(`/api/company-structure?companyId=${company.id}`);const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Struktur açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{if(company){setCreating(false);setForm({});setEditingId(null);void load()}else setItems([])},[company?.id]);
   const departments=Array.from(new Set(items.map(i=>i.department)));
@@ -729,7 +722,9 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
       setItems(body.items||[]);
     }catch(e){setError(e instanceof Error?e.message:"Vəzifə silinmədi.")}
   };
-  const filtered=items.filter(item=>has(item.department,search.department)&&has(item.title,search.title)&&has(item.reports_to||"",search.reportsTo));
+  const structureColumns:ExcelColumn<StructurePosition>[]=[{key:"department",label:"Şöbə",search:i=>i.department},{key:"title",label:"Vəzifə",search:i=>i.title},{key:"reportsTo",label:"Tabe olduğu",search:i=>i.reports_to||"Ən yuxarı vəzifə"}];
+  const excel=useExcelFilters("structure",structureColumns,items,{sortable:false});
+  const filtered=excel.rows;
   // Group rows by şöbə (in first-seen order) so the Şöbə column can render as one merged cell per group — and grows automatically as new vəzifə join that şöbə.
   const departmentOrder:string[]=[];
   for(const item of items)if(!departmentOrder.includes(item.department))departmentOrder.push(item.department);
@@ -746,10 +741,8 @@ function CompanyStructureDialog({company,onClose}:{company:Company|null;onClose:
     {creating&&<div className="inlinetaskrow documentrow customerrow">{fields(form,setForm)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!requiredFilled(form)} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable structuretable"><thead><tr>
-      <th><input aria-label="Şöbə üzrə axtarış" placeholder="Axtar..." value={search.department} onChange={e=>setQuery("department",e.target.value)}/><span>Şöbə</span></th>
-      <th><input aria-label="Vəzifə üzrə axtarış" placeholder="Axtar..." value={search.title} onChange={e=>setQuery("title",e.target.value)}/><span>Vəzifə</span></th>
-      <th><input aria-label="Tabe olduğu üzrə axtarış" placeholder="Axtar..." value={search.reportsTo} onChange={e=>setQuery("reportsTo",e.target.value)}/><span>Tabe olduğu</span></th>
-      <th className="opencolumn"><ActionsHeader hasSearch/></th>
+      {structureColumns.map(col=><th key={col.key}>{excel.header(col)}</th>)}
+      <th className="opencolumn"><ActionsHeader/></th>
     </tr></thead><tbody>{grouped.map(item=>{
       const firstOfGroup=!seenDept.has(item.department);
       if(firstOfGroup)seenDept.add(item.department);
@@ -792,9 +785,6 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
   const [editingId,setEditingId]=useState<number|null>(null);
   const [editForm,setEditForm]=useState<Record<string,string>>({});
   const [editBusy,setEditBusy]=useState(false);
-  const [search,setSearch]=useState<Record<string,string>>({});
-  const setQuery=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/customers");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const requiredFilled=(values:Record<string,string>)=>Boolean((values.entityType||"").trim()&&(values.voen||"").trim()&&(values.name||"").trim()&&(values.legalAddress||"").trim()&&(values.manager||"").trim());
@@ -851,12 +841,13 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
     manager:(values,set)=><label className="field" key="manager">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>,
   };
   const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.map(key=>fieldRenderers[key](values,set))}</>;
-  const filtered=items.filter(item=>customerColumns.every(c=>has(c.search(item),c.key)));
+  const excel=useExcelFilters("customers",customerColumns,items);
+  const filtered=excel.rows;
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştəri siyahısı</h2><p>{filtered.length} müştəri göstərilir</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button></div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">{fields(form,setForm)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!requiredFilled(form)} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>setQuery(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       <td data-label="Əməliyyat">{isAdmin&&<div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div>}</td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
@@ -889,9 +880,6 @@ function ViolationsPage({isAdmin,employees,companies,activeCompanyId}:{isAdmin:b
   const [creating,setCreating]=useState(false);
   const [form,setForm]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false);
-  const [search,setSearch]=useState<Record<string,string>>({});
-  const setQuery=(key:string,value:string)=>setSearch(current=>({...current,[key]:value}));
-  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/violations");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[])}catch(e){setError(e instanceof Error?e.message:"Qeydlər yüklənmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const create=async()=>{
@@ -921,7 +909,8 @@ function ViolationsPage({isAdmin,employees,companies,activeCompanyId}:{isAdmin:b
     else acc[item.employee_id]={employeeId:item.employee_id,name:item.employee_name,count:1,last:item.created_at};
     return acc;
   },{} as Record<number,{employeeId:number;name:string;count:number;last:string}>)).sort((a,b)=>b.count-a.count);
-  const filtered=items.filter(item=>(isAdmin||!activeCompanyId||item.company_id===activeCompanyId)&&violationColumns.every(c=>has(c.search(item),c.key)));
+  const excel=useExcelFilters("violations",violationColumns,items.filter(item=>isAdmin||!activeCompanyId||item.company_id===activeCompanyId));
+  const filtered=excel.rows;
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Noqsanlar</h2><p>{isAdmin?`${filtered.length} qeyd göstərilir`:"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni qeyd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">
@@ -933,7 +922,7 @@ function ViolationsPage({isAdmin,employees,companies,activeCompanyId}:{isAdmin:b
     </div>}
     {error&&<div className="errorbox">{error}</div>}
     {isAdmin&&!loading&&<div className="employeecards officialcards">{counts.length?counts.map(c=><article key={c.employeeId}><div className="identityblock"><i>{initials(c.name)}</i><div><div className="identitytitle"><h3>{c.name}</h3></div><p><b>Son qeyd:</b> {formatDate(c.last)}</p></div></div><div className="recordmetrics"><span><small>Noqsan sayı</small><b>{c.count}</b></span></div></article>):<Empty text="Hələ heç bir noqsan qeydə alınmayıb."/>}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>setQuery(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th>}</tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun qeyd tapılmadı.":"Hələ qeyd yoxdur."}/>}</div>}
@@ -1012,19 +1001,20 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   };
   const templateLink=(key:string|null,name:string|null,size:number|null)=>key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(key)}`}>{name}<small>{formatFileSize(size||0)}</small></a>:<span className="nodocument">Yoxdur</span>;
   const templateLabel=(n:number)=><span className="templatelabel">Sənədin şablonu<br/>{n}</span>;
-  const documentColumns:Array<{key:string;label:string;width:number;headerContent:React.ReactNode;render:(item:DocumentTemplate)=>React.ReactNode}>=[
-    {key:"name",label:"Sənədin adı",width:240,headerContent:<span>Sənədin adı</span>,render:item=><b>{item.name}</b>},
-    {key:"template1",label:"Sənədin şablonu 1",width:220,headerContent:templateLabel(1),render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
-    {key:"template2",label:"Sənədin şablonu 2",width:220,headerContent:templateLabel(2),render:item=>templateLink(item.template2_key,item.template2_name,item.template2_size)},
-    {key:"template3",label:"Sənədin şablonu 3",width:220,headerContent:templateLabel(3),render:item=>templateLink(item.template3_key,item.template3_name,item.template3_size)},
-    {key:"draftFolder",label:"İlkin sənəd papkası",width:220,headerContent:<span>İlkin sənəd papkası</span>,render:item=>item.draft_folder_path?<span className="folderpath" title={item.draft_folder_path}>{item.draft_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
-    {key:"finalFolder",label:"Hazır sənəd papkası",width:220,headerContent:<span>Hazır sənəd papkası</span>,render:item=>item.final_folder_path?<span className="folderpath" title={item.final_folder_path}>{item.final_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
+  const documentColumns:Array<{key:string;label:string;width:number;search:(item:DocumentTemplate)=>string;render:(item:DocumentTemplate)=>React.ReactNode}>=[
+    {key:"name",label:"Sənədin adı",width:240,search:item=>item.name,render:item=><b>{item.name}</b>},
+    {key:"template1",label:"Sənədin şablonu 1",width:220,search:item=>item.template1_name||"Yoxdur",render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
+    {key:"template2",label:"Sənədin şablonu 2",width:220,search:item=>item.template2_name||"Yoxdur",render:item=>templateLink(item.template2_key,item.template2_name,item.template2_size)},
+    {key:"template3",label:"Sənədin şablonu 3",width:220,search:item=>item.template3_name||"Yoxdur",render:item=>templateLink(item.template3_key,item.template3_name,item.template3_size)},
+    {key:"draftFolder",label:"İlkin sənəd papkası",width:220,search:item=>item.draft_folder_path||"Qeyd edilməyib",render:item=>item.draft_folder_path?<span className="folderpath" title={item.draft_folder_path}>{item.draft_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
+    {key:"finalFolder",label:"Hazır sənəd papkası",width:220,search:item=>item.final_folder_path||"Qeyd edilməyib",render:item=>item.final_folder_path?<span className="folderpath" title={item.final_folder_path}>{item.final_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(documentColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(documentColumns.map(c=>[c.key,c.width]));
+  const excel=useExcelFilters("templates",documentColumns,items);
   const createFieldRenderers:Record<string,()=>React.ReactNode>={
     name:()=><Field key="name" label="Sənədin adı" value={name} set={setName}/>,
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label>,
@@ -1045,7 +1035,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları (3 versiyada)</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow">{order.map(key=>createFieldRenderers[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{col.headerContent}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{items.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow">{order.map(key=>editFieldRenderers(item)[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{excel.rows.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow">{order.map(key=>editFieldRenderers(item)[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ sənəd əlavə edilməyib."/>}</div>}
@@ -1165,16 +1155,14 @@ function OutgoingDocumentsPage({isAdmin}:{isAdmin:boolean}){
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(outgoingColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(outgoingColumns.map(c=>[c.key,c.width]));
-  const [outgoingSearch,setOutgoingSearch]=useState<Record<string,string>>({});
-  const setOutgoingFilter=(key:string,value:string)=>setOutgoingSearch(current=>({...current,[key]:value}));
-  const matchesOutgoingFilter=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((outgoingSearch[key]||"").toLocaleLowerCase("az-AZ"));
-  const filteredOutgoing=items.filter(item=>outgoingColumns.every(c=>matchesOutgoingFilter(c.search(item),c.key)));
+  const excel=useExcelFilters("outgoing",outgoingColumns,items);
+  const filteredOutgoing=excel.rows;
   return <section className="panel pagepanel directorypanel">
     <datalist id="documentTypeOptions">{templates.map(t=><option key={t.id} value={t.name}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan Sənədlər</h2><p>Təşkilatdan göndərilən sənədlərin qeydiyyatı</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields(form,setForm)}{templateAndFileBlock(form,newFile,setNewFile)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={outgoingSearch[key]||""} onChange={e=>setOutgoingFilter(key,e.target.value)}/><span>{col.label}</span></SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th>}</tr></thead><tbody>{filteredOutgoing.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{filteredOutgoing.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm)}{templateAndFileBlock(editForm,editFile,setEditFile)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!filteredOutgoing.length&&<Empty text={items.length?"Axtarışa uyğun sənəd tapılmadı.":"Hələ çıxan sənəd qeydə alınmayıb."}/>}</div>}
@@ -1205,7 +1193,6 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const [form,setForm]=useState<Record<string,string>>({});
   const [file,setFile]=useState<File|null>(null);
   const [busy,setBusy]=useState(false);
-  const [search,setSearch]=useState<Record<string,string>>({});
   const [openId,setOpenId]=useState<number|null>(null);
   const [events,setEvents]=useState<WorkHistoryEvent[]|null>(null);
   const [act,setAct]=useState<Record<string,string>>({});
@@ -1217,9 +1204,10 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const scoped=data.items.filter(i=>isAdmin||!activeCompanyId||i.company_id===activeCompanyId);
   const counts={incoming:scoped.filter(i=>i.box==="incoming").length,outgoing:scoped.filter(i=>i.box==="outgoing").length,oversight:scoped.filter(i=>i.box==="oversight").length};
   const pending={incoming:scoped.filter(i=>i.box==="incoming"&&i.actionable).length,outgoing:scoped.filter(i=>i.box==="outgoing"&&i.actionable).length};
-  const has=(value:string,key:string)=>value.toLocaleLowerCase("az-AZ").includes((search[key]||"").toLocaleLowerCase("az-AZ"));
-  const {sort,toggleSort,applySort}=useColumnSort("requests");
-  const filtered=applySort(scoped.filter(i=>i.box===box&&requestColumns.every(c=>has(c.search(i),c.key))),(key,i)=>{const c=columnsByKey[key];return c?(c.sort?c.sort(i):c.search(i)):null});
+  const excel=useExcelFilters("requests",requestColumns,scoped.filter(i=>i.box===box));
+  const filtered=excel.rows;
+  // Employees work inside one chosen firma, so the firma column only matters in the admin's all-firma view.
+  const shownOrder=order.filter(k=>columnsByKey[k]&&(isAdmin||k!=="company"));
   const formCompanyId=Number(form.companyId||activeCompanyId||companies[0]?.id||0);
   const myDepartment=data.myDepartments[String(formCompanyId)]||null;
   const departmentOptions=(data.departments[String(formCompanyId)]||[]).filter(d=>d!==myDepartment);
@@ -1271,8 +1259,8 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
     </div>}
     {error&&<div className="errorbox">{error}</div>}
     <div className="fixedsubtabs"><button className={box==="incoming"?"on":""} onClick={()=>setBox("incoming")}>Gələnlər ({counts.incoming}){pending.incoming>0&&<em className="requestbadge">{pending.incoming}</em>}</button><button className={box==="outgoing"?"on":""} onClick={()=>setBox("outgoing")}>Göndərdiklərim ({counts.outgoing}){pending.outgoing>0&&<em className="requestbadge">{pending.outgoing}</em>}</button>{counts.oversight>0&&<button className={box==="oversight"?"on":""} onClick={()=>setBox("oversight")}>Şöbəmin sorğuları ({counts.oversight})</button>}</div>
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable requesttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}><input aria-label={`${col.label} üzrə axtarış`} placeholder="Axtar..." value={search[key]||""} onChange={e=>setSearch(s=>({...s,[key]:e.target.value}))}/><SortLabel label={col.label} colKey={key} sort={sort} onToggle={toggleSort}/></SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader hasSearch/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id} className={item.actionable?"requestpending":undefined}>
-      {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable requesttable"><ColGroup order={shownOrder} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{shownOrder.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id} className={item.actionable?"requestpending":undefined}>
+      {shownOrder.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>void openDetail(item)}>Aç</button></td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={box==="incoming"?"Gələn sorğu yoxdur.":box==="outgoing"?"Hələ sorğu göndərməmisiniz.":"Şöbənizin sorğusu yoxdur."}/>}</div>}
     <Dialog open={Boolean(current)} onOpenChange={v=>{if(!v)setOpenId(null)}}><DialogContent className="businessdialog" resizable>{current&&<FormShell title={current.title} desc={`Sorğu №${current.id} • ${current.company_name}`} formClass="taskdetailform">
@@ -1435,12 +1423,11 @@ function useTableColumns(storageKey:string,defaultKeys:string[]){
   };
   return {order:state.order,widths:state.widths,setWidth,moveColumn};
 }
-// Excel-like column sorting: a header click sorts A→Z, the next Z→A, the third turns sorting off. Empty cells always go last; the choice is remembered per table.
+// Column sorting shared by the Excel-like filters: A→Z or Z→A on one column. Empty cells always go last; the choice is remembered per table.
 type ColumnSort={key:string;dir:"asc"|"desc"}|null;
 function useColumnSort(storageKey:string){
   const [sort,setSort]=useState<ColumnSort>(()=>{if(typeof window==="undefined")return null;try{const raw=window.localStorage.getItem(`sort:${storageKey}`);return raw?JSON.parse(raw):null}catch{return null}});
-  const toggleSort=(key:string)=>{
-    const next:ColumnSort=!sort||sort.key!==key?{key,dir:"asc"}:sort.dir==="asc"?{key,dir:"desc"}:null;
+  const setSortTo=(next:ColumnSort)=>{
     setSort(next);
     try{if(next)window.localStorage.setItem(`sort:${storageKey}`,JSON.stringify(next));else window.localStorage.removeItem(`sort:${storageKey}`)}catch{}
   };
@@ -1455,11 +1442,109 @@ function useColumnSort(storageKey:string){
       return diff*direction;
     });
   };
-  return {sort,toggleSort,applySort};
+  return {sort,setSortTo,applySort};
 }
-function SortLabel({label,colKey,sort,onToggle}:{label:string;colKey:string;sort:ColumnSort;onToggle:(key:string)=>void}){
-  const dir=sort?.key===colKey?sort.dir:null;
-  return <span><button type="button" className={`sortlabel${dir?" on":""}`} title={dir==="asc"?"A→Z sıralanıb (Z→A üçün klikləyin)":dir==="desc"?"Z→A sıralanıb (sıralamanı ləğv etmək üçün klikləyin)":"A→Z sırala"} onMouseDown={e=>e.stopPropagation()} onClick={()=>onToggle(colKey)}>{label}<i>{dir==="asc"?"▲":dir==="desc"?"▼":"↕"}</i></button></span>;
+// Excel-like column filters: every header gets a ▾ button that opens a panel with A→Z / Z→A sorting, a value search and a
+// checkbox list of the column's distinct values (with counts). Values offered for one column follow the filters set on the
+// others, like in Excel. The chosen sort is remembered per table; filters last until the page is reloaded.
+type ExcelColumn<T>={key:string;label:string;search?:(row:T)=>string;sort?:(row:T)=>string|number|null};
+type ExcelValue={value:string;count:number;order:string|number|null};
+const EMPTY_VALUE="(Boş)";
+function compareSortValues(x:string|number|null,y:string|number|null){
+  const empty=(v:string|number|null)=>v===null||v===""||v==="—"||v===EMPTY_VALUE||(typeof v==="number"&&Number.isNaN(v));
+  if(empty(x)||empty(y))return empty(x)===empty(y)?0:empty(x)?1:-1;
+  return typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"az",{numeric:true,sensitivity:"base"});
+}
+function useExcelFilters<T>(storageKey:string,columns:ExcelColumn<T>[],rows:T[],options:{sortable?:boolean}={}){
+  const sortable=options.sortable!==false;
+  const {sort,setSortTo,applySort}=useColumnSort(storageKey);
+  const [excluded,setExcluded]=useState<Record<string,string[]>>({});
+  const byKey=new Map(columns.map(c=>[c.key,c]));
+  const cellText=(col:ExcelColumn<T>,row:T)=>{const text=(col.search?col.search(row):"").trim();return text&&text!=="—"?text:EMPTY_VALUE};
+  const passes=(row:T,skipKey?:string)=>Object.entries(excluded).every(([key,values])=>{
+    if(key===skipKey||!values.length)return true;
+    const col=byKey.get(key);
+    return !col||!values.includes(cellText(col,row));
+  });
+  const visible=rows.filter(row=>passes(row));
+  const sorted=sortable?applySort(visible,(key,row)=>{const col=byKey.get(key);return col?(col.sort?col.sort(row):col.search?col.search(row):null):null}):visible;
+  const header=(col:ExcelColumn<T>)=>{
+    const counts=new Map<string,ExcelValue>();
+    for(const row of rows){
+      if(!passes(row,col.key))continue;
+      const value=cellText(col,row);
+      const entry=counts.get(value);
+      if(entry)entry.count+=1;else counts.set(value,{value,count:1,order:value===EMPTY_VALUE?null:col.sort?col.sort(row):value});
+    }
+    const values=[...counts.values()].sort((a,b)=>compareSortValues(a.order,b.order));
+    return <ExcelFilterHeader label={col.label} values={values} excluded={excluded[col.key]||[]} sortable={sortable} sortDir={sortable&&sort?.key===col.key?sort.dir:null}
+      onSort={dir=>setSortTo(dir?{key:col.key,dir}:null)} onApply={next=>setExcluded(current=>({...current,[col.key]:next}))}/>;
+  };
+  return {rows:sorted,header};
+}
+function ExcelFilterHeader({label,values,excluded,sortable,sortDir,onSort,onApply}:{label:string;values:ExcelValue[];excluded:string[];sortable:boolean;sortDir:"asc"|"desc"|null;onSort:(dir:"asc"|"desc"|null)=>void;onApply:(excluded:string[])=>void}){
+  const [open,setOpen]=useState(false);
+  const [place,setPlace]=useState<{host:Element;top:number;left:number;maxHeight:number}|null>(null);
+  const [draft,setDraft]=useState<Set<string>>(new Set());
+  const [query,setQuery]=useState("");
+  const buttonRef=useRef<HTMLButtonElement>(null);
+  const panelRef=useRef<HTMLDivElement>(null);
+  const active=excluded.length>0;
+  useEffect(()=>{
+    if(!open)return;
+    const outside=(e:Event)=>{const target=e.target as Node;if(panelRef.current?.contains(target)||buttonRef.current?.contains(target))return;setOpen(false)};
+    const escape=(e:KeyboardEvent)=>{if(e.key==="Escape")setOpen(false)};
+    const close=()=>setOpen(false);
+    document.addEventListener("mousedown",outside);
+    document.addEventListener("scroll",outside,true);
+    document.addEventListener("keydown",escape);
+    window.addEventListener("resize",close);
+    return()=>{document.removeEventListener("mousedown",outside);document.removeEventListener("scroll",outside,true);document.removeEventListener("keydown",escape);window.removeEventListener("resize",close)};
+  },[open]);
+  const show=()=>{
+    const button=buttonRef.current;
+    if(!button)return;
+    // Inside a dialog the panel is mounted in the dialog itself (the dialog is transformed, so fixed positions are relative to it).
+    const host=button.closest("[role=\"dialog\"]")||document.body;
+    const rect=button.getBoundingClientRect();
+    const origin=host===document.body?{top:0,left:0}:host.getBoundingClientRect();
+    const width=270;
+    const left=Math.max(8,Math.min(rect.right-width,window.innerWidth-width-8));
+    setPlace({host,top:rect.bottom+4-origin.top,left:left-origin.left,maxHeight:Math.max(220,window.innerHeight-rect.bottom-16)});
+    setDraft(new Set(excluded));setQuery("");setOpen(true);
+  };
+  const needle=query.trim().toLocaleLowerCase("az-AZ");
+  const shown=needle?values.filter(v=>v.value.toLocaleLowerCase("az-AZ").includes(needle)):values;
+  const checkedCount=shown.filter(v=>!draft.has(v.value)).length;
+  const allChecked=shown.length>0&&checkedCount===shown.length;
+  const toggle=(value:string)=>setDraft(current=>{const next=new Set(current);if(next.has(value))next.delete(value);else next.add(value);return next});
+  const toggleAll=()=>setDraft(current=>{const next=new Set(current);for(const v of shown){if(allChecked)next.add(v.value);else next.delete(v.value)}return next});
+  // As in Excel: while searching, OK keeps only the matching values that are ticked.
+  const apply=()=>{
+    const matched=new Set(shown.map(v=>v.value));
+    const next=needle?[...new Set([...values.filter(v=>!matched.has(v.value)).map(v=>v.value),...draft])]:[...draft];
+    onApply(next);setOpen(false);
+  };
+  const panel=open&&place?<div ref={panelRef} className="excelpanel" style={{top:place.top,left:place.left,maxHeight:place.maxHeight}} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}>
+    {sortable&&<div className="excelsort">
+      <button type="button" className={sortDir==="asc"?"on":""} onClick={()=>{onSort(sortDir==="asc"?null:"asc");setOpen(false)}}><ArrowDownAZ/>A→Z sırala</button>
+      <button type="button" className={sortDir==="desc"?"on":""} onClick={()=>{onSort(sortDir==="desc"?null:"desc");setOpen(false)}}><ArrowDownZA/>Z→A sırala</button>
+    </div>}
+    <input className="excelsearch" placeholder="Axtar..." value={query} autoFocus onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")apply()}}/>
+    <div className="excellist">
+      {shown.length>0&&<label className="excelall"><input type="checkbox" checked={allChecked} ref={el=>{if(el)el.indeterminate=checkedCount>0&&!allChecked}} onChange={toggleAll}/><span>{needle?"(Bütün nəticələri seç)":"(Hamısını seç)"}</span></label>}
+      {shown.map(v=><label key={v.value}><input type="checkbox" checked={!draft.has(v.value)} onChange={()=>toggle(v.value)}/><span title={v.value}>{v.value}</span><small>{v.count}</small></label>)}
+      {!shown.length&&<small className="excelnone">Uyğun dəyər yoxdur</small>}
+    </div>
+    <div className="excelactions"><button type="button" disabled={!active} onClick={()=>{onApply([]);setOpen(false)}}>Filtri təmizlə</button><button type="button" className="primary" disabled={needle?checkedCount===0:values.length>0&&values.every(v=>draft.has(v.value))} onClick={apply}>OK</button></div>
+  </div>:null;
+  return <div className="excelhead">
+    <div className="excellabel" title={label}>{label}</div>
+    <button ref={buttonRef} type="button" className={`excelbtn${active||sortDir?" on":""}`} title={active?"Filtr tətbiq olunub":"Filtr və sıralama"} aria-label={`${label}: filtr və sıralama`} onMouseDown={e=>e.stopPropagation()} onClick={()=>open?setOpen(false):show()}>
+      {sortDir==="asc"?<ArrowDownAZ/>:sortDir==="desc"?<ArrowDownZA/>:null}{active?<Funnel/>:<ChevronDown/>}
+    </button>
+    {panel&&place&&createPortal(panel,place.host)}
+  </div>;
 }
 function useSimpleColumnWidths(storageKey:string){
   const [widths,setWidths]=useState<Record<string,number>>(()=>{

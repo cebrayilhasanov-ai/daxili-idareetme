@@ -407,3 +407,30 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .sortlabel.on i,.sortlabel:hover i{color:#0C8599}
 .tasktype{display:inline-block;border-radius:12px;padding:4px 8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:800}
 .tasktype.request{background:#fff4e5;color:#c2410c}
+/* Excel-bənzəri sütun filtrləri */
+.excelhead{display:flex;align-items:center;gap:6px;min-height:26px}
+.excelhead .excellabel{flex:1;min-width:0;font-size:11px;font-weight:800;color:#172237;overflow:hidden;text-overflow:ellipsis}
+.excelbtn{flex:none;display:inline-flex;align-items:center;gap:1px;height:22px;min-width:22px;padding:0 3px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;color:#64748b;cursor:pointer}
+.excelbtn svg{width:13px;height:13px}
+.excelbtn:hover{border-color:#0C8599;color:#0C8599}
+.excelbtn.on{border-color:#0C8599;background:#0C8599;color:#fff}
+.excelpanel{position:fixed;z-index:1000;width:270px;display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;box-shadow:0 14px 34px #0f172a33;font-size:12px;color:#172237;text-align:left;font-weight:500}
+.excelsort{display:grid;gap:2px;padding-bottom:8px;border-bottom:1px solid #e2e8f0}
+.excelsort button{display:flex;align-items:center;gap:8px;border:0;border-radius:6px;background:transparent;padding:6px 8px;color:#172237;font-size:12px;text-align:left;cursor:pointer}
+.excelsort button svg{width:15px;height:15px;color:#0C8599}
+.excelsort button:hover{background:#f1f5f9}
+.excelsort button.on{background:#E3FAFD;font-weight:800}
+.excelpanel .excelsearch{width:100%;height:32px;border:1px solid #b9c8da;border-radius:7px;padding:0 9px;font-size:12px;outline:none}
+.excelpanel .excelsearch:focus{border-color:#0C8599;box-shadow:0 0 0 3px #0C85991a}
+.excellist{flex:1 1 auto;min-height:60px;max-height:260px;overflow:auto;border:1px solid #e2e8f0;border-radius:7px;padding:4px}
+.excellist label{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;cursor:pointer}
+.excellist label:hover{background:#f1f5f9}
+.excellist label input{width:14px;height:14px;flex:none;accent-color:#0C8599}
+.excellist label span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.excellist label small{flex:none;color:#94a3b8;font-size:10px}
+.excellist .excelall{font-weight:800;border-bottom:1px solid #eef2f7;border-radius:0}
+.excelnone{display:block;padding:8px;color:#94a3b8}
+.excelactions{display:flex;justify-content:space-between;gap:8px}
+.excelactions button{height:32px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;padding:0 12px;font-size:11px;font-weight:800;cursor:pointer}
+.excelactions button.primary{border-color:#0C8599;background:#0C8599;color:#fff;min-width:70px}
+.excelactions button:disabled{opacity:.45;cursor:not-allowed}
