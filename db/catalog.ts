@@ -1,5 +1,6 @@
 import { env } from "@/lib/runtime";
 import { periodWindow } from "@/lib/fixed-periods";
+import { ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -320,6 +321,8 @@ async function ensureSchema() {
       JOIN work_definitions d ON d.title = c.title AND d.frequency = c.frequency
       JOIN work_catalog_companies cc ON cc.work_item_id = c.id`).run();
   }
+  // The task list links each task back to the request it was created from, so that table must exist first.
+  await ensureRequestSchema();
   schemaReady = true;
 }
 
@@ -432,7 +435,8 @@ export async function getAllData() {
     db().prepare(`SELECT tasks.*, employees.name AS employee_name,
       COALESCE((SELECT p.title FROM employee_companies ec JOIN company_structure_positions p ON p.id = ec.position_id
         WHERE ec.employee_id = tasks.employee_id AND ec.company_id = tasks.company_id), '') AS employee_position,
-      companies.name AS company_name
+      companies.name AS company_name,
+      (SELECT id FROM work_requests WHERE work_requests.task_id = tasks.id) AS request_id
       FROM tasks JOIN employees ON employees.id = tasks.employee_id
       LEFT JOIN companies ON companies.id = tasks.company_id
       ORDER BY tasks.created_at DESC, tasks.id DESC`).all(),
@@ -663,17 +667,19 @@ export async function resolveDateChangeRequest(input: { id: number; approve: boo
 export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionAttachmentKey?: string; submissionAttachmentName?: string; submissionAttachmentSize?: number; submissionAttachmentType?: string }) {
   const current = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Tapşırıq tapılmadı.");
+  const linkedRequest = await requestForTask(input.id);
   if (input.userMode) {
     const changeCount = Number(current.employee_status_changed || 0);
     if (changeCount >= 2) throw new Error("Bu tapşırıq artıq təqdim edilib və status dəyişdirilə bilməz.");
     const validTransition = (current.status === "Yeni" && input.status === "İcradadır") ||
       ((current.status === "İcradadır" || current.status === "Geri qaytarılıb") && input.status === "Təqdim edilib");
     if (!validTransition) throw new Error("Status yalnız “Yeni” → “İcradadır” → “Təqdim edilib” ardıcıllığı ilə dəyişə bilər.");
-    if (input.status === "Təqdim edilib" && current.attachment_key && !input.submissionAttachmentKey && !current.submission_attachment_key)
+    if (input.status === "Təqdim edilib" && current.attachment_key && !linkedRequest && !input.submissionAttachmentKey && !current.submission_attachment_key)
       throw new Error("Tapşırıqla göndərilən faylı doldurub yükləməlisiniz.");
   } else if (input.status === "Təsdiqlənib") {
     const score = Number(input.evaluation);
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq təsdiqlənə bilər.");
+    if (linkedRequest && linkedRequest.status !== "Bağlandı") throw new Error("Sorğudan yaranan tapşırıq yalnız sorğunu göndərən onu bağladıqdan sonra qiymətləndirilə bilər.");
     if (!(score >= 1 && score <= 10)) throw new Error("Qiymət 1 ilə 10 arasında olmalıdır.");
   } else if (input.status === "Geri qaytarılıb") {
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq geri qaytarıla bilər.");
@@ -702,6 +708,12 @@ export async function updateTask(input: { id: number; actorName?: string; status
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
     await db().prepare("UPDATE task_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
   }
+  if (linkedRequest && input.status && input.status !== current.status) {
+    const detail = status === "Təqdim edilib" ? (input.submissionAttachmentName || current.submission_attachment_name ? `Fayl: ${input.submissionAttachmentName || current.submission_attachment_name}` : null)
+      : status === "Geri qaytarılıb" ? input.evaluationNote?.trim() || null
+      : status === "Təsdiqlənib" ? `${input.evaluation}/10${input.evaluationNote?.trim() ? `\n${input.evaluationNote.trim()}` : ""}` : null;
+    await syncRequestFromTask(input.id, String(status), input.actorName, detail as string | null);
+  }
   // A task handed over from a personal work reports its progress back into that work's history.
   if (input.status && input.status !== current.status) {
     const linked = await db().prepare(`SELECT items.personal_work_id, items.title, employees.name AS employee_name
@@ -723,6 +735,7 @@ export async function deleteTask(id: number, actorName?: string) {
   const task = await db().prepare("SELECT id, status, attachment_key FROM tasks WHERE id = ?").bind(id).first<{ id: number; status: string; attachment_key: string | null }>();
   if (!task) throw new Error("Tapşırıq tapılmadı.");
   if (task.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu tapşırıq silinə bilər.");
+  if (await requestForTask(id)) throw new Error("Bu tapşırıq sorğudan yaranıb — onu Sorğular bölməsindən idarə edin (icraçını dəyişin və ya imtina edin).");
   const linked = await db().prepare("SELECT personal_work_id, title FROM personal_work_checklist_items WHERE delegated_task_id = ?").bind(id).first<{ personal_work_id: number; title: string }>();
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();
   await db().prepare("UPDATE task_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();

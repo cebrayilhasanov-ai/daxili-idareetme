@@ -3,7 +3,8 @@ import type { SessionUser } from "@/lib/auth";
 
 // "Sorğular": horizontal requests between departments (e.g. Təchizat → Mühasibatlıq). Unlike tasks, which go down the
 // hierarchy, a request goes to a department of a company; that department's head accepts it (and picks who handles it)
-// or rejects it with a reason, the handler answers it, and the requester closes it once satisfied.
+// or rejects it with a reason, the handler answers it, and the requester closes it once satisfied. Accepting creates a task
+// for the chosen assignee; the request's status then follows that task, and the head scores it once the request is closed.
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -14,7 +15,7 @@ export const REQUEST_STATUSES = ["Yeni", "Qəbul edildi", "İcra olunur", "Cavab
 const CLOSED = new Set(["Bağlandı", "İmtina edildi"]);
 
 let schemaReady = false;
-async function ensureRequestSchema() {
+export async function ensureRequestSchema() {
   if (schemaReady) return;
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -47,6 +48,8 @@ async function ensureRequestSchema() {
     detail TEXT,
     created_at TEXT NOT NULL
   )`).run();
+  const columns = await db().prepare("PRAGMA table_info(work_requests)").all<{ name: string }>();
+  if (!columns.results.some((column) => column.name === "task_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN task_id INTEGER REFERENCES tasks(id)").run();
   schemaReady = true;
 }
 
@@ -94,7 +97,7 @@ async function loadStructure() {
 }
 
 type Structure = Awaited<ReturnType<typeof loadStructure>>;
-type RequestRow = Record<string, unknown> & { id: number; company_id: number; from_user_id: number; from_department: string | null; to_department: string; assignee_employee_id: number | null; status: string };
+type RequestRow = Record<string, unknown> & { id: number; company_id: number; from_user_id: number; from_department: string | null; to_department: string; assignee_employee_id: number | null; status: string; task_id: number | null; task_status: string | null };
 
 function roles(row: RequestRow, user: SessionUser, structure: Structure) {
   const isAdmin = user.role === "admin";
@@ -106,6 +109,9 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
   const isRequester = row.from_user_id === user.id;
   const isAssignee = Boolean(me && row.assignee_employee_id === me);
   const isSourceHead = Boolean(me && source?.heads.has(me));
+  // Once accepted, the request lives on as a task of the assignee ("Tapşırıqlarım"): the assignee works it from there and
+  // the request's status follows the task. Requests accepted before tasks were linked keep being worked from here.
+  const linked = Boolean(row.task_id);
   // The admin can always step in; a department with no head on staff is handled by the admin alone.
   const manages = isTargetHead || isAdmin;
   const handles = isAssignee || manages;
@@ -114,18 +120,22 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
     accept: status === "Yeni" && manages,
     reject: (status === "Yeni" || status === "Qəbul edildi") && manages,
     reassign: (status === "Qəbul edildi" || status === "İcra olunur") && manages,
-    start: status === "Qəbul edildi" && handles,
-    answer: (status === "Qəbul edildi" || status === "İcra olunur") && handles,
+    start: status === "Qəbul edildi" && handles && !linked,
+    answer: (status === "Qəbul edildi" || status === "İcra olunur") && handles && !linked,
     close: status === "Cavablandı" && (isRequester || isAdmin),
     reopen: status === "Cavablandı" && isRequester,
     remove: status === "Yeni" && (isRequester || isAdmin),
     comment: !CLOSED.has(status),
+    // The head scores the assignee's work only after the requester has closed the request.
+    evaluate: status === "Bağlandı" && linked && row.task_status === "Təqdim edilib" && manages,
   };
-  const actionable = (status === "Yeni" && (isTargetHead || (isAdmin && !targetHasHead)))
-    || (status === "Qəbul edildi" && isAssignee)
-    || (status === "Cavablandı" && isRequester);
+  const leadsTarget = isTargetHead || (isAdmin && !targetHasHead);
+  const actionable = (status === "Yeni" && leadsTarget)
+    || (status === "Qəbul edildi" && isAssignee && !linked)
+    || (status === "Cavablandı" && isRequester)
+    || (can.evaluate && leadsTarget);
   return {
-    visible: isAdmin || isRequester || isTargetHead || isAssignee || isSourceHead,
+    visible: isAdmin || isRequester || isTargetHead || (isAssignee && !linked) || isSourceHead,
     box: isRequester ? "outgoing" : isTargetHead || isAssignee || (isAdmin && !isSourceHead) ? "incoming" : "oversight",
     can,
     actionable,
@@ -133,12 +143,73 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
 }
 
 async function allRows() {
-  return (await db().prepare(`SELECT r.*, c.name AS company_name, u.name AS from_name, a.name AS assignee_name
+  return (await db().prepare(`SELECT r.*, c.name AS company_name, u.name AS from_name, a.name AS assignee_name,
+      t.status AS task_status, t.evaluation AS task_evaluation, t.evaluation_note AS task_evaluation_note,
+      t.submission_attachment_key, t.submission_attachment_name, t.submission_attachment_size
     FROM work_requests r
     JOIN companies c ON c.id = r.company_id
     LEFT JOIN app_users u ON u.id = r.from_user_id
     LEFT JOIN employees a ON a.id = r.assignee_employee_id
+    LEFT JOIN tasks t ON t.id = r.task_id
     ORDER BY r.created_at DESC, r.id DESC`).all<RequestRow>()).results;
+}
+
+// The accepted request becomes a task of the assignee. The task gets its own copy of the request's file, so removing
+// either one never orphans the other (same as when a checklist step is handed over).
+async function createLinkedTask(row: RequestRow, employeeId: number, dueDate: string) {
+  let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
+  if (row.attachment_key && env.FILES) {
+    const source = await env.FILES.get(String(row.attachment_key));
+    if (source) {
+      const copyKey = `${crypto.randomUUID()}-${String(row.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
+      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
+      attachment = { key: copyKey, name: (row.attachment_name as string | null) ?? null, size: (row.attachment_size as number | null) ?? null, type: (row.attachment_type as string | null) ?? null };
+    }
+  }
+  const sender = await db().prepare("SELECT name FROM app_users WHERE id = ?").bind(row.from_user_id).first<{ name: string }>();
+  const from = `${sender?.name || "—"}${row.from_department ? ` (${row.from_department})` : ""}`;
+  const description = `Sorğunu göndərən: ${from}${row.description ? `\n\n${row.description}` : ""}`;
+  // End of the agreed day, Baku time (UTC+4).
+  const dueAt = new Date(`${dueDate}T18:00:00+04:00`).toISOString();
+  const result = await db().prepare(`INSERT INTO tasks
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
+    .bind(employeeId, row.company_id, `Sorğu №${row.id}: ${row.title}`, description, dueAt, dueAt, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
+  return Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+}
+
+async function dropLinkedTask(taskId: number | null) {
+  if (!taskId) return;
+  const task = await db().prepare("SELECT attachment_key, submission_attachment_key FROM tasks WHERE id = ?").bind(taskId).first<{ attachment_key: string | null; submission_attachment_key: string | null }>();
+  if (!task) return;
+  await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(taskId).run();
+  await db().prepare("UPDATE task_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(taskId).run();
+  await db().prepare("DELETE FROM tasks WHERE id = ?").bind(taskId).run();
+  if (env.FILES) for (const key of [task.attachment_key, task.submission_attachment_key]) if (key) await env.FILES.delete(key);
+}
+
+export async function requestForTask(taskId: number) {
+  await ensureRequestSchema();
+  return db().prepare("SELECT id, status FROM work_requests WHERE task_id = ?").bind(taskId).first<{ id: number; status: string }>();
+}
+
+// Called by updateTask after the assignee (or the admin, from the tasks page) moved a request-linked task.
+export async function syncRequestFromTask(taskId: number, taskStatus: string, actorName: string | undefined, detail?: string | null) {
+  const request = await requestForTask(taskId);
+  if (!request) return;
+  const now = new Date().toISOString();
+  const move = (status: string) => db().prepare("UPDATE work_requests SET status = ?, updated_at = ? WHERE id = ?").bind(status, now, request.id).run();
+  if (taskStatus === "İcradadır" && request.status === "Qəbul edildi") {
+    await move("İcra olunur");
+    await logEvent(request.id, actorName || "İcraçı", "İcraçı işi icraya aldı");
+  } else if (taskStatus === "Təqdim edilib" && request.status !== "Bağlandı") {
+    await move("Cavablandı");
+    await logEvent(request.id, actorName || "İcraçı", "Sorğu cavablandı", detail);
+  } else if (taskStatus === "Geri qaytarılıb" && request.status !== "Bağlandı") {
+    await move("İcra olunur");
+    await logEvent(request.id, actorName || "Rəhbər", "İş icraçıya geri qaytarıldı", detail);
+  } else if (taskStatus === "Təsdiqlənib") {
+    await logEvent(request.id, actorName || "Rəhbər", "İcraçının işi qiymətləndirildi ✓", detail);
+  }
 }
 
 async function userCompanyIds(user: SessionUser): Promise<number[]> {
@@ -163,7 +234,7 @@ export async function listRequests(user: SessionUser) {
     if (companyIds.has(companyId)) (departments[companyId] ??= []).push(name);
     if (user.role === "admin" || (user.employeeId && dept.heads.has(user.employeeId))) members[groupKey] = dept.members;
   }
-  const order = new Map(structure.positions.map((p, index) => [`${p.company_id}|${p.department.trim()}`, index]));
+  const order = new Map<string, number>(structure.positions.map((p: Position, index: number): [string, number] => [`${p.company_id}|${p.department.trim()}`, index]));
   for (const companyId of Object.keys(departments)) departments[companyId].sort((a, b) => (order.get(`${companyId}|${a}`) ?? 0) - (order.get(`${companyId}|${b}`) ?? 0));
   const myDepartments: Record<string, string | null> = {};
   for (const companyId of companyIds) myDepartments[companyId] = structure.departmentOf(companyId, user.employeeId);
@@ -188,7 +259,7 @@ async function logEvent(requestId: number, actorName: string, action: string, de
 }
 
 async function requireRow(user: SessionUser, id: number) {
-  const row = await db().prepare("SELECT * FROM work_requests WHERE id = ?").bind(id).first<RequestRow>();
+  const row = await db().prepare("SELECT r.*, t.status AS task_status FROM work_requests r LEFT JOIN tasks t ON t.id = r.task_id WHERE r.id = ?").bind(id).first<RequestRow>();
   if (!row) throw new Error("Sorğu tapılmadı.");
   const structure = await loadStructure();
   const r = roles(row, user, structure);
@@ -223,7 +294,7 @@ export async function createRequest(user: SessionUser, input: { companyId: numbe
   await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə`);
 }
 
-export async function updateRequest(user: SessionUser, input: { id: number; action: string; assigneeId?: number; agreedDueAt?: string; text?: string }) {
+export async function updateRequest(user: SessionUser, input: { id: number; action: string; assigneeId?: number; agreedDueAt?: string; text?: string; score?: number }) {
   await ensureRequestSchema();
   const { row, can, structure } = await requireRow(user, input.id);
   const text = input.text?.trim() || "";
@@ -240,21 +311,29 @@ export async function updateRequest(user: SessionUser, input: { id: number; acti
       if (!can.accept) throw new Error("Bu sorğunu qəbul edə bilməzsiniz.");
       const person = assignee();
       const agreed = dateOnly(input.agreedDueAt) ?? (row.desired_due_at as string | null);
-      await set("status = 'Qəbul edildi', assignee_employee_id = ?, agreed_due_at = ?", person.id, agreed);
-      await logEvent(row.id, user.name, "Sorğu qəbul edildi", `İcraçı: ${person.name}${agreed ? `\nRazılaşdırılmış tarix: ${agreed.split("-").reverse().join(".")}` : ""}`);
+      if (!agreed) throw new Error("Razılaşdırılmış tarixi seçin.");
+      const taskId = await createLinkedTask(row, person.id, agreed);
+      await set("status = 'Qəbul edildi', assignee_employee_id = ?, agreed_due_at = ?, task_id = ?", person.id, agreed, taskId);
+      await logEvent(row.id, user.name, "Sorğu qəbul edildi", `İcraçı: ${person.name} (tapşırıq kimi verildi)\nRazılaşdırılmış tarix: ${agreed.split("-").reverse().join(".")}`);
       return;
     }
     case "reassign": {
       if (!can.reassign) throw new Error("İcraçını dəyişə bilməzsiniz.");
       const person = assignee();
-      await set("assignee_employee_id = ?", person.id);
+      if (row.task_id) {
+        // The old assignee's task is withdrawn and the new assignee starts from a fresh one.
+        await dropLinkedTask(row.task_id);
+        const taskId = await createLinkedTask(row, person.id, String(row.agreed_due_at || row.desired_due_at || now.slice(0, 10)));
+        await set("assignee_employee_id = ?, task_id = ?, status = 'Qəbul edildi'", person.id, taskId);
+      } else await set("assignee_employee_id = ?", person.id);
       await logEvent(row.id, user.name, "İcraçı dəyişdirildi", person.name);
       return;
     }
     case "reject":
       if (!can.reject) throw new Error("Bu sorğunu rədd edə bilməzsiniz.");
       if (!text) throw new Error("İmtinanın səbəbini yazın.");
-      await set("status = 'İmtina edildi', reject_reason = ?, closed_at = ?", text, now);
+      await dropLinkedTask(row.task_id);
+      await set("status = 'İmtina edildi', reject_reason = ?, closed_at = ?, task_id = NULL", text, now);
       await logEvent(row.id, user.name, "Sorğudan imtina edildi", `Səbəb: ${text}`);
       return;
     case "start":
@@ -276,8 +355,18 @@ export async function updateRequest(user: SessionUser, input: { id: number; acti
       if (!can.reopen) throw new Error("Bu sorğunu yenidən aça bilməzsiniz.");
       if (!text) throw new Error("Nəyin çatışmadığını yazın.");
       await set("status = 'İcra olunur'");
+      if (row.task_id) await db().prepare("UPDATE tasks SET status = 'Geri qaytarılıb', evaluation_note = ?, employee_status_changed = 1 WHERE id = ?").bind(`Sorğunu göndərən: ${text}`, row.task_id).run();
       await logEvent(row.id, user.name, "Cavab qəbul edilmədi, sorğu yenidən açıldı", text);
       return;
+    case "evaluate": {
+      if (!can.evaluate) throw new Error("Bu işi hələ qiymətləndirmək olmaz.");
+      const score = Number(input.score);
+      if (!(Number.isInteger(score) && score >= 1 && score <= 10)) throw new Error("Qiymət 1 ilə 10 arasında olmalıdır.");
+      await db().prepare("UPDATE tasks SET status = 'Təsdiqlənib', evaluation = ?, evaluation_note = ?, completed_at = ? WHERE id = ?").bind(score, text || null, now, row.task_id).run();
+      await set("status = status");
+      await logEvent(row.id, user.name, "İcraçının işi qiymətləndirildi ✓", `${score}/10${text ? `\n${text}` : ""}`);
+      return;
+    }
     case "comment":
       if (!can.comment) throw new Error("Bağlanmış sorğuya şərh yazmaq olmaz.");
       if (!text) throw new Error("Şərhi yazın.");

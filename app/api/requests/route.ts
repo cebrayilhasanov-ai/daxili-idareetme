@@ -42,7 +42,7 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request);
     const body = await request.json();
-    await updateRequest(user, { id: Number(body.id), action: String(body.action || ""), assigneeId: body.assigneeId ? Number(body.assigneeId) : undefined, agreedDueAt: body.agreedDueAt, text: body.text });
+    await updateRequest(user, { id: Number(body.id), action: String(body.action || ""), assigneeId: body.assigneeId ? Number(body.assigneeId) : undefined, agreedDueAt: body.agreedDueAt, text: body.text, score: body.score });
     return Response.json({ ...(await listRequests(user)), events: await getRequestEvents(user, Number(body.id)) });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sorğu yenilənmədi." }, { status: 400 }); }
 }
