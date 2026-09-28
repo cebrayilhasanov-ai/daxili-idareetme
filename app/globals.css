@@ -491,3 +491,4 @@ nav button>em+.navcaret{margin-left:6px}
 .incomingdept+.incomingdept{margin-top:6px}.tasktable tr.incomingwaiting td{background:#fff7e8}
 .incomingcustomer{margin-top:4px}.incomingcustomerfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:8px 0}
 .incomingtypehint{display:block;margin-top:4px;color:#0b6b7b;font-size:9px;overflow-wrap:anywhere}
+.templatetable td{padding:6px 8px;line-height:1.3}.templatetable td .folderpath,.templatetable td .filelink{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.templatetable td .filelink small{display:inline;margin:0 0 0 6px}.templatetable td .tableactions{flex-wrap:nowrap}
