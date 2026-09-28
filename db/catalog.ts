@@ -158,7 +158,6 @@ async function ensureSchema() {
     created_by_name TEXT,
     created_at TEXT NOT NULL
   )`).run();
-  if (!outgoingColumns.results.some((column) => column.name === "reply_to_incoming_id")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN reply_to_incoming_id INTEGER").run();
   const personalWorksColumns = await db().prepare("PRAGMA table_info(personal_works)").all<{ name: string }>();
   if (personalWorksColumns.results.length && !personalWorksColumns.results.some((column) => column.name === "user_id")) {
     // Migrate old employee_id-owned personal_works to user_id ownership (so admins, who have no employee record, can own works too).
@@ -1260,8 +1259,7 @@ async function nextOutgoingNumber(column: "outgoing_no" | "incoming_no", company
 export async function getOutgoingDocuments(user: SessionUser) {
   await ensureSchema();
   const scope = await outgoingCompanyScope(user);
-  const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, r.incoming_no AS reply_incoming_no, r.sender_name AS reply_sender_name
-    FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id LEFT JOIN incoming_documents r ON r.id = d.reply_to_incoming_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
+  const rows = (await db().prepare("SELECT d.*, c.name AS company_name FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC").all<Record<string, unknown>>()).results;
   // A file someone moved or renamed by hand inside the folder is flagged instead of silently giving a broken link.
   return rows.filter((row) => !scope || scope.includes(Number(row.company_id))).map((row) => ({
     ...row,
@@ -1270,15 +1268,7 @@ export async function getOutgoingDocuments(user: SessionUser) {
   }));
 }
 
-type OutgoingInput = { companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; replyToIncomingId?: number | null };
-
-// A reply must answer a registered incoming document of the same firm.
-async function checkReplyTarget(companyId: number | null, incomingId: number | null | undefined) {
-  if (!incomingId) return null;
-  const found = await db().prepare("SELECT company_id FROM incoming_documents WHERE id = ?").bind(incomingId).first<{ company_id: number }>();
-  if (!found || (companyId && found.company_id !== companyId)) throw new Error("Cavab verilən daxil olan sənəd bu firmaya aid deyil.");
-  return incomingId;
-}
+type OutgoingInput = { companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string };
 
 async function checkDepartment(companyId: number, department: string | undefined) {
   const value = department?.trim();
@@ -1307,12 +1297,11 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
     if (!isNaN(parsed) && parsed > maxDocNumber) maxDocNumber = parsed;
   }
   const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
-  const replyTo = await checkReplyTarget(companyId, input.replyToIncomingId);
   // Daxil olma No / tarixi are filled when the signed document comes back (saveOutgoingFile), not typed at creation.
   const result = await db().prepare(`INSERT INTO outgoing_documents
-    (company_id, reply_to_incoming_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(companyId, replyTo, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, new Date().toISOString()).run();
+    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, new Date().toISOString()).run();
   return { id: Number(result.meta.last_row_id), outgoingNo };
 }
 
@@ -1325,11 +1314,9 @@ export async function updateOutgoingDocument(input: OutgoingInput & { id: number
   const department = input.sendingDepartment === undefined || input.sendingDepartment === current.sending_department ? current.sending_department
     : companyId ? await checkDepartment(companyId, input.sendingDepartment) : input.sendingDepartment?.trim() || null;
   // Çıxış No and Sənədin Nömrəsi are system-assigned at creation and stay fixed afterwards, so the sequence they guarantee is never broken by an edit.
-  const replyTo = input.replyToIncomingId === undefined ? current.reply_to_incoming_id : await checkReplyTarget(companyId, input.replyToIncomingId);
-  await db().prepare(`UPDATE outgoing_documents SET company_id = ?, reply_to_incoming_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ? WHERE id = ?`)
+  await db().prepare(`UPDATE outgoing_documents SET company_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ? WHERE id = ?`)
     .bind(
       companyId,
-      replyTo ?? null,
       input.outgoingDate ?? current.outgoing_date,
       input.incomingNo ?? current.incoming_no,
       input.incomingDate ?? current.incoming_date,
@@ -1477,8 +1464,8 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
     oldKey: record[`${kind}_key`] ? String(record[`${kind}_key`]) : null,
     missingRuleNote: "Şablonda papka göstərilməyib — sənəd sistemdə saxlanıldı.",
   });
-  // The signed copy coming back is an incoming document: it takes the firm's next Daxil olma No, shared with Daxil Olan Sənədlər.
-  const incomingNo = kind === "final" && !record.incoming_no ? await nextIncomingNumber(Number(record.company_id)) : record.incoming_no;
+  // Daxil olma No of the signed copy: Çıxan Sənədlər' own sequence per firm, separate from Daxil Olan Sənədlər.
+  const incomingNo = kind === "final" && !record.incoming_no ? await nextOutgoingNumber("incoming_no", Number(record.company_id)) : record.incoming_no;
   const incomingDate = kind === "final" && !record.incoming_date ? bakuDateIso() : record.incoming_date;
   await db().prepare(`UPDATE outgoing_documents SET file_base_name = ?, ${kind}_path = ?, ${kind}_key = ?, ${kind}_name = ?, ${kind}_size = ?, ${kind}_type = ?, incoming_no = ?, incoming_date = ? WHERE id = ?`)
     .bind(record.file_base_name || saved.savedBase, saved.path, saved.key, saved.name, input.data.byteLength, input.contentType || "application/octet-stream", incomingNo ?? null, incomingDate ?? null, input.id).run();
@@ -1493,11 +1480,9 @@ export async function readOutgoingFile(user: SessionUser, id: number, kind: "dra
 
 // ---------- Daxil Olan Sənədlər ----------
 
-// One Daxil olma No sequence per firm, shared by registered incoming documents and signed copies returning to Çıxan Sənədlər.
+// Daxil Olan Sənədlər has its own Daxil olma No sequence per firm, independent of Çıxan Sənədlər.
 async function nextIncomingNumber(companyId: number) {
-  const row = await db().prepare(`SELECT MAX(n) AS maxNo FROM (
-    SELECT MAX(CAST(incoming_no AS INTEGER)) AS n FROM incoming_documents WHERE company_id = ?
-    UNION ALL SELECT MAX(CAST(incoming_no AS INTEGER)) FROM outgoing_documents WHERE company_id = ?)`).bind(companyId, companyId).first<{ maxNo: number | null }>();
+  const row = await db().prepare("SELECT MAX(CAST(incoming_no AS INTEGER)) AS maxNo FROM incoming_documents WHERE company_id = ?").bind(companyId).first<{ maxNo: number | null }>();
   return String((row?.maxNo || 0) + 1).padStart(6, "0");
 }
 
@@ -1574,23 +1559,12 @@ export async function getIncomingDocuments(user: SessionUser) {
   await ensureSchema();
   const scope = await incomingScope(user);
   const inScope = (row: Record<string, unknown>) => !scope || scope.includes(Number(row.company_id));
-  const own = (await db().prepare(`SELECT i.*, c.name AS company_name, e.name AS assignee_name, t.status AS task_status,
-      (SELECT group_concat(o.outgoing_no, ', ') FROM outgoing_documents o WHERE o.reply_to_incoming_id = i.id) AS reply_outgoing_nos
+  const items = (await db().prepare(`SELECT i.*, c.name AS company_name, e.name AS assignee_name, t.status AS task_status
     FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id LEFT JOIN employees e ON e.id = i.assignee_employee_id
     LEFT JOIN tasks t ON t.id = i.task_id ORDER BY i.id DESC`).all<Record<string, unknown>>()).results.filter(inScope).map((row) => ({
-    ...row, source: "registered", status: incomingStatus(row),
+    ...row, status: incomingStatus(row),
     file_missing: Boolean(row.file_path && folderStore && !folderStore.exists(String(row.file_path))),
   }));
-  // Signed copies returned to Çıxan Sənədlər are incoming documents as well: they appear here read-only, under the same numbering.
-  const signed = (await db().prepare(`SELECT o.*, c.name AS company_name FROM outgoing_documents o LEFT JOIN companies c ON c.id = o.company_id
-    WHERE o.final_name IS NOT NULL AND o.incoming_no IS NOT NULL ORDER BY o.id DESC`).all<Record<string, unknown>>()).results.filter(inScope).map((o) => ({
-    id: -Number(o.id), source: "signed", outgoing_id: o.id, outgoing_no: o.outgoing_no, company_id: o.company_id, company_name: o.company_name,
-    incoming_no: o.incoming_no, incoming_date: o.incoming_date, sender_voen: o.voen, sender_name: o.organization_name,
-    sender_doc_no: o.document_number, sender_doc_date: o.document_date, document_type: o.document_type ? `${o.document_type} (imzalı qayıdan)` : "İmzalı qayıdan sənəd",
-    receive_method: o.sending_method, summary: `Çıxan sənəd №${o.outgoing_no} imzalanıb qaytarılıb`, file_name: o.final_name, file_size: o.final_size,
-    file_path: o.final_path, file_missing: Boolean(o.final_path && folderStore && !folderStore.exists(String(o.final_path))), status: "Qəbul edildi", created_at: o.created_at,
-  }));
-  const items = [...own, ...signed].sort((a, b) => String(b.incoming_date || "").localeCompare(String(a.incoming_date || "")) || String(b.incoming_no || "").localeCompare(String(a.incoming_no || ""), undefined, { numeric: true }));
   const companyIds = scope ?? (await db().prepare("SELECT id FROM companies WHERE active = 1").all<{ id: number }>()).results.map((c) => c.id);
   const assignees: Array<{ company_id: number; id: number; name: string; department: string | null }> = [];
   for (const companyId of companyIds) for (const person of await assignableEmployees(user, companyId)) assignees.push({ company_id: companyId, ...person });
@@ -1633,7 +1607,6 @@ export async function deleteIncomingDocument(id: number, actorName?: string) {
   // A task not started yet goes with the document; an approved one stays in the executor's history; one in progress blocks the delete.
   if (current.task_id && current.task_status && !["Yeni", "Təsdiqlənib"].includes(current.task_status)) throw new Error("Sənəd icradadır — əvvəlcə tapşırıq bağlanmalıdır.");
   if (current.task_id && current.task_status === "Yeni") await deleteTask(current.task_id, actorName);
-  await db().prepare("UPDATE outgoing_documents SET reply_to_incoming_id = NULL WHERE reply_to_incoming_id = ?").bind(id).run();
   await db().prepare("DELETE FROM incoming_documents WHERE id = ?").bind(id).run();
   // Scans in the server folders are the archive and stay; only a copy kept inside the system goes with the record.
   if (current.file_key && env.FILES) await env.FILES.delete(current.file_key);
@@ -1697,14 +1670,6 @@ export async function readIncomingFile(user: SessionUser, id: number, sectionAll
   const isAssignee = Boolean(user.employeeId && Number(record.assignee_employee_id) === user.employeeId);
   if (!isAssignee && (!sectionAllowed || (scope && !scope.includes(Number(record.company_id))))) throw new Error("FORBIDDEN");
   return loadDocumentFile(record.file_path, record.file_key, record.file_name, record.file_type);
-}
-
-// For linking an outgoing reply: the firm's registered incoming documents, newest first.
-export async function incomingOptions(user: SessionUser) {
-  await ensureSchema();
-  const scope = await incomingScope(user);
-  const rows = (await db().prepare("SELECT id, company_id, incoming_no, incoming_date, sender_name, summary FROM incoming_documents ORDER BY id DESC LIMIT 500").all<Record<string, unknown>>()).results;
-  return rows.filter((row) => !scope || scope.includes(Number(row.company_id)));
 }
 
 const FOREIGN_SUPPLIER = "Xarici təchizatçı";

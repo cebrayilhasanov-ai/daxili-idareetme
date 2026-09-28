@@ -1,4 +1,4 @@
-import { assignIncomingDocument, createIncomingDocument, deleteIncomingDocument, getDocumentStorage, getIncomingDocuments, getIncomingSettings, incomingOptions, setIncomingSettings, updateIncomingDocument } from "@/db/catalog";
+import { assignIncomingDocument, createIncomingDocument, deleteIncomingDocument, getDocumentStorage, getIncomingDocuments, getIncomingSettings, setIncomingSettings, updateIncomingDocument } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -17,13 +17,7 @@ async function listResponse(user: Awaited<ReturnType<typeof requireUser>>) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
-    // Çıxan Sənədlər asks for the list of incoming documents a reply can answer.
-    if (new URL(request.url).searchParams.get("options")) {
-      try { await requireSection(user, "documents.outgoing"); } catch { await requireSection(user, "documents.incoming"); }
-      return Response.json({ items: await incomingOptions(user) });
-    }
-    await requireSection(user, "documents.incoming");
+    const user = await requireSection(await requireUser(request), "documents.incoming");
     return await listResponse(user);
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
