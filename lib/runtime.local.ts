@@ -114,7 +114,7 @@ export const folderStore: FolderStore = {
     const base = path.resolve(root);
     const target = path.resolve(base, folder);
     const rel = path.relative(base, target);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) throw new Error(`Papka kök papkadan (${base}) kənardadır: ${target}`);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) throw new Error(`Şablondakı papka (${target}) icazə verilən kök papkadan (${base}) kənardadır.`);
     return target;
   },
   async saveUnique(dir, baseName, ext, data, ownPath) {

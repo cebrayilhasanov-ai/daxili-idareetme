@@ -37,7 +37,7 @@ type ChecklistLikeItem = { id:number; title:string; done:number; delegated_task_
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
-type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; created_at:string };
+type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
 type OutgoingDocument = { id:number; outgoing_no:string; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
 type WorkRequest = { id:number; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
@@ -153,7 +153,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.37</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.38</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?can("hr.violations"):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1018,6 +1018,8 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [draftFolderPath,setDraftFolderPath]=useState("");
   const [finalFolderPath,setFinalFolderPath]=useState("");
   const [fileNamePattern,setFileNamePattern]=useState("");
+  const [incomingFolderPath,setIncomingFolderPath]=useState("");
+  const [incomingNamePattern,setIncomingNamePattern]=useState("");
   const [storage,setStorage]=useState<{root:string;folderSaving:boolean}|null>(null);
   const [rootDraft,setRootDraft]=useState("");
   const [rootBusy,setRootBusy]=useState(false);
@@ -1030,6 +1032,8 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [editDraftFolderPath,setEditDraftFolderPath]=useState("");
   const [editFinalFolderPath,setEditFinalFolderPath]=useState("");
   const [editFileNamePattern,setEditFileNamePattern]=useState("");
+  const [editIncomingFolderPath,setEditIncomingFolderPath]=useState("");
+  const [editIncomingNamePattern,setEditIncomingNamePattern]=useState("");
   const [editBusy,setEditBusy]=useState(false);
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[]);setStorage(body.storage||null);setRootDraft(body.storage?.root||"")}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
@@ -1045,23 +1049,23 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     if(!name.trim())return;
     setBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={name,draftFolderPath,finalFolderPath,fileNamePattern};
+      const body:Record<string,unknown>={name,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern};
       if(file1){const uploaded=await uploadFile(file1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(file2){const uploaded=await uploadFile(file2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(file3){const uploaded=await uploadFile(file3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
       const response=await fetch("/api/documents",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
-      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setCreating(false);
+      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"")};
+  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"")};
   const cancelEdit=()=>{setEditingId(null);setEditFile1(null);setEditFile2(null);setEditFile3(null)};
   const saveEdit=async(item:DocumentTemplate)=>{
     setEditBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern};
+      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern};
       if(editFile1){const uploaded=await uploadFile(editFile1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(editFile2){const uploaded=await uploadFile(editFile2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(editFile3){const uploaded=await uploadFile(editFile3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
@@ -1102,6 +1106,8 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     {key:"template3",label:"Sənədin şablonu 3",width:220,search:item=>item.template3_name||"Yoxdur",render:item=>templateLink(item.template3_key,item.template3_name,item.template3_size)},
     {key:"draftFolder",label:"İlkin sənəd papkası",width:220,search:item=>item.draft_folder_path||"Qeyd edilməyib",render:item=>item.draft_folder_path?<span className="folderpath" title={item.draft_folder_path}>{item.draft_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
     {key:"finalFolder",label:"Hazır sənəd papkası",width:220,search:item=>item.final_folder_path||"Qeyd edilməyib",render:item=>item.final_folder_path?<span className="folderpath" title={item.final_folder_path}>{item.final_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
+    {key:"incomingFolder",label:"Daxil olan sənəd üçün hazır sənəd papkası",width:230,search:item=>item.incoming_folder_path||"Qeyd edilməyib",render:item=>item.incoming_folder_path?<span className="folderpath" title={item.incoming_folder_path}>{item.incoming_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
+    {key:"incomingNamePattern",label:"Daxil olan sənəd üçün adlanma qaydası",width:230,search:item=>item.incoming_name_pattern||DEFAULT_INCOMING_NAME,render:item=>item.incoming_name_pattern?<span className="folderpath">{item.incoming_name_pattern}</span>:<span className="nodocument" title="Qayda yazılmayıb — standart qayda işlədilir">{DEFAULT_INCOMING_NAME}</span>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
@@ -1117,6 +1123,8 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label>,
     draftFolder:()=><Field key="draftFolder" label="İlkin sənəd papkası" value={draftFolderPath} set={setDraftFolderPath}/>,
     finalFolder:()=><Field key="finalFolder" label="Hazır sənəd papkası" value={finalFolderPath} set={setFinalFolderPath}/>,
+    incomingFolder:()=><Field key="incomingFolder" label="Daxil olan sənəd üçün hazır sənəd papkası" value={incomingFolderPath} set={setIncomingFolderPath}/>,
+    incomingNamePattern:()=><label className="field" key="incomingNamePattern">Daxil olan sənəd üçün adlanma qaydası<Input value={incomingNamePattern} placeholder={DEFAULT_INCOMING_NAME} onChange={e=>setIncomingNamePattern(e.target.value)}/></label>,
   };
   const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
     name:()=><Field key="name" label="Sənədin adı" value={editName} set={setEditName}/>,
@@ -1126,12 +1134,14 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small>Hazırkı: {item.template3_name}</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label>,
     draftFolder:()=><Field key="draftFolder" label="İlkin sənəd papkası" value={editDraftFolderPath} set={setEditDraftFolderPath}/>,
     finalFolder:()=><Field key="finalFolder" label="Hazır sənəd papkası" value={editFinalFolderPath} set={setEditFinalFolderPath}/>,
+    incomingFolder:()=><Field key="incomingFolder" label="Daxil olan sənəd üçün hazır sənəd papkası" value={editIncomingFolderPath} set={setEditIncomingFolderPath}/>,
+    incomingNamePattern:()=><label className="field" key="incomingNamePattern">Daxil olan sənəd üçün adlanma qaydası<Input value={editIncomingNamePattern} placeholder={DEFAULT_INCOMING_NAME} onChange={e=>setEditIncomingNamePattern(e.target.value)}/></label>,
   });
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları (3 versiyada)</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {isAdmin&&storage&&<div className="docstoragebar">
-      <div className="docstoragerow"><label className="field">Sənədlərin kök papkası (serverdə)<Input value={rootDraft} placeholder={storage.folderSaving?"Məsələn: D:\\Sənədlər":"Yalnız öz serverdə işləyəndə"} disabled={!storage.folderSaving} onChange={e=>setRootDraft(e.target.value)}/></label>{storage.folderSaving&&<Button disabled={rootBusy||rootDraft.trim()===storage.root} onClick={()=>void saveRoot()}>{rootBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button>}</div>
-      <p>{!storage.folderSaving?"Proqram hazırda buludda işləyir — sənədlər qaydaya uyğun adla sistemdə saxlanılır. Papkaya yazmaq proqram öz serverdə işləyəndə aktiv olur.":storage.root?"Yüklənən sənədlər qaydaya uyğun adlandırılıb şablondakı papkaya yazılır. Papka yolu kök papkaya nisbətən (məs. {Firma}\\{İl}\\Müqavilə) və ya onun içində tam yol ola bilər.":"Kök papka təyin edilməyib — təyin edilənə qədər sənədlər sistemdə saxlanılır."}</p>
+      <div className="docstoragerow"><label className="field">İcazə verilən kök papka (qorunma)<Input value={rootDraft} placeholder={storage.folderSaving?"Məsələn: D:\\Sənədlər":"Yalnız öz serverdə işləyəndə"} disabled={!storage.folderSaving} onChange={e=>setRootDraft(e.target.value)}/></label>{storage.folderSaving&&<Button disabled={rootBusy||rootDraft.trim()===storage.root} onClick={()=>void saveRoot()}>{rootBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button>}</div>
+      <p>{!storage.folderSaving?"Proqram hazırda buludda işləyir — sənədlər qaydaya uyğun adla sistemdə saxlanılır. Papkaya yazmaq proqram öz serverdə işləyəndə aktiv olur.":storage.root?`Şablonlarda papkanın tam yolunu yazın (məs. ${storage.root}\\{Firma}\\{İl}\\İlkin). Sistem yalnız bu kök papkanın içinə yazır — yol ondan kənara çıxarsa, fayl yazılmır və xəbərdarlıq verilir.`:"Kök papka təyin edilməyib — proqramın yaza biləcəyi sahəni göstərin (məs. D:\\Sənədlər). Təyin edilənə qədər sənədlər sistemdə saxlanılır."}</p>
       <p className="doctokens">Qayda dəyişənləri: {DOCUMENT_TOKENS.map(t=><code key={t}>{"{"+t+"}"}</code>)}</p>
     </div>}
     {creating&&<div className="inlinetaskrow documentrow">{order.map(key=>createFieldRenderers[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
@@ -1143,6 +1153,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   </section>;
 }
 const DEFAULT_FILE_NAME_PATTERN="{ÇıxışNo}_{SənədTipi}_{Təşkilat}_{Tarix}";
+const DEFAULT_INCOMING_NAME="{DaxilOlmaNo}_{Təşkilat}_{Tarix}";
 const DOCUMENT_TOKENS=["ÇıxışNo","DaxilOlmaNo","SənədNo","SənədTipi","Təşkilat","VÖEN","Firma","Şöbə","Tarix","İl","Ay"];
 function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:boolean;companies:Company[];activeCompanyId:number|null}){
   const [items,setItems]=useState<OutgoingDocument[]>([]);
@@ -1327,8 +1338,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const [items,setItems]=useState<IncomingDocument[]>([]);
   const [departments,setDepartments]=useState<IncomingDepartment[]>([]);
   const [directorOf,setDirectorOf]=useState<number[]>([]);
-  const [settings,setSettings]=useState<{folder:string;namePattern:string;folderSaving:boolean}|null>(null);
-  const [settingsDraft,setSettingsDraft]=useState({folder:"",namePattern:""});
+  const [types,setTypes]=useState<Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -1345,10 +1355,10 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   // Sender lookup by VÖEN: "found" fills the name from the customer list, "missing" opens the new-customer card.
   const [voenState,setVoenState]=useState<Record<string,"found"|"missing"|"">>({});
   const [customerForm,setCustomerForm]=useState<Record<string,string>>({});
-  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];settings?:{folder:string;namePattern:string;folderSaving:boolean}})=>{
+  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];types?:Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
     const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);
     onPending(list.filter(i=>i.director_pending&&!i.info_only&&(body.directorOf||[]).includes(i.company_id)).length);
-    if(body.settings){setSettings(body.settings);setSettingsDraft({folder:body.settings.folder,namePattern:body.settings.namePattern})}
+    if(body.types)setTypes(body.types);
   };
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents/incoming");const body=await response.json();if(!response.ok)throw new Error(body.error);apply(body)}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1427,7 +1437,6 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     }catch(e){setError(e instanceof Error?e.message:"Sənəd göndərilmədi.")}
     finally{setBusy(false)}
   };
-  const saveSettings=async()=>{setBusy(true);setError("");try{await send("PATCH",{action:"settings",...settingsDraft})}catch(e){setError(e instanceof Error?e.message:"Qayda yadda saxlanılmadı.")}finally{setBusy(false)}};
   const customerCard=(key:string,values:Record<string,string>,set:(next:Record<string,string>)=>void)=>voenState[key]==="missing"&&<div className="templateusepanel incomingcustomer">
     <b>VÖEN {values.senderVoen} müştəri siyahısında yoxdur — müştəri kartını yaradın</b>
     <div className="incomingcustomerfields">
@@ -1448,7 +1457,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     <label className="field">Göndərən təşkilat<Input value={values.senderName||""} readOnly={fromList||voenState[key]==="missing"} placeholder={voenState[key]==="missing"?"Müştəri kartını yaradın":(values.senderVoen||"").trim()?"VÖEN yoxlanılır...":"VÖEN yoxdursa, adı yazın"} onChange={e=>set({...values,senderName:e.target.value})}/></label>
     <Field label="Sənədin nömrəsi (göndərənin)" value={values.senderDocNo||""} set={v=>set({...values,senderDocNo:v})}/>
     <Field label="Sənədin tarixi (göndərənin)" type="date" value={values.senderDocDate||""} set={v=>set({...values,senderDocDate:v})}/>
-    <label className="field">Sənədin tipi<Input list="incomingTypeOptions" value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/></label>
+    <label className="field">Sənədin tipi<Input list="incomingTypeOptions" value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/>{(()=>{const t=types.find(x=>x.name.trim().toLocaleLowerCase("az-AZ")===(values.documentType||"").trim().toLocaleLowerCase("az-AZ"));return (values.documentType||"").trim()?<small className="incomingtypehint">{t?.incoming_folder_path?`Skan “${t.incoming_name_pattern||DEFAULT_INCOMING_NAME}” adı ilə ${t.incoming_folder_path} papkasına yazılacaq`:t?"Şablonda daxil olan sənəd papkası yoxdur — skan sistemdə saxlanılacaq":"Bu tip üçün şablon yoxdur — skan sistemdə saxlanılacaq"}</small>:null})()}</label>
     <label className="field">Daxil olma yolu<select value={values.receiveMethod||""} onChange={e=>set({...values,receiveMethod:e.target.value})}><option value="">Seçin</option>{RECEIVE_METHODS.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
     <Field label="Qısa məzmun" value={values.summary||""} set={v=>set({...values,summary:v})}/>
     <Field label="Vərəq sayı" value={values.pages||""} set={v=>set({...values,pages:v})}/>
@@ -1496,13 +1505,8 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const canRoute=(item:IncomingDocument)=>!item.locked&&item.status!=="İcra olundu";
   const colSpan=order.length+1;
   return <section className="panel pagepanel directorypanel">
-    <datalist id="incomingTypeOptions">{INCOMING_TYPES.map(t=><option key={t} value={t}/>)}</datalist>
+    <datalist id="incomingTypeOptions">{[...new Set([...types.map(t=>t.name),...INCOMING_TYPES])].map(t=><option key={t} value={t}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Daxil Olan Sənədlər</h2><p>{activeCompanyId?`${companyName(activeCompanyId)} — daxil olan sənədlərin qeydiyyatı`:"Daxil olan sənədlərin qeydiyyatı və icrası"}</p></div>{(isAdmin||companies.length>0)&&<Button onClick={()=>{setCreating(v=>!v);setVoenState(s=>({...s,new:""}))}}><Plus/>Yeni sənəd</Button>}</div>
-    {isAdmin&&settings&&<div className="docstoragebar">
-      <div className="docstoragerow"><label className="field">Skanların papkası (kök papkaya nisbətən)<Input value={settingsDraft.folder} onChange={e=>setSettingsDraft({...settingsDraft,folder:e.target.value})}/></label><label className="field">Fayl adı qaydası<Input value={settingsDraft.namePattern} onChange={e=>setSettingsDraft({...settingsDraft,namePattern:e.target.value})}/></label><Button disabled={busy||(settingsDraft.folder===settings.folder&&settingsDraft.namePattern===settings.namePattern)} onClick={()=>void saveSettings()}>Yadda saxla</Button></div>
-      <p>{settings.folderSaving?"Skan qaydaya uyğun adlandırılıb bu papkaya yazılır. Kök papka Şablonlar bölməsində təyin olunur.":"Proqram hazırda buludda işləyir — skan qaydaya uyğun adla sistemdə saxlanılır."}</p>
-      <p className="doctokens">Dəyişənlər: {["DaxilOlmaNo","Təşkilat","VÖEN","SənədNo","SənədTipi","Firma","Tarix","İl","Ay"].map(t=><code key={t}>{"{"+t+"}"}</code>)}</p>
-    </div>}
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{formFields("new",form,setForm,true)}<label className="field filefield">Sənədin skanı (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Qeydə alınır...":"Qeydə al"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {notice&&<div className="docnotice">{notice}</div>}

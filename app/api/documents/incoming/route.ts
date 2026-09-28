@@ -1,4 +1,4 @@
-import { countIncomingForDirector, createCustomer, createIncomingDocument, deleteIncomingDocument, findCustomerByVoen, getDocumentStorage, getIncomingDocuments, getIncomingSettings, routeIncomingDocument, setIncomingSettings, updateIncomingDocument } from "@/db/catalog";
+import { countIncomingForDirector, createCustomer, createIncomingDocument, deleteIncomingDocument, findCustomerByVoen, getIncomingDocuments, routeIncomingDocument, updateIncomingDocument } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -11,8 +11,7 @@ function authError(error: unknown) {
 }
 
 async function listResponse(user: Awaited<ReturnType<typeof requireUser>>) {
-  const { items, departments, directorOf } = await getIncomingDocuments(user);
-  return Response.json({ items, departments, directorOf, settings: user.role === "admin" ? { ...(await getIncomingSettings()), folderSaving: (await getDocumentStorage()).folderSaving } : undefined });
+  return Response.json(await getIncomingDocuments(user));
 }
 
 export async function GET(request: Request) {
@@ -58,11 +57,6 @@ export async function PATCH(request: Request) {
       return await listResponse(user);
     }
     if (user.role !== "admin") throw new Error("FORBIDDEN");
-    if (body.action === "settings") {
-      await setIncomingSettings({ folder: body.folder, namePattern: body.namePattern });
-      await logAudit(user, "Daxil olan sənədlərin papka qaydası dəyişdirildi", "incoming-document", String(body.folder || "—"));
-      return await listResponse(user);
-    }
     await updateIncomingDocument({ ...body, id: Number(body.id) });
     await logAudit(user, "Daxil olan sənəd yeniləndi", "incoming-document", `#${body.id}`);
     return await listResponse(user);

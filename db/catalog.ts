@@ -121,6 +121,9 @@ async function ensureSchema() {
   // Per-firm documents: the written (draft) and client-signed (final) files, each renamed by the template's rule and stored either
   // in a server folder (*_path) or, where no folder can be written, in the FILES bucket (*_key). file_base_name keeps both stages on one name.
   if (!documentColumns.results.some((column) => column.name === "file_name_pattern")) await db().prepare("ALTER TABLE document_templates ADD COLUMN file_name_pattern TEXT").run();
+  // Daxil Olan Sənədlər of this type: the folder their scan goes to and how it is named.
+  if (!documentColumns.results.some((column) => column.name === "incoming_folder_path")) await db().prepare("ALTER TABLE document_templates ADD COLUMN incoming_folder_path TEXT").run();
+  if (!documentColumns.results.some((column) => column.name === "incoming_name_pattern")) await db().prepare("ALTER TABLE document_templates ADD COLUMN incoming_name_pattern TEXT").run();
   for (const column of ["company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT"]) {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
@@ -1209,21 +1212,21 @@ export async function getDocumentTemplates() {
   return (await db().prepare("SELECT * FROM document_templates ORDER BY name").all()).results;
 }
 
-export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string }) {
+export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Sənədin adını yazın.");
   await db().prepare(`INSERT INTO document_templates
-    (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, new Date().toISOString()).run();
+    (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, input.incomingFolderPath?.trim() || null, input.incomingNamePattern?.trim() || null, new Date().toISOString()).run();
 }
 
-export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string }) {
+export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
-  await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ?, file_name_pattern = ? WHERE id = ?`)
+  await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ?, file_name_pattern = ?, incoming_folder_path = ?, incoming_name_pattern = ? WHERE id = ?`)
     .bind(
       input.name?.trim() || current.name,
       input.template1Key ?? current.template1_key,
@@ -1241,6 +1244,8 @@ export async function updateDocumentTemplate(input: { id: number; name?: string;
       input.draftFolderPath !== undefined ? input.draftFolderPath.trim() || null : current.draft_folder_path,
       input.finalFolderPath !== undefined ? input.finalFolderPath.trim() || null : current.final_folder_path,
       input.fileNamePattern !== undefined ? input.fileNamePattern.trim() || null : current.file_name_pattern,
+      input.incomingFolderPath !== undefined ? input.incomingFolderPath.trim() || null : current.incoming_folder_path,
+      input.incomingNamePattern !== undefined ? input.incomingNamePattern.trim() || null : current.incoming_name_pattern,
       input.id,
     ).run();
 }
@@ -1421,7 +1426,7 @@ function documentValues(record: Record<string, unknown>) {
 
 const BLOCKED_DOCUMENT_EXTENSIONS = /\.(exe|bat|cmd|com|msi|scr|ps1|vbs|vbe|js|jse|wsf|wsh|jar|apk|dll|sh|bin|app|cpl|reg|hta|lnk)$/i;
 
-// Writes an uploaded document under `baseName` into the folder the rule points to (inside the documents root), or — where no
+// Writes an uploaded document under `baseName` into the folder the template gives (a full path that must lie inside the allowed root), or — where no
 // folder can be written — into the FILES bucket. The file it replaces is removed only after the new one is safely written.
 async function storeDocumentFile(input: { baseName: string; fileName: string; contentType: string; data: Uint8Array; folderRule: string; values: Record<string, string>; oldPath: string | null; oldKey: string | null; missingRuleNote: string }) {
   if (BLOCKED_DOCUMENT_EXTENSIONS.test(input.fileName)) throw new Error("Bu fayl növünə icazə verilmir.");
@@ -1442,7 +1447,7 @@ async function storeDocumentFile(input: { baseName: string; fileName: string; co
     name = `${input.baseName}${ext}`;
     key = `${crypto.randomUUID()}-${name.replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
     await env.FILES.put(key, input.data, { httpMetadata: { contentType: input.contentType || "application/octet-stream" }, customMetadata: { originalName: name } });
-    note = !folderStore ? "Sənəd sistemdə saxlanıldı (papkaya yazmaq yalnız öz serverdə işləyir)." : !root ? "Kök papka təyin edilməyib — sənəd sistemdə saxlanıldı." : input.missingRuleNote;
+    note = !folderStore ? "Sənəd sistemdə saxlanıldı (papkaya yazmaq yalnız öz serverdə işləyir)." : !root ? "İcazə verilən kök papka təyin edilməyib (Şablonlar) — sənəd sistemdə saxlanıldı." : input.missingRuleNote;
   }
   if (input.oldPath && input.oldPath !== path && folderStore) await folderStore.remove(input.oldPath);
   if (input.oldKey && env.FILES) await env.FILES.delete(input.oldKey);
@@ -1504,25 +1509,7 @@ async function nextIncomingNumber(companyId: number) {
   return String((row?.maxNo || 0) + 1).padStart(6, "0");
 }
 
-export const DEFAULT_INCOMING_FOLDER = "{Firma}\\{İl}\\Daxil olan";
 export const DEFAULT_INCOMING_NAME = "{DaxilOlmaNo}_{Təşkilat}_{Tarix}";
-
-async function setting(key: string) {
-  return (await db().prepare("SELECT value FROM app_settings WHERE key = ?").bind(key).first<{ value: string | null }>())?.value || "";
-}
-
-export async function getIncomingSettings() {
-  await ensureSchema();
-  return { folder: (await setting("incoming_folder")) || DEFAULT_INCOMING_FOLDER, namePattern: (await setting("incoming_name")) || DEFAULT_INCOMING_NAME };
-}
-
-export async function setIncomingSettings(input: { folder?: string; namePattern?: string }) {
-  await ensureSchema();
-  for (const [key, value] of [["incoming_folder", input.folder], ["incoming_name", input.namePattern]] as const) {
-    if (value === undefined) continue;
-    await db().prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(key, value.trim() || null).run();
-  }
-}
 
 // Workflow (agreed with the admin): Ümumi şöbə — whoever may open Daxil Olan Sənədlər — registers the document and either marks it
 // "Məlumat üçün", sends it straight to one or more departments, or passes it to the director (the head of the top of the firm's
@@ -1611,7 +1598,9 @@ export async function getIncomingDocuments(user: SessionUser) {
   const companyIds = scope ?? (await db().prepare("SELECT id FROM companies WHERE active = 1").all<{ id: number }>()).results.map((c) => c.id);
   const departments = companyIds.flatMap((companyId) => structure.departmentsOf(companyId).map((d) => ({ company_id: companyId, ...d })));
   const directorOf = companyIds.filter((companyId) => user.role === "admin" || Boolean(user.employeeId && structure.directorsOf(companyId).has(user.employeeId)));
-  return { items, departments, directorOf };
+  // Document types from Şablonlar, with where a scan of that type is filed.
+  const types = (await db().prepare("SELECT name, incoming_folder_path, incoming_name_pattern FROM document_templates ORDER BY name").all<{ name: string; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
+  return { items, departments, directorOf, types };
 }
 
 // The director's badge: documents waiting for their decision (for the admin: in every firm).
@@ -1742,12 +1731,15 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
   await ensureSchema();
   const record = await incomingRecord(user, input.id);
   const values = incomingValues(record);
-  const settings = await getIncomingSettings();
-  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(settings.namePattern, values, false)) || `Daxil-olan-${values.DaxilOlmaNo}`;
+  // The folder and naming rule come from the template of the document's type (Şablonlar), like for outgoing documents.
+  const template = record.document_type
+    ? await db().prepare("SELECT incoming_folder_path, incoming_name_pattern FROM document_templates WHERE lower(trim(name)) = lower(trim(?))").bind(String(record.document_type)).first<{ incoming_folder_path: string | null; incoming_name_pattern: string | null }>()
+    : null;
+  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(template?.incoming_name_pattern || DEFAULT_INCOMING_NAME, values, false)) || `Daxil-olan-${values.DaxilOlmaNo}`;
   const saved = await storeDocumentFile({
-    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data, values, folderRule: settings.folder,
+    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data, values, folderRule: template?.incoming_folder_path || "",
     oldPath: record.file_path ? String(record.file_path) : null, oldKey: record.file_key ? String(record.file_key) : null,
-    missingRuleNote: "Daxil olan sənədlər üçün papka göstərilməyib — sənəd sistemdə saxlanıldı.",
+    missingRuleNote: template ? "Şablonda daxil olan sənəd papkası göstərilməyib — sənəd sistemdə saxlanıldı." : "Bu sənəd tipi üçün şablon yoxdur — sənəd sistemdə saxlanıldı.",
   });
   await db().prepare("UPDATE incoming_documents SET file_base_name = ?, file_path = ?, file_key = ?, file_name = ?, file_size = ?, file_type = ? WHERE id = ?")
     .bind(record.file_base_name || saved.savedBase, saved.path, saved.key, saved.name, input.data.byteLength, input.contentType || "application/octet-stream", input.id).run();
