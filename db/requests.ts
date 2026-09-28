@@ -102,6 +102,18 @@ async function loadStructure() {
 
 type Structure = Awaited<ReturnType<typeof loadStructure>>;
 
+// Department lookups for other modules (Daxil Olan Sənədlər): an employee's department in a firm, and the departments they head there.
+export async function companyDepartments() {
+  const structure = await loadStructure();
+  const headedBy = (companyId: number, employeeId: number | null) => {
+    if (!employeeId) return [] as string[];
+    const names: string[] = [];
+    for (const [groupKey, dept] of structure.departments) if (groupKey.startsWith(`${companyId}|`) && dept.heads.has(employeeId)) names.push(groupKey.slice(groupKey.indexOf("|") + 1));
+    return names;
+  };
+  return { departmentOf: structure.departmentOf, headedBy };
+}
+
 // Employees heading at least one department of any company (used to warn the admin before hiding Sorğular from them).
 export async function departmentHeadIds() {
   const structure = await loadStructure();
