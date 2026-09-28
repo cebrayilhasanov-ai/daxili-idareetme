@@ -1,4 +1,4 @@
-import { createDocumentTemplate, deleteDocumentTemplate, getDocumentTemplates, updateDocumentTemplate } from "@/db/catalog";
+import { createDocumentTemplate, deleteDocumentTemplate, getDocumentStorage, getDocumentTemplates, setDocumentRoot, updateDocumentTemplate } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -12,8 +12,10 @@ function authError(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    await requireSection(await requireUser(request), "documents.templates");
-    return Response.json({ items: await getDocumentTemplates() });
+    const user = await requireUser(request);
+    // Çıxan Sənədlər reads the templates too (to offer them while writing), so either section opens the list.
+    try { await requireSection(user, "documents.templates"); } catch { await requireSection(user, "documents.outgoing"); }
+    return Response.json({ items: await getDocumentTemplates(), storage: user.role === "admin" ? await getDocumentStorage() : undefined });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
@@ -31,6 +33,11 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request, "admin");
     const body = await request.json();
+    if (body.action === "storage") {
+      await setDocumentRoot(String(body.root || ""));
+      await logAudit(user, "Sənədlərin kök papkası dəyişdirildi", "document", String(body.root || "—"));
+      return Response.json({ items: await getDocumentTemplates(), storage: await getDocumentStorage() });
+    }
     await updateDocumentTemplate({ ...body, id: Number(body.id) });
     await logAudit(user, "Sənəd şablonu yeniləndi", "document", body.name || `#${body.id}`);
     return Response.json({ items: await getDocumentTemplates() });

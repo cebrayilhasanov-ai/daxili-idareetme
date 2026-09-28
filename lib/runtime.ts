@@ -4,3 +4,5 @@
 // `@/lib/runtime` import to `lib/runtime.local.ts` instead, so this file only
 // needs to satisfy the Cloudflare build.
 export { env } from "cloudflare:workers";
+import type { FolderStore } from "@/lib/folder-store";
+export const folderStore: FolderStore | null = null;

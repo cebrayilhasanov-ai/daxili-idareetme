@@ -477,3 +477,10 @@ nav button>em+.navcaret{margin-left:6px}
 .permissionwarning{padding:9px 12px;border:1px solid #fcd9a5;border-radius:8px;background:#fff7e8;color:#9a5b00;font-size:12px;font-weight:700}
 .tablestatus.awaiting,.detailstatus.awaiting{background:#fff1e0;color:#c2410c}
 .requestscore{color:#16a34a}
+.docstoragebar{margin:0 18px 14px;padding:12px 14px;border:1px solid #cfe3ea;border-radius:10px;background:#f4fbfd}
+.docstoragerow{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px}.docstoragerow .field{flex:1;min-width:240px}
+.docstoragebar p{margin:8px 0 0;color:#475569;font-size:11px}.doctokens code{display:inline-block;margin:3px 4px 0 0;padding:1px 6px;border-radius:5px;background:#e2eef3;color:#0b6b7b;font-size:10px}
+.docnotice{margin:18px 0;padding:11px 16px;border:1px solid #bbe5c8;border-radius:11px;background:#effaf2;color:#15803d;font-size:12px;overflow-wrap:anywhere}
+.docstage{display:flex;flex-direction:column;align-items:flex-start;gap:6px}.docstage .tablestatus{margin-top:0}
+.docfolder{color:#64748b;font-size:9px}.docmissing{color:#dc2626;font-size:10px;font-weight:700}
+.docuploadbtn{display:inline-block;border:1px solid #0C8599;border-radius:7px;background:#fff;color:#0C8599;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer}.docuploadbtn:hover{background:#E3FAFD}.docuploadbtn.disabled{opacity:.55;cursor:default}

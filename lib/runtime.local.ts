@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { FolderStore } from "@/lib/folder-store";
 
 const dataDir = path.join(process.cwd(), "data");
 const filesDir = path.join(dataDir, "files");
@@ -106,4 +107,36 @@ export const env = {
   FILES: filesShim,
   ADMIN_INITIAL_PASSWORD: process.env.ADMIN_INITIAL_PASSWORD,
   AYSUN_INITIAL_PASSWORD: process.env.AYSUN_INITIAL_PASSWORD,
+};
+
+export const folderStore: FolderStore = {
+  resolveDir(root, folder) {
+    const base = path.resolve(root);
+    const target = path.resolve(base, folder);
+    const rel = path.relative(base, target);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) throw new Error(`Papka kök papkadan (${base}) kənardadır: ${target}`);
+    return target;
+  },
+  async saveUnique(dir, baseName, ext, data, ownPath) {
+    mkdirSync(dir, { recursive: true });
+    const own = ownPath ? path.resolve(ownPath).toLowerCase() : null;
+    for (let n = 1; ; n++) {
+      const candidate = path.join(dir, `${baseName}${n > 1 ? ` (${n})` : ""}${ext}`);
+      if (existsSync(candidate) && path.resolve(candidate).toLowerCase() !== own) continue;
+      writeFileSync(candidate, data);
+      return candidate;
+    }
+  },
+  async read(filePath) {
+    return existsSync(filePath) ? new Uint8Array(readFileSync(filePath)) : null;
+  },
+  exists(filePath) {
+    return existsSync(filePath);
+  },
+  async remove(filePath) {
+    if (existsSync(filePath)) unlinkSync(filePath);
+  },
+  baseName(filePath) {
+    return path.basename(filePath);
+  },
 };

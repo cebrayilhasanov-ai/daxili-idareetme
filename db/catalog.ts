@@ -1,4 +1,5 @@
-import { env } from "@/lib/runtime";
+import { env, folderStore } from "@/lib/runtime";
+import type { SessionUser } from "@/lib/auth";
 import { periodWindow } from "@/lib/fixed-periods";
 import { departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { parseHiddenSections } from "@/lib/permissions";
@@ -117,6 +118,13 @@ async function ensureSchema() {
   if (!outgoingColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_name TEXT").run();
   if (!outgoingColumns.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_size INTEGER").run();
   if (!outgoingColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_type TEXT").run();
+  // Per-firm documents: the written (draft) and client-signed (final) files, each renamed by the template's rule and stored either
+  // in a server folder (*_path) or, where no folder can be written, in the FILES bucket (*_key). file_base_name keeps both stages on one name.
+  if (!documentColumns.results.some((column) => column.name === "file_name_pattern")) await db().prepare("ALTER TABLE document_templates ADD COLUMN file_name_pattern TEXT").run();
+  for (const column of ["company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT"]) {
+    if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
+  }
+  await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
   const personalWorksColumns = await db().prepare("PRAGMA table_info(personal_works)").all<{ name: string }>();
   if (personalWorksColumns.results.length && !personalWorksColumns.results.some((column) => column.name === "user_id")) {
     // Migrate old employee_id-owned personal_works to user_id ownership (so admins, who have no employee record, can own works too).
@@ -1138,21 +1146,21 @@ export async function getDocumentTemplates() {
   return (await db().prepare("SELECT * FROM document_templates ORDER BY name").all()).results;
 }
 
-export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string }) {
+export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Sənədin adını yazın.");
   await db().prepare(`INSERT INTO document_templates
-    (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, new Date().toISOString()).run();
+    (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, new Date().toISOString()).run();
 }
 
-export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string }) {
+export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
-  await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ? WHERE id = ?`)
+  await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ?, file_name_pattern = ? WHERE id = ?`)
     .bind(
       input.name?.trim() || current.name,
       input.template1Key ?? current.template1_key,
@@ -1169,6 +1177,7 @@ export async function updateDocumentTemplate(input: { id: number; name?: string;
       input.template3Type ?? current.template3_type,
       input.draftFolderPath !== undefined ? input.draftFolderPath.trim() || null : current.draft_folder_path,
       input.finalFolderPath !== undefined ? input.finalFolderPath.trim() || null : current.final_folder_path,
+      input.fileNamePattern !== undefined ? input.fileNamePattern.trim() || null : current.file_name_pattern,
       input.id,
     ).run();
 }
@@ -1178,43 +1187,95 @@ export async function deleteDocumentTemplate(id: number) {
   await db().prepare("DELETE FROM document_templates WHERE id = ?").bind(id).run();
 }
 
-export async function getOutgoingDocuments() {
-  await ensureSchema();
-  return (await db().prepare("SELECT * FROM outgoing_documents ORDER BY id DESC").all()).results;
+// Documents are kept per firm: an employee only sees and files the outgoing documents of the firms they work in; the admin sees all.
+async function outgoingCompanyScope(user: SessionUser): Promise<number[] | null> {
+  if (user.role === "admin") return null;
+  if (!user.employeeId) return [];
+  return (await db().prepare("SELECT company_id FROM employee_companies WHERE employee_id = ?").bind(user.employeeId).all<{ company_id: number }>()).results.map((row) => row.company_id);
 }
 
-export async function createOutgoingDocument(input: { outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+async function outgoingRecord(user: SessionUser, id: number) {
+  const record = await db().prepare("SELECT d.*, c.name AS company_name FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id WHERE d.id = ?").bind(id).first<Record<string, unknown>>();
+  if (!record) throw new Error("Sənəd tapılmadı.");
+  const scope = await outgoingCompanyScope(user);
+  if (scope && !scope.includes(Number(record.company_id))) throw new Error("FORBIDDEN");
+  return record;
+}
+
+function bakuDateIso() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baku" }).format(new Date());
+}
+
+async function nextOutgoingNumber(column: "outgoing_no" | "incoming_no", companyId: number) {
+  const row = await db().prepare(`SELECT MAX(CAST(${column} AS INTEGER)) AS maxNo FROM outgoing_documents WHERE company_id = ?`).bind(companyId).first<{ maxNo: number | null }>();
+  return String((row?.maxNo || 0) + 1).padStart(6, "0");
+}
+
+export async function getOutgoingDocuments(user: SessionUser) {
   await ensureSchema();
-  // Çıxış No: one continuous sequence for every outgoing document ever created, regardless of type — never resets.
-  const maxOutgoing = await db().prepare("SELECT MAX(CAST(outgoing_no AS INTEGER)) AS maxNo FROM outgoing_documents").first<{ maxNo: number | null }>();
-  const outgoingNo = String((maxOutgoing?.maxNo || 0) + 1).padStart(6, "0");
-  // Sənədin Nömrəsi: its own sequence per document type, starting over at 1 each calendar year, shown as "N/YYYY".
+  const scope = await outgoingCompanyScope(user);
+  const rows = (await db().prepare("SELECT d.*, c.name AS company_name FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC").all<Record<string, unknown>>()).results;
+  // A file someone moved or renamed by hand inside the folder is flagged instead of silently giving a broken link.
+  return rows.filter((row) => !scope || scope.includes(Number(row.company_id))).map((row) => ({
+    ...row,
+    draft_missing: Boolean(row.draft_path && folderStore && !folderStore.exists(String(row.draft_path))),
+    final_missing: Boolean(row.final_path && folderStore && !folderStore.exists(String(row.final_path))),
+  }));
+}
+
+type OutgoingInput = { companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string };
+
+async function checkDepartment(companyId: number, department: string | undefined) {
+  const value = department?.trim();
+  if (!value) return null;
+  const found = await db().prepare("SELECT 1 FROM company_structure_positions WHERE company_id = ? AND department = ?").bind(companyId, value).first();
+  if (!found) throw new Error("Göndərən şöbə bu firmanın strukturunda yoxdur.");
+  return value;
+}
+
+export async function createOutgoingDocument(user: SessionUser, input: OutgoingInput) {
+  await ensureSchema();
+  const companyId = Number(input.companyId);
+  if (!companyId) throw new Error("Firma seçilməyib.");
+  const scope = await outgoingCompanyScope(user);
+  if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
+  const department = await checkDepartment(companyId, input.sendingDepartment);
+  // Çıxış No: one continuous sequence per firm, regardless of type — never resets.
+  const outgoingNo = await nextOutgoingNumber("outgoing_no", companyId);
+  // Sənədin Nömrəsi: its own sequence per firm and document type, starting over at 1 each calendar year, shown as "N/YYYY".
   const year = new Date().getFullYear();
   const docType = input.documentType?.trim() || "";
-  const yearRows = await db().prepare("SELECT document_number FROM outgoing_documents WHERE document_number LIKE ? AND COALESCE(document_type,'') = ?").bind(`%/${year}`, docType).all<{ document_number: string | null }>();
+  const yearRows = await db().prepare("SELECT document_number FROM outgoing_documents WHERE company_id = ? AND document_number LIKE ? AND COALESCE(document_type,'') = ?").bind(companyId, `%/${year}`, docType).all<{ document_number: string | null }>();
   let maxDocNumber = 0;
   for (const row of yearRows.results) {
     const parsed = parseInt(String(row.document_number || "").split("/")[0], 10);
     if (!isNaN(parsed) && parsed > maxDocNumber) maxDocNumber = parsed;
   }
   const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
-  await db().prepare(`INSERT INTO outgoing_documents
-    (outgoing_no, outgoing_date, incoming_no, incoming_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, attachment_key, attachment_name, attachment_size, attachment_type, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(outgoingNo, input.outgoingDate || null, input.incomingNo || null, input.incomingDate || null, input.sendingDepartment || null, input.documentType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, new Date().toISOString()).run();
+  // Daxil olma No / tarixi are filled when the signed document comes back (saveOutgoingFile), not typed at creation.
+  const result = await db().prepare(`INSERT INTO outgoing_documents
+    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, new Date().toISOString()).run();
+  return { id: Number(result.meta.last_row_id), outgoingNo };
 }
 
-export async function updateOutgoingDocument(input: { id: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function updateOutgoingDocument(input: OutgoingInput & { id: number }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM outgoing_documents WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
+  const companyId = input.companyId ? Number(input.companyId) : Number(current.company_id) || null;
+  // A department typed by hand before the structure list existed may stay as it is; a changed one must come from the firm's structure.
+  const department = input.sendingDepartment === undefined || input.sendingDepartment === current.sending_department ? current.sending_department
+    : companyId ? await checkDepartment(companyId, input.sendingDepartment) : input.sendingDepartment?.trim() || null;
   // Çıxış No and Sənədin Nömrəsi are system-assigned at creation and stay fixed afterwards, so the sequence they guarantee is never broken by an edit.
-  await db().prepare(`UPDATE outgoing_documents SET outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?`)
+  await db().prepare(`UPDATE outgoing_documents SET company_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ? WHERE id = ?`)
     .bind(
+      companyId,
       input.outgoingDate ?? current.outgoing_date,
       input.incomingNo ?? current.incoming_no,
       input.incomingDate ?? current.incoming_date,
-      input.sendingDepartment ?? current.sending_department,
+      department,
       input.documentType ?? current.document_type,
       input.sendingMethod ?? current.sending_method,
       input.deliveredBy ?? current.delivered_by,
@@ -1224,17 +1285,137 @@ export async function updateOutgoingDocument(input: { id: number; outgoingDate?:
       input.organizationName ?? current.organization_name,
       input.phone ?? current.phone,
       input.note ?? current.note,
-      input.attachmentKey ?? current.attachment_key,
-      input.attachmentName ?? current.attachment_name,
-      input.attachmentSize ?? current.attachment_size,
-      input.attachmentType ?? current.attachment_type,
       input.id,
     ).run();
 }
 
 export async function deleteOutgoingDocument(id: number) {
   await ensureSchema();
+  const current = await db().prepare("SELECT draft_key, final_key FROM outgoing_documents WHERE id = ?").bind(id).first<{ draft_key: string | null; final_key: string | null }>();
   await db().prepare("DELETE FROM outgoing_documents WHERE id = ?").bind(id).run();
+  // Files in the server folders are the archive and stay; only copies kept inside the system go with the record.
+  for (const key of [current?.draft_key, current?.final_key]) if (key && env.FILES) await env.FILES.delete(key);
+}
+
+const DOCUMENTS_ROOT_KEY = "documents_root";
+
+export async function getDocumentStorage() {
+  await ensureSchema();
+  const row = await db().prepare("SELECT value FROM app_settings WHERE key = ?").bind(DOCUMENTS_ROOT_KEY).first<{ value: string | null }>();
+  return { root: row?.value || "", folderSaving: Boolean(folderStore) };
+}
+
+export async function setDocumentRoot(value: string) {
+  await ensureSchema();
+  const root = value.trim();
+  if (root && !folderStore) throw new Error("Papkaya yazmaq yalnız proqram öz serverdə işləyəndə mümkündür.");
+  await db().prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(DOCUMENTS_ROOT_KEY, root || null).run();
+}
+
+export const DEFAULT_FILE_NAME_PATTERN = "{ÇıxışNo}_{SənədTipi}_{Təşkilat}_{Tarix}";
+
+// "{Çıxış No}", "{cixisno}" and "{ÇIXIŞNO}" all mean the same token, so a template rule survives typing on any keyboard.
+function tokenKey(name: string) {
+  const map: Record<string, string> = { ç: "c", ı: "i", ə: "e", ğ: "g", ö: "o", ş: "s", ü: "u" };
+  return name.toLocaleLowerCase("az-AZ").replace(/[çıəğöşü]/g, (ch) => map[ch]).replace(/[^a-z0-9]/g, "");
+}
+
+// Characters Windows refuses in file and folder names.
+function cleanPart(value: string) {
+  return value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim();
+}
+
+function fillPattern(pattern: string, values: Record<string, string>, keepSeparators: boolean) {
+  const byKey = Object.fromEntries(Object.entries(values).map(([name, value]) => [tokenKey(name), cleanPart(value)]));
+  return pattern.split(/(\{[^{}]+\})/).map((part) => {
+    const token = part.match(/^\{([^{}]+)\}$/);
+    if (token) return byKey[tokenKey(token[1])] ?? part;
+    return keepSeparators ? part.replace(/[*?"<>|\u0000-\u001f]/g, "-") : cleanPart(part);
+  }).join("");
+}
+
+function tidyName(name: string) {
+  return name.replace(/([_\-. ])\1+/g, "$1").replace(/_[-. ]+|[-. ]+_/g, "_").replace(/^[_\-. ]+|[_\-. ]+$/g, "").slice(0, 150).replace(/[. ]+$/, "");
+}
+
+function documentValues(record: Record<string, unknown>) {
+  const text = (value: unknown) => (value === null || value === undefined ? "" : String(value));
+  const date = text(record.document_date) || text(record.outgoing_date) || bakuDateIso();
+  return {
+    ÇıxışNo: text(record.outgoing_no),
+    DaxilOlmaNo: text(record.incoming_no),
+    SənədNo: text(record.document_number),
+    SənədTipi: text(record.document_type),
+    Təşkilat: text(record.organization_name),
+    VÖEN: text(record.voen),
+    Firma: text(record.company_name),
+    Şöbə: text(record.sending_department),
+    Tarix: date.slice(0, 10),
+    İl: date.slice(0, 4),
+    Ay: date.slice(5, 7),
+  };
+}
+
+const BLOCKED_DOCUMENT_EXTENSIONS = /\.(exe|bat|cmd|com|msi|scr|ps1|vbs|vbe|js|jse|wsf|wsh|jar|apk|dll|sh|bin|app|cpl|reg|hta|lnk)$/i;
+
+export async function saveOutgoingFile(user: SessionUser, input: { id: number; kind: "draft" | "final"; fileName: string; contentType: string; data: Uint8Array }) {
+  await ensureSchema();
+  if (BLOCKED_DOCUMENT_EXTENSIONS.test(input.fileName)) throw new Error("Bu fayl növünə icazə verilmir.");
+  const record = await outgoingRecord(user, input.id);
+  if (!record.company_id) throw new Error("Əvvəlcə sənədin firmasını seçin (Redaktə et).");
+  const kind = input.kind;
+  const values = documentValues(record);
+  const template = record.document_type
+    ? await db().prepare("SELECT * FROM document_templates WHERE lower(trim(name)) = lower(trim(?))").bind(String(record.document_type)).first<Record<string, unknown>>()
+    : null;
+  // The name is worked out once, on the first upload, and reused for the signed copy — so the Word file and the signed file always match.
+  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(String(template?.file_name_pattern || DEFAULT_FILE_NAME_PATTERN), values, false)) || `Sənəd-${values.ÇıxışNo}`;
+  const extMatch = input.fileName.match(/\.[A-Za-z0-9]{1,10}$/);
+  const ext = extMatch ? extMatch[0].toLowerCase() : "";
+  const oldPath = record[`${kind}_path`] ? String(record[`${kind}_path`]) : null;
+  const oldKey = record[`${kind}_key`] ? String(record[`${kind}_key`]) : null;
+  const { root } = await getDocumentStorage();
+  const folderRule = String(template?.[kind === "draft" ? "draft_folder_path" : "final_folder_path"] || "").trim();
+  let savedPath: string | null = null;
+  let savedKey: string | null = null;
+  let savedName: string;
+  let note = "";
+  if (folderStore && root && folderRule) {
+    const dir = folderStore.resolveDir(root, fillPattern(folderRule, values, true));
+    savedPath = await folderStore.saveUnique(dir, baseName, ext, input.data, oldPath);
+    savedName = folderStore.baseName(savedPath);
+  } else {
+    if (!env.FILES) throw new Error("Fayl saxlama aktiv deyil.");
+    savedName = `${baseName}${ext}`;
+    savedKey = `${crypto.randomUUID()}-${savedName.replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
+    await env.FILES.put(savedKey, input.data, { httpMetadata: { contentType: input.contentType || "application/octet-stream" }, customMetadata: { originalName: savedName } });
+    note = !folderStore ? "Sənəd sistemdə saxlanıldı (papkaya yazmaq yalnız öz serverdə işləyir)." : !root ? "Kök papka təyin edilməyib — sənəd sistemdə saxlanıldı." : "Şablonda papka göstərilməyib — sənəd sistemdə saxlanıldı.";
+  }
+  // One copy only: the previous file of this stage is removed once the new one is safely written.
+  if (oldPath && oldPath !== savedPath && folderStore) await folderStore.remove(oldPath);
+  if (oldKey && env.FILES) await env.FILES.delete(oldKey);
+  const incomingNo = kind === "final" && !record.incoming_no ? await nextOutgoingNumber("incoming_no", Number(record.company_id)) : record.incoming_no;
+  const incomingDate = kind === "final" && !record.incoming_date ? bakuDateIso() : record.incoming_date;
+  await db().prepare(`UPDATE outgoing_documents SET file_base_name = ?, ${kind}_path = ?, ${kind}_key = ?, ${kind}_name = ?, ${kind}_size = ?, ${kind}_type = ?, incoming_no = ?, incoming_date = ? WHERE id = ?`)
+    // The first saved name (with any " (2)" it got) becomes the record's name, so the signed copy later gets exactly the same one.
+    .bind(record.file_base_name || (ext && savedName.endsWith(ext) ? savedName.slice(0, -ext.length) : savedName), savedPath, savedKey, savedName, input.data.byteLength, input.contentType || "application/octet-stream", incomingNo ?? null, incomingDate ?? null, input.id).run();
+  return { name: savedName, path: savedPath, note };
+}
+
+export async function readOutgoingFile(user: SessionUser, id: number, kind: "draft" | "final") {
+  await ensureSchema();
+  const record = await outgoingRecord(user, id);
+  const name = String(record[`${kind}_name`] || "sened");
+  const type = String(record[`${kind}_type`] || "application/octet-stream");
+  if (record[`${kind}_path`]) {
+    const data = folderStore ? await folderStore.read(String(record[`${kind}_path`])) : null;
+    return data ? { data, name, type } : null;
+  }
+  if (record[`${kind}_key`] && env.FILES) {
+    const object = await env.FILES.get(String(record[`${kind}_key`]));
+    return object ? { data: new Uint8Array(await new Response(object.body).arrayBuffer()), name, type } : null;
+  }
+  return null;
 }
 
 const FOREIGN_SUPPLIER = "Xarici təchizatçı";
