@@ -150,7 +150,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.35</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.36</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?can("hr.violations"):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1286,7 +1286,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
     {key:"note",label:"Əlavə Qeydlər",width:180,search:item=>item.note||"",render:item=><>{item.note||"—"}</>},
     {key:"draft",label:"İlkin sənəd (Word)",width:210,search:item=>item.draft_name||item.attachment_name||"Yoxdur",render:item=><div className="docstage">
       {stageFile(item,"draft")||(item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer" title="Köhnə qaydada əlavə olunub">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yüklənməyib</span>)}
-      {uploadButton(item,"draft",item.draft_name?"Yenisini yüklə":"Sənədi yüklə")}
+      {uploadButton(item,"draft",item.draft_name?"Yenisini yüklə":"Sənədi sistemə yüklə")}
     </div>},
     {key:"final",label:"Hazır sənəd (imzalı)",width:210,search:item=>item.final_name||"İmza gözləyir",render:item=><div className="docstage">
       {stageFile(item,"final")||<span className="tablestatus review">İmza gözləyir</span>}
