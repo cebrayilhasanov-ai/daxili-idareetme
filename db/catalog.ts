@@ -273,6 +273,17 @@ async function ensureSchema() {
       await db().prepare("INSERT OR IGNORE INTO app_flags (key, created_at) VALUES (?, ?)").bind(copyFlag, now).run();
     }
   }
+  // One-time (requested by the admin): outgoing documents registered before documents became per-firm belong to Arsenal.
+  const outgoingFirmFlag = "outgoing-documents-to-arsenal-v1";
+  if (!(await db().prepare("SELECT 1 FROM app_flags WHERE key = ?").bind(outgoingFirmFlag).first())) {
+    const normalize = (name: string) => name.trim().replace(/\s+mmc$/i, "").toLocaleLowerCase("az");
+    const allCompanies = (await db().prepare("SELECT id, name FROM companies").all<{ id: number; name: string }>()).results;
+    const arsenal = allCompanies.find((company) => normalize(company.name) === normalize("Arsenal Construction and Engineering"));
+    if (arsenal) {
+      await db().prepare("UPDATE outgoing_documents SET company_id = ? WHERE company_id IS NULL").bind(arsenal.id).run();
+      await db().prepare("INSERT OR IGNORE INTO app_flags (key, created_at) VALUES (?, ?)").bind(outgoingFirmFlag, new Date().toISOString()).run();
+    }
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_definitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     title TEXT NOT NULL,
