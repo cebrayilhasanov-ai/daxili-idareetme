@@ -492,3 +492,13 @@ nav button>em+.navcaret{margin-left:6px}
 .incomingcustomer{margin-top:4px}.incomingcustomerfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:8px 0}
 .incomingtypehint{display:block;margin-top:4px;color:#0b6b7b;font-size:9px;overflow-wrap:anywhere}
 .templatetable td{padding:6px 8px;line-height:1.3}.templatetable td .folderpath,.templatetable td .filelink{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.templatetable td .filelink small{display:inline;margin:0 0 0 6px}.templatetable td .tableactions{flex-wrap:nowrap}
+/* Çıxan / Daxil Olan Sənədlər: compact rows — secondary lines sit beside the value, the folder path moves into the link's tooltip. */
+.compacttable td{padding:5px 8px;line-height:1.25}
+.compacttable td .requestsub,.compacttable td .latedays{display:inline;margin:0 0 0 6px}
+.compacttable td .tablestatus{margin-top:0;padding:2px 7px}
+.compacttable .docstage{flex-direction:row;flex-wrap:wrap;align-items:center;gap:3px 8px}
+.compacttable .docfolder{display:none}
+.compacttable td .filelink{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.compacttable td .filelink small{display:inline;margin:0 0 0 6px}
+.compacttable .docuploadbtn{padding:2px 7px;font-size:9px}
+.compacttable .incomingdept{display:inline}.compacttable .incomingdept+.incomingdept{margin:0 0 0 8px}
+.compacttable td .tableactions{gap:4px}.compacttable td .tableactions button{padding:4px 7px}
