@@ -1,4 +1,4 @@
-import { assignIncomingDocument, createIncomingDocument, deleteIncomingDocument, getDocumentStorage, getIncomingDocuments, getIncomingSettings, setIncomingSettings, updateIncomingDocument } from "@/db/catalog";
+import { countIncomingForDirector, createCustomer, createIncomingDocument, deleteIncomingDocument, findCustomerByVoen, getDocumentStorage, getIncomingDocuments, getIncomingSettings, routeIncomingDocument, setIncomingSettings, updateIncomingDocument } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -11,22 +11,33 @@ function authError(error: unknown) {
 }
 
 async function listResponse(user: Awaited<ReturnType<typeof requireUser>>) {
-  const { items, assignees } = await getIncomingDocuments(user);
-  return Response.json({ items, assignees, settings: user.role === "admin" ? { ...(await getIncomingSettings()), folderSaving: (await getDocumentStorage()).folderSaving } : undefined });
+  const { items, departments, directorOf } = await getIncomingDocuments(user);
+  return Response.json({ items, departments, directorOf, settings: user.role === "admin" ? { ...(await getIncomingSettings()), folderSaving: (await getDocumentStorage()).folderSaving } : undefined });
 }
 
 export async function GET(request: Request) {
   try {
+    const params = new URL(request.url).searchParams;
     const user = await requireSection(await requireUser(request), "documents.incoming");
+    // The menu badge: documents waiting for this director's decision.
+    if (params.get("summary")) return Response.json({ pending: await countIncomingForDirector(user) });
+    if (params.has("voen")) return Response.json({ customer: await findCustomerByVoen(String(params.get("voen"))) });
     return await listResponse(user);
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
-// Anyone who may open Daxil Olan Sənədlər registers documents for their own firms; editing and deleting stay with the admin.
+// Anyone who may open Daxil Olan Sənədlər (Ümumi şöbə) registers and routes documents for their own firms; editing and deleting stay with the admin.
 export async function POST(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "documents.incoming");
     const body = await request.json();
+    // A sender whose VÖEN is not in the customer list gets its card created right from the registration form.
+    if (body.action === "customer") {
+      const customer = body.customer || {};
+      await createCustomer(customer);
+      await logAudit(user, "Müştəri yaradıldı", "customer", String(customer.name || ""));
+      return Response.json({ customer: await findCustomerByVoen(String(customer.voen || "")) });
+    }
     const created = await createIncomingDocument(user, { ...body, companyId: Number(body.companyId) });
     await logAudit(user, "Daxil olan sənəd qeydə alındı", "incoming-document", `#${created.incomingNo} ${body.senderName || ""}`.trim());
     const response = await listResponse(user);
@@ -34,13 +45,16 @@ export async function POST(request: Request) {
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd qeydə alınmadı." }, { status: 400 }); }
 }
 
+const ROUTE_LOG: Record<string, string> = { director: "Daxil olan sənəd rəhbərə göndərildi", info: "Daxil olan sənəd məlumat üçün qeyd edildi", departments: "Daxil olan sənəd şöbələrə icraya göndərildi" };
+
 export async function PATCH(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "documents.incoming");
     const body = await request.json();
-    if (body.action === "assign") {
-      await assignIncomingDocument(user, { id: Number(body.id), assigneeId: Number(body.assigneeId) || undefined, dueDate: body.dueDate || undefined, resolution: body.resolution, infoOnly: Boolean(body.infoOnly) });
-      await logAudit(user, body.infoOnly ? "Daxil olan sənəd məlumat üçün qeyd edildi" : "Daxil olan sənəd icraya verildi", "incoming-document", `#${body.id}`);
+    if (body.action === "route") {
+      const route = body.route === "director" || body.route === "info" ? body.route : "departments";
+      await routeIncomingDocument(user, { id: Number(body.id), action: route, departments: Array.isArray(body.departments) ? body.departments.map(String) : [], dueDate: body.dueDate || undefined, resolution: body.resolution });
+      await logAudit(user, ROUTE_LOG[route], "incoming-document", `#${body.id}${route === "departments" ? ` → ${(body.departments || []).join(", ")}` : ""}`);
       return await listResponse(user);
     }
     if (user.role !== "admin") throw new Error("FORBIDDEN");

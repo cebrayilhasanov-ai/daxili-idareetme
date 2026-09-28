@@ -111,7 +111,19 @@ export async function companyDepartments() {
     for (const [groupKey, dept] of structure.departments) if (groupKey.startsWith(`${companyId}|`) && dept.heads.has(employeeId)) names.push(groupKey.slice(groupKey.indexOf("|") + 1));
     return names;
   };
-  return { departmentOf: structure.departmentOf, headedBy };
+  // Every department of the firm with the people heading it (empty when the head position is vacant and nobody stands in).
+  const departmentsOf = (companyId: number) => [...structure.departments.entries()]
+    .filter(([groupKey]) => groupKey.startsWith(`${companyId}|`))
+    .map(([groupKey, dept]) => ({ name: groupKey.slice(groupKey.indexOf("|") + 1), heads: dept.members.filter((m) => dept.heads.has(m.id)).map((m) => ({ id: m.id, name: m.name })) }));
+  // The firm's director: the head of the department holding the top of the structure (a position reporting to nobody) —
+  // "Baş direktor" in Rəhbərlik, or whoever stands in for it when vacant.
+  const directorsOf = (companyId: number) => {
+    const topDepartments = new Set<string>(structure.positions.filter((p: Position) => p.company_id === companyId && !(p.reports_to || "").trim()).map((p: Position) => p.department.trim()));
+    const ids = new Set<number>();
+    for (const name of topDepartments) structure.departments.get(structure.key(companyId, name))?.heads.forEach((id) => ids.add(id));
+    return ids;
+  };
+  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf };
 }
 
 // Employees heading at least one department of any company (used to warn the admin before hiding Sorğular from them).
