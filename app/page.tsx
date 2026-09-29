@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDownAZ, ArrowDownZA, Bell, Briefcase, ChevronDown, Funnel, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -160,7 +160,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.43</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.44</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -2033,8 +2033,8 @@ function useColumnDrag(moveColumn:(key:string,targetKey:string)=>void){
   });
   return {dragProps};
 }
-function SortableTh({resize,drag,className,children}:{resize:{onMouseMove:(e:React.MouseEvent<HTMLElement>)=>void;onMouseLeave:()=>void;onMouseDown:(e:React.MouseEvent<HTMLElement>)=>void;className?:string};drag:{draggable:boolean;onDragStart:(e:React.DragEvent)=>void;onDragEnd:()=>void;onDragOver:(e:React.DragEvent)=>void;onDragLeave:()=>void;onDrop:(e:React.DragEvent)=>void;className?:string};className?:string;children:React.ReactNode}){
-  return <th draggable={drag.draggable} onDragStart={drag.onDragStart} onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragLeave={drag.onDragLeave} onDrop={drag.onDrop} onMouseMove={resize.onMouseMove} onMouseLeave={resize.onMouseLeave} onMouseDown={resize.onMouseDown} className={joinClass(resize.className,drag.className,className)}>{children}</th>;
+function SortableTh({resize,drag,className,children}:{resize:{onMouseMove:(e:React.MouseEvent<HTMLElement>)=>void;onMouseLeave:()=>void;onMouseDown:(e:React.MouseEvent<HTMLElement>)=>void;onDoubleClick:(e:React.MouseEvent<HTMLElement>)=>void;className?:string};drag:{draggable:boolean;onDragStart:(e:React.DragEvent)=>void;onDragEnd:()=>void;onDragOver:(e:React.DragEvent)=>void;onDragLeave:()=>void;onDrop:(e:React.DragEvent)=>void;className?:string};className?:string;children:React.ReactNode}){
+  return <th draggable={drag.draggable} onDragStart={drag.onDragStart} onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragLeave={drag.onDragLeave} onDrop={drag.onDrop} onMouseMove={resize.onMouseMove} onMouseLeave={resize.onMouseLeave} onMouseDown={resize.onMouseDown} onDoubleClick={resize.onDoubleClick} className={joinClass(resize.className,drag.className,className)}>{children}</th>;
 }
 function useEdgeResize(onResize:(key:string,width:number)=>void,min=60){
   const [hoverKey,setHoverKey]=useState<string|null>(null);
@@ -2054,11 +2054,69 @@ function useEdgeResize(onResize:(key:string,width:number)=>void,min=60){
       window.addEventListener("mousemove",onMove);
       window.addEventListener("mouseup",onUp);
     },
+    // Double-click on the edge fits the column to its longest text, like Excel; the width is kept as the user's own.
+    onDoubleClick:(e:React.MouseEvent<HTMLElement>)=>{
+      if(!near(e))return;
+      e.preventDefault();e.stopPropagation();
+      const th=e.currentTarget as HTMLTableCellElement;
+      const table=th.closest("table");
+      const width=table?measureColumns(table)[th.cellIndex]:0;
+      if(width)onResize(key,Math.min(MANUAL_FIT_MAX,Math.max(min,width)));
+    },
     className:hoverKey===key?"edgeresizing":undefined,
   });
 }
+// Excel-like column widths. Text in every cell wraps and the row grows with it; a column the user has not resized yet is
+// fitted to its longest one-line content the first time the table has rows (capped, so long notes still wrap), so rows start
+// one line high. The table is exactly as wide as its columns (never narrower than its box), so narrowing a column really narrows it.
+const AUTO_FIT_MAX=350;
+const MANUAL_FIT_MAX=800;
+// Natural one-line width of every column, measured by letting the browser lay the table out unwrapped for a moment (see .colmeasure).
+function measureColumns(table:HTMLTableElement):number[]{
+  const header=table.tHead?.rows[0];
+  if(!header)return [];
+  table.classList.add("colmeasure");
+  const widths=Array.from(header.cells).map(cell=>Math.ceil(cell.getBoundingClientRect().width));
+  table.classList.remove("colmeasure");
+  return widths;
+}
 function ColGroup({order,defaultWidths,widths,extraKeys=[]}:{order:string[];defaultWidths:Record<string,number>;widths:Record<string,number>;extraKeys?:string[]}){
-  return <colgroup>{order.map(key=><col key={key} style={{width:widths[key]||defaultWidths[key]}}/>)}{extraKeys.map(key=><col key={key} style={{width:widths[key]||defaultWidths[key]||140}}/>)}</colgroup>;
+  const ref=useRef<HTMLTableColElement>(null);
+  const [fitted,setFitted]=useState<Record<string,number>|null>(null);
+  const [box,setBox]=useState(0);
+  const keys=[...order,...extraKeys];
+  // Runs after every render until the table first has rows to measure, then never again (no dependency list on purpose).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(()=>{
+    if(fitted)return;
+    const table=ref.current?.parentElement;
+    // Phones show the table as cards, where column widths do not apply.
+    if(!(table instanceof HTMLTableElement)||!table.tBodies[0]?.rows.length||window.matchMedia("(max-width:700px)").matches)return;
+    const measured=measureColumns(table);
+    setFitted(Object.fromEntries(keys.map((key,i)=>[key,Math.min(AUTO_FIT_MAX,Math.max(60,measured[i]||0))])));
+  });
+  // The width of the box the table sits in, so a table narrower than its box can be widened to fill it.
+  useLayoutEffect(()=>{
+    const host=ref.current?.parentElement?.parentElement;
+    if(!host)return;
+    const read=()=>{const style=getComputedStyle(host);setBox(host.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight))};
+    read();
+    const observer=new ResizeObserver(read);
+    observer.observe(host);
+    return ()=>observer.disconnect();
+  },[]);
+  const base=(key:string)=>widths[key]||fitted?.[key]||defaultWidths[key]||140;
+  const sum=keys.reduce((total,key)=>total+base(key),0);
+  // Spare room goes only to the long-text columns that hit the fit cap (else to the last column), never spread over all of them,
+  // so narrowing any other column really narrows it. Columns the user sized keep exactly their width.
+  const capped=order.filter(key=>!widths[key]&&(fitted?.[key]||0)>=AUTO_FIT_MAX);
+  const lastFree=[...order].reverse().find(key=>!widths[key]);
+  const takers=capped.length?capped:lastFree?[lastFree]:[];
+  const spare=takers.length?Math.max(0,Math.floor(box-sum)):0;
+  const width=(key:string)=>base(key)+(takers.includes(key)?Math.floor(spare/takers.length):0);
+  const total=keys.reduce((all,key)=>all+width(key),0);
+  useLayoutEffect(()=>{const table=ref.current?.parentElement;table?.style.setProperty("width",`${total}px`)},[total]);
+  return <colgroup ref={ref}>{keys.map(key=><col key={key} style={{width:width(key)}}/>)}</colgroup>;
 }
 function joinClass(...parts:Array<string|undefined>){return parts.filter(Boolean).join(" ")||undefined}
 function ActionsHeader({hasSearch=false}:{hasSearch?:boolean}){return <>{hasSearch&&<input aria-hidden="true" tabIndex={-1} readOnly value="" style={{visibility:"hidden"}}/>}<span>Əməliyyat</span></>}

@@ -568,3 +568,27 @@ nav button>em+.navcaret{margin-left:6px}
 .steprequestactions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.steprequestactions button{height:32px;font-size:11px}
 .steprequestform label{display:grid;gap:4px;font-size:10px;font-weight:700;color:#334155}.steprequestform select,.steprequestform input{height:36px;border:1px solid #d6c79f;border-radius:7px;background:#fff;padding:0 9px}
 .requestorigin{display:block;margin-top:2px;color:#0b6b7b;font-size:10px;font-weight:600}
+/* Excel-like rows (Versiya 2.44): every cell wraps its text and the row takes the height of its tallest cell; rows start one
+   line high because controls are line-sized and secondary info sits beside the value. Column widths come from ColGroup. */
+@media(min-width:701px){
+.tasktable{min-width:0!important}
+.tasktable td{padding:5px 8px;line-height:1.35;overflow-wrap:anywhere;vertical-align:top}
+.tasktable time{display:inline;white-space:normal}
+.tasktable td .requestsub,.tasktable td .latedays,.tasktable td .filelink small,.tasktable td .hrsub{display:inline;margin:0 0 0 6px}
+.tasktable td .folderpath,.tasktable td .filelink{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere}
+.tasktable td .tableactions{flex-wrap:wrap!important;gap:4px}
+.tasktable td :is(.openbtn,.editcompanybtn,.deletetaskbtn,.evaluatebtn,.docuploadbtn,.delegatebtn,.viewasbtn){height:auto;min-height:0;padding:2px 9px;line-height:1.35;font-size:10px}
+.tasktable td .tablestatus{margin-top:0;padding:1px 7px;line-height:1.35}
+.tasktable td select{margin-top:0;padding:1px 5px;height:auto}
+.tasktable td .pill{padding:1px 8px}
+.tasktable .excelhead .excellabel{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word}
+/* Measuring mode (measureColumns): for an instant the table is laid out unwrapped at its natural width; headers only
+   claim their longest word, so a long title wraps instead of widening its column. */
+.tasktable.colmeasure{table-layout:auto!important;width:max-content!important;min-width:0!important}
+.tasktable.colmeasure col{width:auto!important}
+.tasktable.colmeasure td,.tasktable.colmeasure td *{white-space:nowrap!important}
+.tasktable.colmeasure td .tableactions{flex-wrap:nowrap!important}
+.tasktable.colmeasure td[colspan]{display:none}
+.tasktable.colmeasure th input{display:none}
+.tasktable.colmeasure .excelhead .excellabel{flex:none;width:min-content}
+}
