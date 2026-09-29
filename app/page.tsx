@@ -40,8 +40,8 @@ type ChecklistLikeItem = StepRequest & { id:number; title:string; done:number; d
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
-type DocumentTemplate = { id:number; name:string; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
-type OutgoingDocument = { id:number; outgoing_no:string; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
+type DocumentTemplate = { id:number; name:string; signed_copy_returns?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
+type OutgoingDocument = { id:number; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
 type WorkRequest = { id:number; origin_work_title?:string|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
 type ChatData = { threads:ChatThread[]; users:ChatUser[]; messages:ChatMessage[]; selectedThreadId:number; totalUnread:number; readUpTo:number };
@@ -160,7 +160,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.44</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.45</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1068,6 +1068,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [fileNamePattern,setFileNamePattern]=useState("");
   const [incomingFolderPath,setIncomingFolderPath]=useState("");
   const [incomingNamePattern,setIncomingNamePattern]=useState("");
+  const [signedReturn,setSignedReturn]=useState("1");
   const [storage,setStorage]=useState<{root:string;folderSaving:boolean}|null>(null);
   const [rootDraft,setRootDraft]=useState("");
   const [rootBusy,setRootBusy]=useState(false);
@@ -1082,6 +1083,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [editFileNamePattern,setEditFileNamePattern]=useState("");
   const [editIncomingFolderPath,setEditIncomingFolderPath]=useState("");
   const [editIncomingNamePattern,setEditIncomingNamePattern]=useState("");
+  const [editSignedReturn,setEditSignedReturn]=useState("1");
   const [editBusy,setEditBusy]=useState(false);
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[]);setStorage(body.storage||null);setRootDraft(body.storage?.root||"")}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
@@ -1097,23 +1099,23 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     if(!name.trim())return;
     setBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={name,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern};
+      const body:Record<string,unknown>={name,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern,signedCopyReturns:signedReturn};
       if(file1){const uploaded=await uploadFile(file1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(file2){const uploaded=await uploadFile(file2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(file3){const uploaded=await uploadFile(file3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
       const response=await fetch("/api/documents",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
-      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setCreating(false);
+      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setSignedReturn("1");setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"")};
+  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"");setEditSignedReturn(item.signed_copy_returns===0?"0":"1")};
   const cancelEdit=()=>{setEditingId(null);setEditFile1(null);setEditFile2(null);setEditFile3(null)};
   const saveEdit=async(item:DocumentTemplate)=>{
     setEditBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern};
+      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern,signedCopyReturns:editSignedReturn};
       if(editFile1){const uploaded=await uploadFile(editFile1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(editFile2){const uploaded=await uploadFile(editFile2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(editFile3){const uploaded=await uploadFile(editFile3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
@@ -1148,6 +1150,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const templateLabel=(n:number)=><span className="templatelabel">Sənədin şablonu<br/>{n}</span>;
   const documentColumns:Array<{key:string;label:string;width:number;search:(item:DocumentTemplate)=>string;render:(item:DocumentTemplate)=>React.ReactNode}>=[
     {key:"name",label:"Sənədin adı",width:240,search:item=>item.name,render:item=><b>{item.name}</b>},
+    {key:"signedReturn",label:"İmzalı nüsxə geri qaytarılır",width:120,search:item=>item.signed_copy_returns===0?"Xeyr":"Bəli",render:item=>item.signed_copy_returns===0?<span className="signedreturn no">Xeyr</span>:<span className="signedreturn yes">Bəli</span>},
     {key:"fileNamePattern",label:"Çıxan sənəd üçün adlanma qaydası",width:230,search:item=>item.file_name_pattern||DEFAULT_FILE_NAME_PATTERN,render:item=>item.file_name_pattern?<span className="folderpath">{item.file_name_pattern}</span>:<span className="nodocument" title="Qayda yazılmayıb — standart qayda işlədilir">{DEFAULT_FILE_NAME_PATTERN}</span>},
     {key:"template1",label:"Sənədin şablonu 1",width:220,search:item=>item.template1_name||"Yoxdur",render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
     {key:"template2",label:"Sənədin şablonu 2",width:220,search:item=>item.template2_name||"Yoxdur",render:item=>templateLink(item.template2_key,item.template2_name,item.template2_size)},
@@ -1165,6 +1168,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const excel=useExcelFilters("templates",documentColumns,items);
   const createFieldRenderers:Record<string,()=>React.ReactNode>={
     name:()=><Field key="name" label="Sənədin adı" value={name} set={setName}/>,
+    signedReturn:()=><label className="field" key="signedReturn">İmzalı nüsxə geri qaytarılır<select value={signedReturn} onChange={e=>setSignedReturn(e.target.value)}><option value="1">Bəli — qarşı tərəf bir nüsxəni imzalayıb qaytarır</option><option value="0">Xeyr — geri qaytarılmır (məs. məktub)</option></select></label>,
     fileNamePattern:()=><label className="field" key="fileNamePattern">Çıxan sənəd üçün adlanma qaydası<Input value={fileNamePattern} placeholder={DEFAULT_FILE_NAME_PATTERN} onChange={e=>setFileNamePattern(e.target.value)}/></label>,
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label>,
@@ -1176,6 +1180,7 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   };
   const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
     name:()=><Field key="name" label="Sənədin adı" value={editName} set={setEditName}/>,
+    signedReturn:()=><label className="field" key="signedReturn">İmzalı nüsxə geri qaytarılır<select value={editSignedReturn} onChange={e=>setEditSignedReturn(e.target.value)}><option value="1">Bəli — qarşı tərəf bir nüsxəni imzalayıb qaytarır</option><option value="0">Xeyr — geri qaytarılmır (məs. məktub)</option></select></label>,
     fileNamePattern:()=><label className="field" key="fileNamePattern">Çıxan sənəd üçün adlanma qaydası<Input value={editFileNamePattern} placeholder={DEFAULT_FILE_NAME_PATTERN} onChange={e=>setEditFileNamePattern(e.target.value)}/></label>,
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small>Hazırkı: {item.template1_name}</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small>Hazırkı: {item.template2_name}</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label>,
@@ -1266,7 +1271,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditForm({companyId:item.company_id?String(item.company_id):"",outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",sendingDepartment:item.sending_department||"",documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",copies:item.copies||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||""})};
+  const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditForm({companyId:item.company_id?String(item.company_id):"",outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",sendingDepartment:item.sending_department||"",documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",copies:item.copies||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||"",signedCopyReturns:item.signed_copy_returns===null||item.signed_copy_returns===undefined?"":String(item.signed_copy_returns)})};
   const cancelEdit=()=>{setEditingId(null);setEditForm({})};
   const saveEdit=async(id:number)=>{
     const voenValue=(editForm.voen||"").trim();
@@ -1315,6 +1320,17 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
     note:(values,set)=><Field key="note" label="Əlavə Qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>,
   };
   const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void,isNew:boolean)=><>{order.filter(key=>fieldRenderers[key]&&!(isNew&&autoFilled.has(key))).map(key=>fieldRenderers[key](values,set))}</>;
+  // "İmzalı nüsxə geri qaytarılır" comes from the document type's template; one document may differ ("" = follow the template).
+  const templateReturns=(values:Record<string,string>)=>{const type=(values.documentType||"").trim();if(!type)return true;const t=templateFor(type);return !t||t.signed_copy_returns!==0};
+  const returnsSignedCopy=(values:Record<string,string>)=>values.signedCopyReturns==="1"||values.signedCopyReturns==="0"?values.signedCopyReturns==="1":templateReturns(values);
+  const signedReturnBlock=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
+    const returns=returnsSignedCopy(values);
+    const own=values.signedCopyReturns==="1"||values.signedCopyReturns==="0";
+    return <div className="signedreturnfield"><label><input type="checkbox" checked={returns} onChange={e=>{const next=e.target.checked;set({...values,signedCopyReturns:next===templateReturns(values)?"":next?"1":"0"})}}/>İmzalı nüsxə geri qaytarılır</label>
+      <small>{own?`Bu sənəd üçün ayrıca seçilib (şablona görə: ${templateReturns(values)?"Bəli":"Xeyr"}).`:values.documentType?.trim()&&templateFor(values.documentType)?"Şablona görə.":"Şablon yoxdur — standart olaraq imzalı nüsxə gözlənilir."}</small>
+      {returns&&values.copies==="1"&&<small className="signedreturnwarn">⚠ Sənəd 1 nüsxədə göndərilir — imzalı nüsxənin geri qaytarılması gözlənilirsə, nüsxə sayını yoxlayın.</small>}
+    </div>;
+  };
   const templateBlock=(values:Record<string,string>)=>{
     const matched=values.documentType?templateFor(values.documentType):undefined;
     const templateSlots=matched?[{n:1,key:matched.template1_key,name:matched.template1_name},{n:2,key:matched.template2_key,name:matched.template2_name},{n:3,key:matched.template3_key,name:matched.template3_name}]:[];
@@ -1350,9 +1366,10 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
       {stageFile(item,"draft")||(item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer" title="Köhnə qaydada əlavə olunub">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yüklənməyib</span>)}
       {uploadButton(item,"draft",item.draft_name?"Yenisini yüklə":"Sənədi sistemə yüklə")}
     </div>},
-    {key:"final",label:"Hazır sənəd (imzalı)",width:210,search:item=>item.final_name||"İmza gözləyir",render:item=><div className="docstage">
-      {stageFile(item,"final")||<span className="tablestatus review">İmza gözləyir</span>}
-      {uploadButton(item,"final",item.final_name?"Yenisini yüklə":"İmzalı sənədi yüklə")}
+    // A document whose signed copy comes back waits for it ("İmza gözləyir"); any other just keeps a copy of what was sent.
+    {key:"final",label:"Hazır sənəd (imzalı / sürəti)",width:210,search:item=>item.final_name||(item.returns_signed_copy===0?"Sürəti yüklənməyib":"İmza gözləyir"),render:item=><div className="docstage">
+      {stageFile(item,"final")||(item.returns_signed_copy===0?<span className="nodocument">Sürəti yüklənməyib</span>:<span className="tablestatus review">İmza gözləyir</span>)}
+      {uploadButton(item,"final",item.final_name?"Yenisini yüklə":item.returns_signed_copy===0?"Sürətini yüklə":"İmzalı sənədi yüklə")}
     </div>},
   ];
   const {order,widths,setWidth,moveColumn}=useTableColumns("outgoing2",outgoingColumns.map(c=>c.key));
@@ -1367,10 +1384,10 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
   return <section className="panel pagepanel directorypanel">
     <datalist id="documentTypeOptions">{templates.map(t=><option key={t.id} value={t.name}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan Sənədlər</h2><p>{activeCompanyId?`${companyName(activeCompanyId)} — göndərilən sənədlərin qeydiyyatı`:"Təşkilatdan göndərilən sənədlərin qeydiyyatı"}</p></div>{canCreate&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
-    {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields(form,setForm,true)}{templateBlock(form)}<label className="field filefield">Yazılmış sənəd (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
+    {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields(form,setForm,true)}{signedReturnBlock(form,setForm)}{templateBlock(form)}<label className="field filefield">Yazılmış sənəd (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {notice&&<div className="docnotice">{notice}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable compacttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{filteredOutgoing.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm,false)}{templateBlock(editForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable compacttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{filteredOutgoing.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{fields(editForm,setEditForm,false)}{signedReturnBlock(editForm,setEditForm)}{templateBlock(editForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
     </tr>)}</tbody></table>{!filteredOutgoing.length&&<Empty text={scopedItems.length?"Axtarışa uyğun sənəd tapılmadı.":"Hələ çıxan sənəd qeydə alınmayıb."}/>}</div>}

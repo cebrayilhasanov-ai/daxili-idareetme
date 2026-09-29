@@ -592,3 +592,6 @@ nav button>em+.navcaret{margin-left:6px}
 .tasktable.colmeasure th input{display:none}
 .tasktable.colmeasure .excelhead .excellabel{flex:none;width:min-content}
 }
+/* Şablonlar / Çıxan Sənədlər: "İmzalı nüsxə geri qaytarılır" */
+.signedreturn{display:inline-block;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:800}.signedreturn.yes{background:#fff4d8;color:#b76a00}.signedreturn.no{background:#f1f5f9;color:#64748b}
+.signedreturnfield{display:grid;gap:3px;align-content:end;font-size:11px;color:#334155}.signedreturnfield label{display:flex;align-items:center;gap:7px;font-weight:800;min-height:40px}.signedreturnfield small{color:#64748b;font-size:10px}.signedreturnfield .signedreturnwarn{color:#b45309;font-weight:700}
