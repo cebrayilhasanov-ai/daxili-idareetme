@@ -502,3 +502,57 @@ nav button>em+.navcaret{margin-left:6px}
 .compacttable .docuploadbtn{padding:2px 7px;font-size:9px}
 .compacttable .incomingdept{display:inline}.compacttable .incomingdept+.incomingdept{margin:0 0 0 8px}
 .compacttable td .tableactions{gap:4px}.compacttable td .tableactions button{padding:4px 7px}
+/* HR — kadr uçotu (components/hr/hr-page.tsx) */
+.businessdialog.hrdialog{width:min(1080px,calc(100vw - 32px))!important;max-width:1080px!important}
+.hrdialogbody{padding:18px 22px 22px;background:#f8fafc}
+.hrtabs{padding:14px 22px 0!important;background:#f8fafc}
+.hrcard,.hrtab{display:grid;gap:14px}
+.hrcard fieldset{border:1px solid #dbe5f0;border-radius:12px;padding:12px 14px 14px;background:#fff;margin:0}
+.hrcard legend{padding:0 6px;font-size:11px;font-weight:800;color:#0b6b7b;letter-spacing:.02em}
+.hrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 12px;align-items:end}
+.hrgrid .field,.hrcard>.field{font-size:10px;font-weight:700;color:#334155;gap:5px;min-width:0}
+.hrgrid .field small{font-weight:500;color:#64748b;font-size:9px}
+.hrgrid input,.hrgrid select,.hrcard>.field input,.hrfilters input,.hrfilters select{width:100%;height:36px;border:1px solid #b9c8da;border-radius:8px;background:#fff;padding:0 9px;color:#172237;font-size:12px}
+.hrgrid input[type=file]{padding:6px;font-size:10px}
+.hrwide{grid-column:span 2}
+@media(max-width:600px){.hrwide{grid-column:auto}}
+.hrpair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.hrscan{display:grid;gap:3px}.hrscan small{font-size:10px;font-weight:600}.hrscan a{color:#0C8599;text-decoration:underline}
+.hrlink{border:0;background:none;color:#dc2626;font-size:10px;font-weight:700;padding:0;cursor:pointer}
+.hrcheck{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#334155;min-height:36px}
+.hrhint{display:block;font-size:10px;line-height:1.45;color:#5b6b80}.hrhint.hrwarn{color:#b45309}
+.hrpad{padding:14px 22px 0}.hrcard.hrpad{padding:16px 22px}
+.hractions{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}.hractions.left{justify-content:flex-start}
+.hrok{padding:10px 14px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;color:#166534;font-size:12px}
+.hrfilters{display:flex;flex-wrap:wrap;gap:10px;padding:14px 22px 4px}.hrfilters label{display:grid;gap:4px;font-size:10px;font-weight:700;color:#475569;min-width:170px}.hrfilters .hrsearch{flex:1;min-width:220px}
+.hralert{display:block;margin:14px 22px 0;width:calc(100% - 44px);text-align:left;border:1px solid #fde68a;border-radius:10px;background:#fffbeb;color:#92400e;padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.hrtable td{padding:7px 9px;line-height:1.3;width:auto!important;font-size:11px}.hrtable th{white-space:nowrap}
+.hrtable.hrcompact td{padding:5px 8px}
+.hrrow{cursor:pointer}.hrrow:hover td{background:#f0f9fb}
+.hrsub{display:block;color:#64748b;font-size:10px;margin-top:2px}
+.hrpos{color:#15803d}.hrneg{color:#dc2626}
+.hrbad{color:#dc2626;font-weight:700}.hrwarn{color:#b45309;font-weight:700}
+.hrtag{display:inline-block;border-radius:12px;padding:3px 8px;font-size:10px;font-weight:700;white-space:nowrap}.hrtag.on{background:#e8f8ee;color:#15803d}.hrtag.off{background:#f1f5f9;color:#64748b}
+.hrsummary{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.hrsummary>span{display:grid;gap:3px;min-width:150px;border:1px solid #dbe7f4;border-radius:10px;background:#fff;padding:9px 12px}
+.hrsummary>span small{font-size:9px;color:#64748b;font-weight:600}.hrsummary>span b{font-size:17px}.hrsummary>span b.hrsmall{font-size:12px}
+.hrsummary>.field{min-width:170px;font-size:10px;font-weight:700;color:#334155;gap:5px}.hrsummary>.field input{height:36px;border:1px solid #b9c8da;border-radius:8px;padding:0 9px}
+.hrsummary .hrtotal{background:#ecfeff;border-color:#a5f3fc}.hrsummary .hrtotal b{color:#0e7490}
+.hrtab h4{margin:6px 0 0;font-size:12px;color:#0f2746}
+.hrnum{text-align:right;white-space:nowrap;font-weight:700}
+.hrtotalrow td{font-weight:800;background:#f1f5f9}
+.hrsalarygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.hrsalarygrid .field{font-size:10px;font-weight:700;color:#334155;gap:4px;border:1px solid #e2e8f0;border-radius:9px;background:#fff;padding:7px 8px}
+.hrsalarygrid .field.counted{border-color:#99e3ee;background:#f0fbfd}.hrsalarygrid .field small{font-size:9px;font-weight:600;color:#0b6b7b}
+.hrsalarygrid input{height:32px;border:1px solid #b9c8da;border-radius:7px;padding:0 8px;font-size:12px}
+.hryear{display:flex;align-items:center;gap:8px}.hryear b{font-size:16px;min-width:48px;text-align:center}.hryear button{width:32px;height:32px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:16px}
+.hrcalendarcols{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px;padding:14px 22px 0}
+@media(max-width:1000px){.hrcalendarcols{grid-template-columns:1fr}}
+.hrkind{display:inline-block;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700}
+.hrkind.holiday{background:#fee2e2;color:#b91c1c}.hrkind.dayoff{background:#ffedd5;color:#c2410c}.hrkind.workday{background:#dbeafe;color:#1d4ed8}.hrkind.short{background:#fef9c3;color:#a16207}
+.hrmonths{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;padding:16px 22px}
+.hrmonth{border:1px solid #e2e8f0;border-radius:10px;background:#fff;padding:9px}.hrmonth>b{display:block;font-size:12px;margin-bottom:6px;color:#0f2746}
+.hrmonthgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:10px}
+.hrmonthgrid i{font-style:normal;font-weight:700;color:#94a3b8;font-size:9px}
+.hrday{padding:3px 0;border-radius:5px;color:#1e293b}.hrday.weekend{color:#94a3b8;background:#f8fafc}
+.hrday.holiday{background:#fecaca;color:#991b1b;font-weight:800}.hrday.dayoff{background:#fed7aa;color:#9a3412;font-weight:800}.hrday.workday{background:#bfdbfe;color:#1e40af;font-weight:800}.hrday.short{background:#fef08a;color:#854d0e;font-weight:800}

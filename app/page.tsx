@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { HrPage, type HrSection } from "@/components/hr/hr-page";
 import { MONTH_NAMES, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, formatBakuDate, monthlyKey, overdueDays, periodState, periodWindow, weeksOfMonth } from "@/lib/fixed-periods";
 
 type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; is_department_head?:number };
@@ -80,6 +81,7 @@ export default function Home(){
   const [tasksSection,setTasksSection]=useState<"manager"|"mine">("manager");
   const [documentsMenuOpen,setDocumentsMenuOpen]=useState(false);
   const [hrMenuOpen,setHrMenuOpen]=useState(false);
+  const [hrSubTab,setHrSubTab]=useState<"violations"|HrSection>("violations");
   const [documentSubTab,setDocumentSubTab]=useState<"templates"|"outgoing"|"incoming">("templates");
   const [notifOpen,setNotifOpen]=useState(false);
   const [seenOverdue,setSeenOverdue]=useState<number[]>([]);
@@ -110,12 +112,13 @@ export default function Home(){
   const employeeSelf=!isAdmin&&data.employees.find(e=>e.id===user?.employeeId)||null;
   const effectiveView=viewAs||employeeSelf;
   // Sections hidden from whoever's view this is: none for the admin, the employee's own set otherwise (an admin in "Personal görünüşü" previews it).
-  const deniedSections=new Set<string>(effectiveView?parseHiddenSections(effectiveView.hidden_sections):[]);
+  const deniedSections=effectiveView?deniedFromStored(parseHiddenSections(effectiveView.hidden_sections)):new Set<string>();
   const can=(key:string)=>!deniedSections.has(key);
   const shownChatUnread=can("chat")?chatUnread:0;
   const shownRequestsPending=!viewAs&&can("tasks.requests")?requestsPending:0;
   // Şablonlar is the admin's own workspace (naming rules, folders); employees only reach the template files from Çıxan Sənədlər.
   const canTemplates=isAdmin&&!viewAs;
+  const firstHrTab=can("hr.violations")?"violations":can("hr.personnel")?"personnel":null;
   const firstDocumentTab=(["templates","outgoing","incoming"] as const).find(tab=>tab==="templates"?canTemplates:can(`documents.${tab}`));
   // Lets the admin (Cəbrayıl Həsənov), who is also his own Personal entry, jump straight into his own employee view from the sidebar — same "Personal görünüşü" mechanism, one click.
   const myOwnEmployee=isAdmin?data.employees.find(e=>e.name===user?.name||(user?.email&&e.email&&e.email.toLowerCase()===user.email.toLowerCase()))||null:null;
@@ -145,7 +148,7 @@ export default function Home(){
   const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",requests:"Sorğular",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"HR"};
   const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","HR",Briefcase],["chat","Çat",MessageCircle]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
-  const pageAllowed=page==="customers"?can("dashboard.customers"):page==="requests"?can("tasks.requests"):page==="chat"?can("chat"):page==="hr"?can("hr.violations")
+  const pageAllowed=page==="customers"?can("dashboard.customers"):page==="requests"?can("tasks.requests"):page==="chat"?can("chat"):page==="hr"?can(hrSubTab==="violations"?"hr.violations":"hr.personnel")
     :page==="documents"?can(`documents.${documentSubTab}`):page==="tasks"?(taskSubTab==="tasks"?tasksSection==="manager"||can("tasks.mine"):can(`tasks.${taskSubTab}`)):true;
 
   if(authLoading&&!user)return <div className="authpage"><div className="authcard"><div className="authlogo">Dİ</div><h1>Daxili İdarəetmə</h1><p>Giriş yoxlanılır...</p></div></div>;
@@ -155,9 +158,9 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.40</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.41</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
-      <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?can("hr.violations"):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
+      <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
         if(id==="tasks"){
           // The parent badge adds up everything waiting inside (overdue tasks + requests waiting on this user), so nothing hides in a closed menu.
@@ -166,7 +169,10 @@ export default function Home(){
           return <Fragment key={id}><button className={page===id||page==="requests"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={toggleTasksMenu}><Icon/>{label}{pendingTotal>0&&<em>{pendingTotal}</em>}<span role="button" tabIndex={0} className={`navcaret${childrenOpen?" open":""}`} title={childrenOpen?"Bağla":"Aç"} aria-label="Alt bölmələri aç/bağla" aria-expanded={childrenOpen} onClick={e=>{e.stopPropagation();toggleTasksMenu()}} onDoubleClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();toggleTasksMenu()}}}><ChevronDown/></span></button>{childrenOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button>{!viewAs&&can("tasks.requests")&&<button className={page==="requests"?"on":""} onClick={()=>{setPage("requests");setMenu(false)}}>Sorğular{requestsPending>0&&<em>{requestsPending}</em>}</button>}{can("tasks.mine")&&<button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button>}{can("tasks.monthly")&&<button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button>}{can("tasks.weekly")&&<button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button>}</div>}</Fragment>;
         }
         if(id==="documents")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setDocumentSubTab(firstDocumentTab||"templates");setPage("documents");setMenu(false)}} onDoubleClick={()=>setDocumentsMenuOpen(v=>!v)}><Icon/>{label}</button>{documentsMenuOpen&&<div className="navchildren">{canTemplates&&<button className={page==="documents"&&documentSubTab==="templates"?"on":""} onClick={()=>{setDocumentSubTab("templates");setPage("documents");setMenu(false)}}>Şablonlar</button>}{can("documents.outgoing")&&<button className={page==="documents"&&documentSubTab==="outgoing"?"on":""} onClick={()=>{setDocumentSubTab("outgoing");setPage("documents");setMenu(false)}}>Çıxan Sənədlər</button>}{can("documents.incoming")&&<button className={page==="documents"&&documentSubTab==="incoming"?"on":""} onClick={()=>{setDocumentSubTab("incoming");setPage("documents");setMenu(false)}}>Daxil Olan Sənədlər{!viewAs&&incomingPending>0&&<em>{incomingPending}</em>}</button>}</div>}</Fragment>;
-        if(id==="hr")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage("hr");setMenu(false)}} onDoubleClick={()=>setHrMenuOpen(v=>!v)}><Icon/>{label}</button>{hrMenuOpen&&<div className="navchildren"><button className={page==="hr"?"on":""} onClick={()=>{setPage("hr");setMenu(false)}}>Noqsanlar</button></div>}</Fragment>;
+        if(id==="hr"){
+          const goHr=(tab:"violations"|HrSection)=>{setHrSubTab(tab);setPage("hr");setMenu(false)};
+          return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>goHr(firstHrTab||"violations")} onDoubleClick={()=>setHrMenuOpen(v=>!v)}><Icon/>{label}</button>{hrMenuOpen&&<div className="navchildren">{can("hr.violations")&&<button className={page==="hr"&&hrSubTab==="violations"?"on":""} onClick={()=>goHr("violations")}>Noqsanlar</button>}{can("hr.personnel")&&<><button className={page==="hr"&&hrSubTab==="personnel"?"on":""} onClick={()=>goHr("personnel")}>İşçilər və məzuniyyət</button><button className={page==="hr"&&hrSubTab==="calendar"?"on":""} onClick={()=>goHr("calendar")}>İstehsalat təqvimi</button><button className={page==="hr"&&hrSubTab==="settings"?"on":""} onClick={()=>goHr("settings")}>Hesablama parametrləri</button></>}</div>}</Fragment>;
+        }
         return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}{id==="chat"&&chatUnread>0&&<em>{chatUnread}</em>}</button></Fragment>;
       })}</nav>
       </div>
@@ -194,7 +200,8 @@ export default function Home(){
         {documentSubTab==="templates"&&canTemplates&&<DocumentsPage isAdmin={isAdmin}/>}
         {documentSubTab==="outgoing"&&<OutgoingDocumentsPage isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null}/>}
         {documentSubTab==="incoming"&&<IncomingDocumentsPage onPending={n=>{if(!viewAs)setIncomingPending(n)}} isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null}/>}</>}
-        {pageAllowed&&page==="hr"&&<ViolationsPage isAdmin={isAdmin} employees={data.employees} companies={data.companies} activeCompanyId={activeCompanyId}/>}
+        {pageAllowed&&page==="hr"&&hrSubTab!=="violations"&&<HrPage section={hrSubTab}/>}
+        {pageAllowed&&page==="hr"&&hrSubTab==="violations"&&<ViolationsPage isAdmin={isAdmin} employees={data.employees} companies={data.companies} activeCompanyId={activeCompanyId}/>}
       </>}
     </main>
     <Dialog open={dialog!==null} onOpenChange={v=>!v&&setDialog(null)}><DialogContent className="businessdialog" resizable>
@@ -1660,21 +1667,26 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
 }
 // "Giriş icazələri": which menu sections an employee sees. Unticking stores the key as hidden (lib/permissions.ts); locked
 // items cannot be hidden. The admin always sees everything.
-type SectionNode={key:string;label:string;locked?:boolean};
+type SectionNode={key:string;label:string;locked?:boolean;optIn?:boolean};
 const SECTION_TREE:{key:string;label:string;children:SectionNode[]}[]=[
   {key:"dashboard",label:"İdarə paneli",children:[{key:"dashboard.home",label:"Ana səhifə",locked:true},{key:"dashboard.customers",label:"Müştəri siyahısı"}]},
   {key:"tasks",label:"Tapşırıqlar",children:[{key:"tasks.manager",label:"Rəhbər tərəfindən göndərilən",locked:true},{key:"tasks.requests",label:"Sorğular"},{key:"tasks.mine",label:"İşlərim"},{key:"tasks.monthly",label:"Aylıq Sabit işlər"},{key:"tasks.weekly",label:"Həftəlik Sabit işlər"}]},
   {key:"documents",label:"Sənədlər",children:[{key:"documents.outgoing",label:"Çıxan Sənədlər"},{key:"documents.incoming",label:"Daxil Olan Sənədlər"}]},
-  {key:"hr",label:"HR",children:[{key:"hr.violations",label:"Noqsanlar"}]},
+  {key:"hr",label:"HR",children:[{key:"hr.violations",label:"Noqsanlar"},{key:"hr.personnel",label:"İşçilər və məzuniyyət (şəxsi məlumatlar, maaş)",optIn:true}]},
   {key:"chat",label:"Çat",children:[]},
 ];
 const parseHiddenSections=(raw:string|null|undefined):string[]=>{try{const list=JSON.parse(raw||"[]");return Array.isArray(list)?list.map(String):[]}catch{return []}};
+// Opt-in sections (lib/permissions.ts OPT_IN_SECTIONS) start closed: for them the stored list names what the admin has opened.
+const OPT_IN_SECTIONS=["hr.personnel"];
+const deniedFromStored=(stored:string[])=>{const denied=new Set(stored.filter(key=>!OPT_IN_SECTIONS.includes(key)));for(const key of OPT_IN_SECTIONS)if(!stored.includes(key))denied.add(key);return denied};
+const storedFromDenied=(denied:Set<string>)=>[...[...denied].filter(key=>!OPT_IN_SECTIONS.includes(key)),...OPT_IN_SECTIONS.filter(key=>!denied.has(key))];
 function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:string[];onChange:(next:string[])=>void;employee:Employee|null;assignments:WorkAssignment[];copyFrom:Employee[]}){
-  const hiddenSet=new Set(hidden);
+  // hiddenSet is what the employee may NOT see, whatever way each key is stored.
+  const hiddenSet=deniedFromStored(hidden);
   // Groups start closed so the list stays short; a closed group still shows how many of its items are open.
   const [openGroups,setOpenGroups]=useState<Set<string>>(new Set());
   const toggleGroup=(key:string)=>setOpenGroups(current=>{const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next});
-  const setKeys=(keys:string[],visible:boolean)=>{const next=new Set(hiddenSet);for(const key of keys){if(visible)next.delete(key);else next.add(key)}onChange([...next])};
+  const setKeys=(keys:string[],visible:boolean)=>{const next=new Set(hiddenSet);for(const key of keys){if(visible)next.delete(key);else next.add(key)}onChange(storedFromDenied(next))};
   const own=employee?assignments.filter(a=>a.employee_id===employee.id):[];
   const monthly=own.filter(a=>a.frequency==="monthly").length,weekly=own.filter(a=>a.frequency==="weekly").length;
   const warnings:string[]=[];
@@ -1682,7 +1694,7 @@ function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:
   if(hiddenSet.has("tasks.weekly")&&weekly)warnings.push(`Bu işçiyə ${weekly} həftəlik sabit iş təyin olunub — “Həftəlik Sabit işlər” bağlı olsa, onlara ✓ qoya bilməyəcək.`);
   if(hiddenSet.has("tasks.requests")&&employee?.is_department_head)warnings.push("Bu işçi şöbə rəisidir — “Sorğular” bağlı olsa, şöbəsinə gələn sorğuları qəbul edə bilməyəcək, onları yalnız admin idarə edəcək.");
   return <div className="permissiontree">
-    <div className="permissionhead"><b>Giriş icazələri</b><span><select value="" onChange={e=>{const source=copyFrom.find(x=>String(x.id)===e.target.value);if(source)onChange(parseHiddenSections(source.hidden_sections))}}><option value="">Başqa işçidən köçür...</option>{copyFrom.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><button type="button" disabled={!hidden.length} onClick={()=>onChange([])}>Hamısını aç</button></span></div>
+    <div className="permissionhead"><b>Giriş icazələri</b><span><select value="" onChange={e=>{const source=copyFrom.find(x=>String(x.id)===e.target.value);if(source)onChange(parseHiddenSections(source.hidden_sections))}}><option value="">Başqa işçidən köçür...</option>{copyFrom.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><button type="button" disabled={!hiddenSet.size} onClick={()=>onChange(storedFromDenied(new Set()))}>Hamısını aç</button></span></div>
     <small className="permissionnote">İşarəsi götürülən bölmə bu işçinin menyusunda görünməyəcək və serverdə də bağlanacaq. 🔒 olan bəndlər həmişə açıqdır. Alt başlıqları görmək üçün bölmənin adına klikləyin.</small>
     <div className="permissiongroups">{SECTION_TREE.map(group=>{
       const toggleable=group.children.length?group.children.filter(c=>!c.locked).map(c=>c.key):[group.key];
@@ -1698,7 +1710,7 @@ function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:
           {group.children.length>0?<button type="button" className="permissiontoggle" aria-expanded={expanded} onClick={()=>toggleGroup(group.key)}><ChevronDown/><span>{group.label}</span></button>:<span className="permissiontoggle plain"><span>{group.label}</span></span>}
           <small className={shown===total?"permissioncount all":shown===0?"permissioncount none":"permissioncount"}>{shown===total?"hamısı açıq":shown===0?"bağlı":`${shown}/${total} açıq`}</small>
         </div>
-        {expanded&&group.children.length>0&&<div className="permissionchildren">{group.children.map(child=><label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||!hiddenSet.has(child.key)} disabled={child.locked} onChange={e=>setKeys([child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}</label>)}</div>}
+        {expanded&&group.children.length>0&&<div className="permissionchildren">{group.children.map(child=><label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||!hiddenSet.has(child.key)} disabled={child.locked} onChange={e=>setKeys([child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}{child.optIn&&<small>standart olaraq bağlıdır</small>}</label>)}</div>}
       </div>;
     })}</div>
     {warnings.map(w=><div key={w} className="permissionwarning">⚠ {w}</div>)}

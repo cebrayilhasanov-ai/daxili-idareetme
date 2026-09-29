@@ -2,7 +2,8 @@ import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 
 // Sections the admin can hide per employee ("Giriş icazələri" in the Personal dialog). An employee stores the keys it may NOT
-// see (employees.hidden_sections, a JSON array), so everything stays open by default and sections added later start visible.
+// see (employees.hidden_sections, a JSON array), so everything stays open by default and sections added later start visible
+// (except OPT_IN_SECTIONS below).
 // "tasks.manager" (tasks given by a manager) is never hidden, otherwise assigned work would disappear.
 export const SECTION_KEYS = [
   "dashboard.customers",
@@ -14,9 +15,19 @@ export const SECTION_KEYS = [
   "documents.outgoing",
   "documents.incoming",
   "hr.violations",
+  "hr.personnel",
   "chat",
 ] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
+
+// Sections that start CLOSED (personal ID data, salaries): for these keys the stored list names the ones the admin has
+// opened, the reverse of every other key. deniedSections() turns the stored list into the set of sections that are locked.
+export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel"];
+export function deniedSections(stored: SectionKey[]): Set<SectionKey> {
+  const denied = new Set(stored.filter((key) => !OPT_IN_SECTIONS.includes(key)));
+  for (const key of OPT_IN_SECTIONS) if (!stored.includes(key)) denied.add(key);
+  return denied;
+}
 
 export function parseHiddenSections(raw: unknown): SectionKey[] {
   let list: unknown = raw;
@@ -28,13 +39,14 @@ export function parseHiddenSections(raw: unknown): SectionKey[] {
 }
 
 export async function hiddenSections(user: SessionUser): Promise<Set<SectionKey>> {
-  if (user.role === "admin" || !user.employeeId) return new Set();
+  if (user.role === "admin") return new Set();
+  if (!user.employeeId) return new Set(OPT_IN_SECTIONS);
   try {
     const row = await env.DB.prepare("SELECT hidden_sections FROM employees WHERE id = ?").bind(user.employeeId).first<{ hidden_sections: string | null }>();
-    return new Set(parseHiddenSections(row?.hidden_sections));
+    return deniedSections(parseHiddenSections(row?.hidden_sections));
   } catch {
-    // The column is added by the catalog schema; until then nothing is hidden.
-    return new Set();
+    // The column is added by the catalog schema; until then only the opt-in sections stay closed.
+    return new Set(OPT_IN_SECTIONS);
   }
 }
 
