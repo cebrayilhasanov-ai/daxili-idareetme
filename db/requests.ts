@@ -426,6 +426,8 @@ export async function updateRequest(user: SessionUser, input: { id: number; acti
         await set("status = 'Bağlandı', closed_at = ?", now);
         await logEvent(row.id, user.name, "Sorğu bağlandı ✓", text);
       }
+      // A request sent from an "İşlərim" step ticks that step once its answer is accepted — like a delegated step whose task is approved.
+      if (row.personal_work_item_id) await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE id = ?").bind(row.personal_work_item_id).run();
       return;
     case "reopen":
       if (!can.reopen) throw new Error("Bu sorğunu yenidən aça bilməzsiniz.");

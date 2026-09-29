@@ -757,7 +757,7 @@ export async function resolveDateChangeRequest(input: { id: number; approve: boo
   }
 }
 
-export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionAttachmentKey?: string; submissionAttachmentName?: string; submissionAttachmentSize?: number; submissionAttachmentType?: string }) {
+export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionAttachmentKey?: string; submissionAttachmentName?: string; submissionAttachmentSize?: number; submissionAttachmentType?: string; submissionNote?: string }) {
   const current = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Tapşırıq tapılmadı.");
   const linkedRequest = await requestForTask(input.id);
@@ -802,7 +802,9 @@ export async function updateTask(input: { id: number; actorName?: string; status
     await db().prepare("UPDATE task_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
   }
   if (linkedRequest && input.status && input.status !== current.status) {
-    const detail = status === "Təqdim edilib" ? (input.submissionAttachmentName || current.submission_attachment_name ? `Fayl: ${input.submissionAttachmentName || current.submission_attachment_name}` : null)
+    // On submission the answer text written by the assignee (and the file name) becomes the request's answer, shown in Sorğular and on the requester's step.
+    const submittedFile = input.submissionAttachmentName || current.submission_attachment_name;
+    const detail = status === "Təqdim edilib" ? [input.submissionNote?.trim(), submittedFile ? `Fayl: ${submittedFile}` : ""].filter(Boolean).join("\n") || null
       : status === "Geri qaytarılıb" ? input.evaluationNote?.trim() || null
       : status === "Təsdiqlənib" ? `${input.evaluation}/10${input.evaluationNote?.trim() ? `\n${input.evaluationNote.trim()}` : ""}` : null;
     await syncRequestFromTask(input.id, String(status), input.actorName, detail as string | null);
@@ -983,11 +985,33 @@ export async function getPersonalWorks(userId: number | null) {
     people.set(row.employee_id, person);
     sharedByWork.set(row.work_id, people);
   }
-  // The owner's own share: the steps not handed to anyone, shown first in the "İcraçılar" column.
-  const ownSteps = (await db().prepare(`SELECT personal_work_id AS work_id, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
-    FROM personal_work_checklist_items WHERE delegated_task_id IS NULL GROUP BY personal_work_id`).all<{ work_id: number; total: number; done: number }>()).results;
-  const ownByWork = new Map(ownSteps.map((row) => [row.work_id, { total: Number(row.total), done: Number(row.done) }]));
-  return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []), own: ownByWork.get(work.id) ?? null }));
+  // Steps sent to another department (Şöbəyə sorğu) count under that department; a rejected request gives the step back to the owner.
+  await ensureRequestSchema();
+  const requested = (await db().prepare(`SELECT items.id AS item_id, items.personal_work_id AS work_id, req.to_department AS department, items.done AS done
+    FROM personal_work_checklist_items AS items
+    JOIN work_requests AS req ON req.id = (SELECT MAX(id) FROM work_requests WHERE personal_work_item_id = items.id)
+    WHERE items.delegated_task_id IS NULL AND req.status != 'İmtina edildi' ORDER BY items.id`).all<{ item_id: number; work_id: number; department: string; done: number }>()).results;
+  const departmentsByWork = new Map<number, Map<string, { department: string; total: number; done: number }>>();
+  for (const row of requested) {
+    const departments = departmentsByWork.get(row.work_id) ?? new Map();
+    const entry = departments.get(row.department) ?? { department: row.department, total: 0, done: 0 };
+    entry.total += 1;
+    entry.done += row.done ? 1 : 0;
+    departments.set(row.department, entry);
+    departmentsByWork.set(row.work_id, departments);
+  }
+  const requestedItems = new Set(requested.map((row) => row.item_id));
+  // The owner's own share: the steps neither handed to anyone nor sent to a department, shown first in the "İcraçılar" column.
+  const ownSteps = (await db().prepare("SELECT id, personal_work_id AS work_id, done FROM personal_work_checklist_items WHERE delegated_task_id IS NULL").all<{ id: number; work_id: number; done: number }>()).results;
+  const ownByWork = new Map<number, { total: number; done: number }>();
+  for (const row of ownSteps) {
+    if (requestedItems.has(row.id)) continue;
+    const own = ownByWork.get(row.work_id) ?? { total: 0, done: 0 };
+    own.total += 1;
+    own.done += row.done ? 1 : 0;
+    ownByWork.set(row.work_id, own);
+  }
+  return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []), departments: Array.from(departmentsByWork.get(work.id)?.values() ?? []), own: ownByWork.get(work.id) ?? null }));
 }
 
 // Per-work history shown in the "Aç" dialog. Purely informational, so a failed write never blocks the action itself.
@@ -1199,6 +1223,8 @@ export async function togglePersonalWorkChecklistItem(input: { id: number; actor
   const item = await db().prepare("SELECT personal_work_id, delegated_task_id, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Bu addım işçiyə həvalə edilib, statusu tapşırığın təsdiqi ilə avtomatik yenilənəcək.");
+  const openRequest = await openRequestOfItem(input.id);
+  if (openRequest) throw new Error(`Bu addım üzrə ${openRequest.to_department} şöbəsinə sorğu göndərilib — cavabı qəbul edəndə ✓ avtomatik qoyulacaq.`);
   const work = await db().prepare("SELECT status FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<{ status: string }>();
   if (!work) throw new Error("İş tapılmadı.");
   if (work.status !== "İcradadır") throw new Error("Yalnız icraya alınmış işdə addımlar ✓ edilə bilər.");
