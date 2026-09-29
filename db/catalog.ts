@@ -1,7 +1,7 @@
 import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { periodWindow } from "@/lib/fixed-periods";
-import { companyDepartments, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
+import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { parseHiddenSections } from "@/lib/permissions";
 
 function db() {
@@ -1109,12 +1109,76 @@ export async function deletePersonalWork(input: { id: number; userId: number }) 
 
 export async function getPersonalWorkChecklist(personalWorkId: number) {
   await ensureSchema();
-  return (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
-    delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size
+  await ensureRequestSchema();
+  // Each step also carries its latest request to another department (Sorğular): status, handler, answer text and file.
+  const rows = (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
+    delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size,
+    req.id AS request_id, req.status AS request_status, req.to_department AS request_department, req.reject_reason AS request_reject_reason, req.desired_due_at AS request_due_at, req.agreed_due_at AS request_agreed_due_at,
+    req_assignee.name AS request_assignee_name, req_task.submission_attachment_key AS request_answer_key, req_task.submission_attachment_name AS request_answer_name, req_task.submission_attachment_size AS request_answer_size,
+    (SELECT detail FROM work_request_events WHERE request_id = req.id AND action = 'Sorğu cavablandı' ORDER BY id DESC LIMIT 1) AS request_answer
     FROM personal_work_checklist_items
     LEFT JOIN employees AS delegated_employee ON delegated_employee.id = personal_work_checklist_items.delegated_employee_id
     LEFT JOIN tasks AS delegated_task ON delegated_task.id = personal_work_checklist_items.delegated_task_id
-    WHERE personal_work_id = ? ORDER BY id`).bind(personalWorkId).all()).results;
+    LEFT JOIN work_requests AS req ON req.id = (SELECT MAX(id) FROM work_requests WHERE personal_work_item_id = personal_work_checklist_items.id)
+    LEFT JOIN employees AS req_assignee ON req_assignee.id = req.assignee_employee_id
+    LEFT JOIN tasks AS req_task ON req_task.id = req.task_id
+    WHERE personal_work_id = ? ORDER BY personal_work_checklist_items.id`).bind(personalWorkId).all<Record<string, unknown>>()).results;
+  // The pending score is the other department's matter; for the requester the request is simply closed.
+  return rows.map((row) => (row.request_status === AWAITING_EVALUATION ? { ...row, request_status: "Bağlandı" } : row));
+}
+
+// A step's request is "open" until it is closed or rejected; while open the step cannot be deleted, handed to an employee or re-sent.
+const OPEN_REQUEST_SQL = "SELECT id, status, to_department FROM work_requests WHERE personal_work_item_id = ? AND status NOT IN ('Bağlandı', 'İmtina edildi', ?) ORDER BY id DESC LIMIT 1";
+async function openRequestOfItem(itemId: number) {
+  await ensureRequestSchema();
+  return db().prepare(OPEN_REQUEST_SQL).bind(itemId, AWAITING_EVALUATION).first<{ id: number; status: string; to_department: string }>();
+}
+
+// Departments of the work's firm a step's request can go to (every one except the sender's own) — empty when the work has no firm.
+export async function getPersonalWorkRequestTargets(personalWorkId: number, employeeId: number | null) {
+  await ensureSchema();
+  const work = await db().prepare("SELECT company_id FROM personal_works WHERE id = ?").bind(personalWorkId).first<{ company_id: number | null }>();
+  if (!work?.company_id) return { departments: [] as string[], ownDepartment: null as string | null };
+  const lookup = await companyDepartments();
+  const ownDepartment = lookup.departmentOf(work.company_id, employeeId);
+  return { departments: lookup.departmentsOf(work.company_id).map((d) => d.name).filter((name) => name !== ownDepartment), ownDepartment };
+}
+
+// Sends a step of "İşlərim" as a request to another department of the work's firm. It is an ordinary request (Sorğular);
+// the step only keeps the link, shows the progress and the answer, and the owner ticks it off once satisfied.
+export async function requestPersonalWorkChecklistItem(user: SessionUser, input: { id: number; toDepartment: string; title?: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+  await ensureSchema();
+  const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!item) throw new Error("İş addımı tapılmadı.");
+  const work = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<Record<string, unknown>>();
+  if (!work) throw new Error("İş tapılmadı.");
+  if (Number(work.user_id) !== user.id) throw new Error("Bu iş sizə aid deyil.");
+  if (work.status !== "İcradadır") throw new Error("Yalnız icraya alınmış işdən sorğu göndərmək olar.");
+  if (!work.company_id) throw new Error("Sorğu göndərmək üçün əvvəlcə işin firmasını seçin.");
+  if (item.done) throw new Error("Tamamlanmış addım üçün sorğu göndərmək olmaz.");
+  if (item.delegated_task_id) throw new Error("Bu addım artıq işçiyə həvalə edilib.");
+  const open = await openRequestOfItem(input.id);
+  if (open) throw new Error(`Bu addım üzrə ${open.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır (${open.status}).`);
+  // Without a new file the step's own file goes along, as a copy, so deleting either one never orphans the other.
+  let attachment = input.attachmentKey ? { key: input.attachmentKey, name: input.attachmentName ?? null, size: input.attachmentSize ?? null, type: input.attachmentType ?? null } : null;
+  if (!attachment && item.attachment_key && env.FILES) {
+    const source = await env.FILES.get(String(item.attachment_key));
+    if (source) {
+      const copyKey = `${crypto.randomUUID()}-${String(item.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
+      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
+      attachment = { key: copyKey, name: (item.attachment_name as string | null) ?? null, size: (item.attachment_size as number | null) ?? null, type: (item.attachment_type as string | null) ?? null };
+    }
+  }
+  await createRequest(user, {
+    companyId: Number(work.company_id),
+    toDepartment: input.toDepartment,
+    title: input.title?.trim() || `${work.title} — ${item.title}`,
+    description: input.description,
+    desiredDueAt: input.desiredDueAt,
+    attachmentKey: attachment?.key, attachmentName: attachment?.name ?? undefined, attachmentSize: attachment?.size ?? undefined, attachmentType: attachment?.type ?? undefined,
+    personalWorkItemId: input.id,
+  });
+  return getPersonalWorkChecklist(Number(item.personal_work_id));
 }
 
 export async function createPersonalWorkChecklistItem(input: { personalWorkId: number; actorName?: string; title: string }) {
@@ -1156,6 +1220,8 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Bu addım artıq həvalə edilib.");
+  const openRequest = await openRequestOfItem(input.id);
+  if (openRequest) throw new Error(`Bu addım üzrə ${openRequest.to_department} şöbəsinə sorğu göndərilib — sorğu bağlanana və ya geri çağırılana qədər işçiyə verilə bilməz.`);
   const work = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<Record<string, unknown>>();
   if (!work) throw new Error("İş tapılmadı.");
   if (Number(work.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
@@ -1201,6 +1267,8 @@ export async function deletePersonalWorkChecklistItem(input: { id: number; actor
   const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Həvalə edilmiş addım silinə bilməz.");
+  const openRequest = await openRequestOfItem(input.id);
+  if (openRequest) throw new Error(`Bu addım üzrə ${openRequest.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır (${openRequest.status}). Addım sorğu bağlanandan və ya rədd ediləndən sonra silinə bilər; “Yeni” statusda sorğunu geri çağırmaq olar.`);
   await db().prepare("DELETE FROM personal_work_checklist_items WHERE id = ?").bind(input.id).run();
   if (item.attachment_key && env.FILES) await env.FILES.delete(item.attachment_key);
   await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "Addım silindi", item.title);

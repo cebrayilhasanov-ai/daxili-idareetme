@@ -1,6 +1,6 @@
-import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
+import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
-import { requireSection } from "@/lib/permissions";
+import { hiddenSections, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
@@ -22,7 +22,10 @@ export async function GET(request: Request) {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     const personalWorkId = Number(new URL(request.url).searchParams.get("personalWorkId"));
     await assertAccess(user, personalWorkId);
-    return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: await getPersonalWorkDelegateCandidates(personalWorkId) });
+    // A step can be sent to another department only by someone who may use Sorğular.
+    const canRequest = !(await hiddenSections(user)).has("tasks.requests");
+    const targets = canRequest ? await getPersonalWorkRequestTargets(personalWorkId, user.employeeId) : { departments: [], ownDepartment: null };
+    return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: await getPersonalWorkDelegateCandidates(personalWorkId), canRequest, requestDepartments: targets.departments, ownDepartment: targets.ownDepartment });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
@@ -45,6 +48,11 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(id).first<{ personal_work_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
+    if (body.requestDepartment) {
+      await requireSection(user, "tasks.requests");
+      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, attachmentKey: body.attachmentKey, attachmentName: body.attachmentName, attachmentSize: body.attachmentSize, attachmentType: body.attachmentType });
+      return Response.json({ items });
+    }
     const items = body.delegateEmployeeId
       ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, actorName: user.name, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
       : body.removeAttachment || body.attachmentKey

@@ -52,6 +52,8 @@ export async function ensureRequestSchema() {
   )`).run();
   const columns = await db().prepare("PRAGMA table_info(work_requests)").all<{ name: string }>();
   if (!columns.results.some((column) => column.name === "task_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN task_id INTEGER REFERENCES tasks(id)").run();
+  // A request sent from a step of "İşlərim" (Mənim iş axınım) remembers that step, so the step can show its status and answer.
+  if (!columns.results.some((column) => column.name === "personal_work_item_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN personal_work_item_id INTEGER").run();
   // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
   await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
   schemaReady = true;
@@ -181,7 +183,7 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
 }
 
 async function allRows() {
-  return (await db().prepare(`SELECT r.*, c.name AS company_name, u.name AS from_name, a.name AS assignee_name,
+  return (await db().prepare(`SELECT r.*, c.name AS company_name, u.name AS from_name, a.name AS assignee_name, pw.title AS origin_work_title,
       t.status AS task_status, t.evaluation AS task_evaluation, t.evaluation_note AS task_evaluation_note,
       t.submission_attachment_key, t.submission_attachment_name, t.submission_attachment_size
     FROM work_requests r
@@ -189,6 +191,8 @@ async function allRows() {
     LEFT JOIN app_users u ON u.id = r.from_user_id
     LEFT JOIN employees a ON a.id = r.assignee_employee_id
     LEFT JOIN tasks t ON t.id = r.task_id
+    LEFT JOIN personal_work_checklist_items pwi ON pwi.id = r.personal_work_item_id
+    LEFT JOIN personal_works pw ON pw.id = pwi.personal_work_id
     ORDER BY r.created_at DESC, r.id DESC`).all<RequestRow>()).results;
 }
 
@@ -206,7 +210,8 @@ async function createLinkedTask(row: RequestRow, employeeId: number, dueDate: st
   }
   const sender = await db().prepare("SELECT name FROM app_users WHERE id = ?").bind(row.from_user_id).first<{ name: string }>();
   const from = `${sender?.name || "—"}${row.from_department ? ` (${row.from_department})` : ""}`;
-  const description = `Sorğunu göndərən: ${from}${row.description ? `\n\n${row.description}` : ""}`;
+  const origin = await originOf(row.id);
+  const description = `Sorğunu göndərən: ${from}${origin ? `\nİş: ${origin.work_title} — ${origin.item_title}` : ""}${row.description ? `\n\n${row.description}` : ""}`;
   // End of the agreed day, Baku time (UTC+4).
   const dueAt = new Date(`${dueDate}T18:00:00+04:00`).toISOString();
   const result = await db().prepare(`INSERT INTO tasks
@@ -297,9 +302,27 @@ export async function getRequestEvents(user: SessionUser, id: number) {
   return seesEvaluation ? events : events.filter((event) => !/qiymətləndiril|qiymətləndirmə/i.test(event.action));
 }
 
+// The "İşlərim" step a request was sent from (null for requests made in Sorğular itself, or once the step is deleted).
+async function originOf(requestId: number) {
+  return db().prepare(`SELECT r.to_department, i.personal_work_id, i.title AS item_title, w.title AS work_title FROM work_requests r
+    JOIN personal_work_checklist_items i ON i.id = r.personal_work_item_id JOIN personal_works w ON w.id = i.personal_work_id WHERE r.id = ?`)
+    .bind(requestId).first<{ to_department: string; personal_work_id: number; item_title: string; work_title: string }>();
+}
+
+// Mirrors a request's progress into the history of the work it came from. Comments stay in the request, and the score is
+// the handling department's internal matter, so neither is copied.
+async function logOriginEvent(requestId: number, actorName: string, action: string, detail?: string | null) {
+  if (/qiymətləndiril|qiymətləndirmə/i.test(action)) return;
+  const origin = await originOf(requestId);
+  if (!origin) return;
+  await db().prepare("INSERT INTO personal_work_events (personal_work_id, actor_name, action, detail, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(origin.personal_work_id, actorName || "Naməlum", `Sorğu (${origin.to_department}): ${action.replace(/^Sorğu(dan)?\s+/, "")}`, `${origin.item_title}${detail?.trim() ? `\n${detail.trim()}` : ""}`, new Date().toISOString()).run();
+}
+
 async function logEvent(requestId: number, actorName: string, action: string, detail?: string | null, kind: "event" | "comment" = "event") {
   await db().prepare("INSERT INTO work_request_events (request_id, actor_name, kind, action, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(requestId, actorName || "Naməlum", kind, action, detail?.trim() || null, new Date().toISOString()).run();
+  if (kind === "event") await logOriginEvent(requestId, actorName, action, detail);
 }
 
 async function requireRow(user: SessionUser, id: number) {
@@ -318,7 +341,7 @@ const dateOnly = (value: unknown) => {
   return text;
 };
 
-export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string; personalWorkItemId?: number }) {
   await ensureRequestSchema();
   const title = input.title?.trim();
   const toDepartment = input.toDepartment?.trim();
@@ -328,14 +351,17 @@ export async function createRequest(user: SessionUser, input: { companyId: numbe
   if (!(await userCompanyIds(user)).includes(input.companyId)) throw new Error("Bu firmada işləmirsiniz.");
   const structure = await loadStructure();
   if (!structure.departments.has(structure.key(input.companyId, toDepartment))) throw new Error("Bu şöbə firmanın strukturunda yoxdur.");
+  const fromDepartment = structure.departmentOf(input.companyId, user.employeeId);
+  if (input.personalWorkItemId && fromDepartment === toDepartment) throw new Error("Öz şöbənizə sorğu göndərmək olmaz — addımı “İşçiyə həvalə et” ilə verin.");
   const now = new Date().toISOString();
   const result = await db().prepare(`INSERT INTO work_requests
-    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, attachment_key, attachment_name, attachment_size, attachment_type, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?, ?)`)
-    .bind(input.companyId, user.id, user.employeeId, structure.departmentOf(input.companyId, user.employeeId), toDepartment, title, input.description?.trim() || null, dateOnly(input.desiredDueAt),
-      input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, now, now).run();
+    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, attachment_key, attachment_name, attachment_size, attachment_type, created_at, updated_at, personal_work_item_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(input.companyId, user.id, user.employeeId, fromDepartment, toDepartment, title, input.description?.trim() || null, dateOnly(input.desiredDueAt),
+      input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, now, now, input.personalWorkItemId || null).run();
   const id = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə`);
+  return id;
 }
 
 export async function updateRequest(user: SessionUser, input: { id: number; action: string; assigneeId?: number; agreedDueAt?: string; text?: string; score?: number }) {
@@ -432,6 +458,7 @@ export async function deleteRequest(user: SessionUser, id: number) {
   await ensureRequestSchema();
   const { row, can } = await requireRow(user, id);
   if (!can.remove) throw new Error("Yalnız “Yeni” statuslu öz sorğunuzu silə bilərsiniz.");
+  await logOriginEvent(row.id, user.name, "Sorğu geri çağırıldı");
   await db().prepare("DELETE FROM work_request_events WHERE request_id = ?").bind(row.id).run();
   await db().prepare("DELETE FROM work_requests WHERE id = ?").bind(row.id).run();
   if (row.attachment_key && env.FILES) await env.FILES.delete(String(row.attachment_key));

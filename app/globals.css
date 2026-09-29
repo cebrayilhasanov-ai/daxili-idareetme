@@ -556,3 +556,15 @@ nav button>em+.navcaret{margin-left:6px}
 .hrmonthgrid i{font-style:normal;font-weight:700;color:#94a3b8;font-size:9px}
 .hrday{padding:3px 0;border-radius:5px;color:#1e293b}.hrday.weekend{color:#94a3b8;background:#f8fafc}
 .hrday.holiday{background:#fecaca;color:#991b1b;font-weight:800}.hrday.dayoff{background:#fed7aa;color:#9a3412;font-weight:800}.hrday.workday{background:#bfdbfe;color:#1e40af;font-weight:800}.hrday.short{background:#fef08a;color:#854d0e;font-weight:800}
+/* İşlərim → Şöbəyə sorğu: a step sent to another department, with its status and answer */
+.checklistdelegate+.requestbtn,.requestbtn{background:#eef6ff;color:#1d4ed8;border-color:#bfdbfe}
+.steprequest{grid-column:1/-1;display:grid;gap:5px;margin-top:6px;padding:9px 11px;border:1px solid #bfdbfe;border-left:4px solid #3b82f6;border-radius:9px;background:#f5f9ff;font-size:11px}
+.steprequest.closed{border-color:#bbf7d0;border-left-color:#16a34a;background:#f3fdf6}.steprequest.rejected{border-color:#fecaca;border-left-color:#dc2626;background:#fff6f6}
+.steprequesthead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.steprequesthead small{color:#64748b;font-size:10px}
+.steprequeststatus{border-radius:10px;padding:2px 8px;font-size:10px;font-weight:800;background:#e0e7ff;color:#3730a3}
+.steprequeststatus.new{background:#f1f5f9;color:#475569}.steprequeststatus.answered{background:#fef3c7;color:#92400e}.steprequeststatus.closed{background:#dcfce7;color:#166534}.steprequeststatus.rejected{background:#fee2e2;color:#b91c1c}
+.steprequestanswer{margin:0;white-space:pre-wrap;line-height:1.45;color:#1e293b}
+.steprequestnote{color:#64748b;font-size:10px}.steprequestwarn{color:#b45309;font-size:10px;font-weight:700}
+.steprequestactions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.steprequestactions button{height:32px;font-size:11px}
+.steprequestform label{display:grid;gap:4px;font-size:10px;font-weight:700;color:#334155}.steprequestform select,.steprequestform input{height:36px;border:1px solid #d6c79f;border-radius:7px;background:#fff;padding:0 9px}
+.requestorigin{display:block;margin-top:2px;color:#0b6b7b;font-size:10px;font-weight:600}
