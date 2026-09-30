@@ -612,7 +612,7 @@ nav button>em+.navcaret{margin-left:6px}
 .trendrow.hrrow{border:0;background:none;padding:3px 4px;margin:-3px -4px;border-radius:6px;cursor:pointer;text-align:left;font:inherit}.trendrow.hrrow:hover{background:#fef2f2}.hrrow .trendname small{display:block;font-size:10px;font-weight:500;color:#94a3b8;overflow:hidden;text-overflow:ellipsis}
 .hrmore{font-size:11px;color:#64748b}
 .panel .head .hrperiods.evalperiods button.on{color:#0C8599}
-.evaloverview{padding:18px 18px 0;display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:12px}
+.evaloverview{padding:18px 18px 0;display:grid;grid-template-columns:minmax(170px,220px) minmax(0,1fr) minmax(230px,300px);gap:12px}
 .evalsummary,.evalhist{border:1px solid #e4eaf2;border-radius:12px;padding:12px 14px;background:#fbfdff}
 .evalsummary>small,.evalhist>small{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em}
 .evalsummary>div{display:flex;align-items:baseline;gap:3px;margin:4px 0 2px}.evalsummary b{font-size:30px;line-height:1;color:#0f172a}.evalsummary>div span{font-size:12px;color:#94a3b8}
@@ -638,3 +638,10 @@ nav button>em+.navcaret{margin-left:6px}
 .evalfoot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding-top:10px}.evallegend{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:10px;color:#64748b}.evallegend i{width:9px;height:9px;border-radius:2px;margin-left:6px}.evallegend i:first-child{margin-left:0}
 .evalfoot button{border:1px solid #cfe7ea;background:#f0fbfc;color:#0C8599;font-size:11px;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer}
 @media(max-width:700px){.evaltable{--evalcols:22px minmax(0,1fr) 62px 44px;padding:12px}.evalhidesm{display:none!important}.evalthead button:nth-child(5){display:none}.evalrow{grid-template-areas:"rank name score late" ". bar bar bar";row-gap:4px;padding:6px 4px}.evalrow .evalrank{grid-area:rank}.evalrow .evalname{grid-area:name}.evalrow .evalscore{grid-area:score}.evalrow .evallate{grid-area:late}.evalrow .evalbar{grid-area:bar}}
+.evalpie>small b{color:#15803d;text-transform:none;letter-spacing:0}
+.evalpiebody{display:flex;align-items:center;gap:12px;margin-top:6px;height:96px}.evalpiebody svg{width:96px;height:96px;flex:none;overflow:visible}
+.evalslice{cursor:pointer;transition:opacity .15s}.evalslice.dim{opacity:.35}
+.evalpielegend{flex:1;min-width:0;display:grid;gap:4px}.evalpielegend span{display:grid;grid-template-columns:9px auto 1fr auto 34px;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#334155;padding:2px 4px;border-radius:5px}.evalpielegend span.on{background:#f1f5f9}.evalpielegend i{width:9px;height:9px;border-radius:2px}.evalpielegend small{font-size:10px;font-weight:500;color:#94a3b8}.evalpielegend b{color:#0f172a}.evalpielegend em{font-style:normal;font-size:10px;color:#64748b;text-align:right}
+.evalpieempty{margin:10px 0 0;font-size:11px;color:#94a3b8}
+@media(max-width:1100px){.evaloverview{grid-template-columns:minmax(170px,220px) minmax(0,1fr)}.evalpie{grid-column:1/-1}}
+@media(max-width:700px){.evaloverview{grid-template-columns:1fr}}

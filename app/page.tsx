@@ -170,7 +170,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.49</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.50</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1874,6 +1874,23 @@ function ScoreSparkline({points}:{points:(number|null)[]}){
   const known=points.map((v,i)=>v===null?null:{x:i*step,y:y(v)}).filter((p):p is {x:number;y:number}=>p!==null);
   return <svg className="evalspark" viewBox={`-3 -3 ${w+6} ${h+6}`} aria-hidden="true"><polyline points={known.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>{known.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={i===known.length-1?2.6:1.8} fill="currentColor"/>)}</svg>;
 }
+// Same bands as scoreTier: 8–10 good, 5–7 middling, 1–4 poor.
+const SCORE_GROUPS:{tier:string;label:string;range:string;color:string}[]=[{tier:"",label:"Yaxşı",range:"8–10",color:"#22c55e"},{tier:"mid",label:"Orta",range:"5–7",color:"#f59e0b"},{tier:"low",label:"Pis",range:"1–4",color:"#ef4444"}];
+function ScoreGroupsPie({rated}:{rated:Task[]}){
+  const [hover,setHover]=useState<string|null>(null);
+  const total=rated.length;
+  const groups=SCORE_GROUPS.map(g=>({...g,count:rated.filter(t=>scoreTier(t.evaluation||0)===g.tier).length}));
+  const pct=(n:number)=>total?Math.round(n/total*100):0;
+  const slices=groups.filter(g=>g.count>0).reduce<{g:typeof groups[number];from:number;to:number}[]>((acc,g)=>{const from=acc.length?acc[acc.length-1].to:0;acc.push({g,from,to:from+g.count/total});return acc},[]);
+  // Fractions of a turn to an SVG arc; angles start at 12 o'clock and run clockwise.
+  const point=(f:number)=>`${21+20*Math.sin(f*2*Math.PI)},${21-20*Math.cos(f*2*Math.PI)}`;
+  return <div className="evalhist evalpie"><small>Keyfiyyət payı{total>0&&<b> · {pct(groups[0].count)}% yaxşı</b>}</small>
+    {total?<div className="evalpiebody"><svg viewBox="0 0 42 42" role="img" aria-label="Balların Yaxşı, Orta və Pis qruplar üzrə payı">
+      {slices.map(({g,from,to})=>{const props={className:`evalslice${hover&&hover!==g.label?" dim":""}`,fill:g.color,stroke:"#fff",strokeWidth:0.6,onMouseEnter:()=>setHover(g.label),onMouseLeave:()=>setHover(null)};const title=<title>{`${g.label} (${g.range}): ${g.count} iş, ${pct(g.count)}%`}</title>;
+        return slices.length===1?<circle key={g.label} {...props} cx="21" cy="21" r="20">{title}</circle>:<path key={g.label} {...props} d={`M21,21 L${point(from)} A20,20 0 ${to-from>0.5?1:0} 1 ${point(to)} Z`}>{title}</path>})}
+    </svg><div className="evalpielegend">{groups.map(g=><span key={g.label} className={hover===g.label?"on":""} onMouseEnter={()=>setHover(g.label)} onMouseLeave={()=>setHover(null)}><i style={{background:g.color}}/>{g.label} <small>{g.range}</small><b>{g.count}</b><em>{pct(g.count)}%</em></span>)}</div></div>:<p className="evalpieempty">Bu dövrdə qiymət yoxdur</p>}
+  </div>;
+}
 function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}){
   const [period,setPeriod]=useState<ViolationPeriod>("3m");
   const [now]=useState(()=>new Date());
@@ -1922,6 +1939,7 @@ function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}
           {range&&<p className="evaldelta">{delta===null?<small>Əvvəlki dövrdə qiymət yoxdur</small>:<><em className={delta>0?"up":delta<0?"down":""}>{delta>0?`+${delta.toFixed(1)} ↑`:delta<0?`−${(-delta).toFixed(1)} ↓`:"dəyişməyib"}</em> <small>{range.prevLabel}</small></>}</p>}
         </div>
         <div className="evalhist"><small>Balların paylanması</small><div className="evalhistbars">{histogram.map(x=><div key={x.score} title={`${x.score} bal: ${x.count} iş`}><small>{x.count||""}</small><span className={scoreTier(x.score)} style={{height:`${x.count?Math.max(x.count/histMax*100,6):0}%`}}/><i>{x.score}</i></div>)}</div></div>
+        <ScoreGroupsPie rated={rated}/>
       </div>
       {rows.length?<div className="evaltable">
         <div className="evalthead">{sortHeader("score","#","evalrank")}{sortHeader("name","İşçi")}{sortHeader("score","Bal")}{sortHeader("trend","Son 6 ay","evalhidesm")}{sortHeader("given","Tapşırıqlar")}{sortHeader("late","Gecikən","evalright")}</div>
