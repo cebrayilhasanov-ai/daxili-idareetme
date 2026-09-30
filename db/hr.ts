@@ -1,6 +1,6 @@
 import { env } from "@/lib/runtime";
 import { createCustomer, findCustomerByVoen, getCustomers } from "@/db/catalog";
-import { CALENDAR_KINDS, LEAVE_KINDS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
+import { CALENDAR_KINDS, LEAVE_KINDS, TERMINATION_REASONS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
 
 // HR register (kadr uçotu): every worker of every firm, kept apart from the app's login users (`employees` / `app_users`).
 // Most workers never sign in; a card may optionally point at a Personal entry (user_employee_id) when that person also uses the app.
@@ -96,6 +96,8 @@ async function ensureHrSchema() {
     sort_order INTEGER NOT NULL DEFAULT 0
   )`).run();
   await db().prepare("CREATE INDEX IF NOT EXISTS hr_prior_jobs_customer ON hr_prior_jobs(customer_id)").run();
+  const jobColumns = (await db().prepare("PRAGMA table_info(hr_prior_jobs)").all<{ name: string }>()).results;
+  if (!jobColumns.some((c: { name: string }) => c.name === "termination_reason")) await db().prepare("ALTER TABLE hr_prior_jobs ADD COLUMN termination_reason TEXT").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS hr_family (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     hr_employee_id INTEGER NOT NULL,
@@ -193,7 +195,7 @@ function phoneValue(value: unknown, label: string, required: boolean) {
   return v.replace(/\s+/g, " ");
 }
 
-type PriorJobInput = { customerId: number; position: string; startDate: string; endDate: string };
+type PriorJobInput = { customerId: number; position: string; startDate: string; endDate: string; terminationReason: string };
 async function readPriorJobs(raw: unknown): Promise<PriorJobInput[]> {
   if (!Array.isArray(raw)) return [];
   const jobs: PriorJobInput[] = [];
@@ -208,7 +210,9 @@ async function readPriorJobs(raw: unknown): Promise<PriorJobInput[]> {
     if (!startDate || !endDate) throw new Error(`${label}: başlama və bitmə tarixlərini daxil edin.`);
     if (endDate < startDate) throw new Error(`${label}: bitmə tarixi başlama tarixindən əvvəl ola bilməz.`);
     if (endDate > todayIso()) throw new Error(`${label}: bitmə tarixi gələcəkdə ola bilməz.`);
-    jobs.push({ customerId, position, startDate, endDate });
+    const terminationReason = String(item.terminationReason || "");
+    if (!TERMINATION_REASONS.some((r) => r.key === terminationReason)) throw new Error(`${label}: işdən çıxma əsasını seçin.`);
+    jobs.push({ customerId, position, startDate, endDate, terminationReason });
   }
   const ids = [...new Set(jobs.map((j) => j.customerId))];
   if (ids.length) {
@@ -281,7 +285,7 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
   }
   await db().batch([
     db().prepare("DELETE FROM hr_prior_jobs WHERE hr_employee_id = ?").bind(savedId),
-    ...priorJobs.map((j, i) => db().prepare("INSERT INTO hr_prior_jobs (hr_employee_id, customer_id, position, start_date, end_date, sort_order) VALUES (?, ?, ?, ?, ?, ?)").bind(savedId, j.customerId, j.position, j.startDate, j.endDate, i)),
+    ...priorJobs.map((j, i) => db().prepare("INSERT INTO hr_prior_jobs (hr_employee_id, customer_id, position, start_date, end_date, termination_reason, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(savedId, j.customerId, j.position, j.startDate, j.endDate, j.terminationReason, i)),
   ]);
   return savedId;
 }
@@ -292,7 +296,7 @@ export async function createHrCustomer(input: Record<string, unknown>) {
   const voen = text(input.voen);
   if (!voen) throw new Error("VÖEN daxil edin.");
   if (await findCustomerByVoen(voen)) throw new Error("Bu VÖEN artıq müştəri siyahısında var — siyahıdan seçin.");
-  await createCustomer({ entityType: text(input.entityType) || undefined, voen, name: text(input.name) || "", legalAddress: text(input.legalAddress) || undefined, manager: text(input.manager) || undefined });
+  await createCustomer({ entityType: text(input.entityType) || undefined, voen, name: text(input.name) || "", legalAddress: text(input.legalAddress) || undefined, manager: text(input.manager) || undefined, phone: text(input.phone) || undefined });
   const created = await findCustomerByVoen(voen);
   if (!created) throw new Error("Müştəri yaradılmadı.");
   return created.id;
@@ -394,7 +398,7 @@ export async function deleteHrEducation(id: number) {
 // Customer report, only for users who may see personnel data: which of our people worked at each customer and what they do now.
 export async function getHrCustomerReport() {
   await ensureHrSchema();
-  return (await db().prepare(`SELECT hr_prior_jobs.customer_id, hr_prior_jobs.position AS prior_position, hr_prior_jobs.start_date, hr_prior_jobs.end_date,
+  return (await db().prepare(`SELECT hr_prior_jobs.customer_id, hr_prior_jobs.position AS prior_position, hr_prior_jobs.start_date, hr_prior_jobs.end_date, hr_prior_jobs.termination_reason AS prior_termination_reason,
       hr_employees.id AS hr_employee_id, hr_employees.last_name, hr_employees.first_name, hr_employees.patronymic, hr_employees.position AS current_position,
       hr_employees.termination_date, companies.name AS company_name
     FROM hr_prior_jobs JOIN hr_employees ON hr_employees.id = hr_prior_jobs.hr_employee_id LEFT JOIN companies ON companies.id = hr_employees.company_id

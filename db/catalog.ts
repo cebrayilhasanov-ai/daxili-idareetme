@@ -113,6 +113,7 @@ async function ensureSchema() {
   )`).run();
   const customerColumns = await db().prepare("PRAGMA table_info(customers)").all<{ name: string }>();
   if (!customerColumns.results.some((column) => column.name === "country")) await db().prepare("ALTER TABLE customers ADD COLUMN country TEXT").run();
+  if (!customerColumns.results.some((column: { name: string }) => column.name === "phone")) await db().prepare("ALTER TABLE customers ADD COLUMN phone TEXT").run();
   const outgoingColumns = await db().prepare("PRAGMA table_info(outgoing_documents)").all<{ name: string }>();
   if (!outgoingColumns.results.some((column) => column.name === "attachment_key")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_key TEXT").run();
   if (!outgoingColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE outgoing_documents ADD COLUMN attachment_name TEXT").run();
@@ -1903,13 +1904,23 @@ async function customerUsageSql() {
   };
 }
 
+// A customer's phone is required: digits with an optional leading +, spaces, dashes and brackets, 7–15 digits (foreign numbers too).
+function customerPhone(value: string | null | undefined) {
+  const phone = value?.trim().replace(/\s+/g, " ");
+  if (!phone) throw new Error("Müştərinin telefon nömrəsini daxil edin.");
+  if (!/^\+?[\d\s()-]+$/.test(phone)) throw new Error("Telefon nömrəsi yalnız rəqəm, boşluq, \"+\", \"-\" və mötərizədən ibarət ola bilər.");
+  const digits = phone.replace(/\D/g, "").length;
+  if (digits < 7 || digits > 15) throw new Error("Telefon nömrəsi 7–15 rəqəmdən ibarət olmalıdır.");
+  return phone;
+}
+
 export async function getCustomers() {
   await ensureSchema();
   const usage = await customerUsageSql();
   return (await db().prepare(`SELECT customers.*, ${usage.outgoing} + ${usage.incoming} + ${usage.hr} AS usage_count FROM customers ORDER BY name`).all()).results;
 }
 
-export async function createCustomer(input: { entityType?: string; country?: string; voen?: string; name: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
+export async function createCustomer(input: { entityType?: string; country?: string; voen?: string; name: string; legalAddress?: string; legalAddress2?: string; manager?: string; phone?: string }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Müştərinin adını yazın.");
@@ -1924,15 +1935,16 @@ export async function createCustomer(input: { entityType?: string; country?: str
   if (!legalAddress) throw new Error("Hüquqi ünvanı yazın.");
   const manager = input.manager?.trim();
   if (!manager) throw new Error("Rəhbəri yazın.");
+  const phone = customerPhone(input.phone);
   const duplicate = voen ? await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND COALESCE(country, '') = COALESCE(?, '')").bind(voen, country).first<{ id: number; name: string }>() : null;
   if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
   await db().prepare(`INSERT INTO customers
-    (entity_type, country, voen, name, legal_address, legal_address2, manager, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(entityType, country, voen, name, legalAddress, input.legalAddress2 || null, manager, new Date().toISOString()).run();
+    (entity_type, country, voen, name, legal_address, legal_address2, manager, phone, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(entityType, country, voen, name, legalAddress, input.legalAddress2 || null, manager, phone, new Date().toISOString()).run();
 }
 
-export async function updateCustomer(input: { id: number; entityType?: string; country?: string; voen?: string; name?: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
+export async function updateCustomer(input: { id: number; entityType?: string; country?: string; voen?: string; name?: string; legalAddress?: string; legalAddress2?: string; manager?: string; phone?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM customers WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Müştəri tapılmadı.");
@@ -1949,9 +1961,10 @@ export async function updateCustomer(input: { id: number; entityType?: string; c
   if (!legalAddress) throw new Error("Hüquqi ünvanı yazın.");
   const manager = input.manager === undefined ? (current.manager as string | null) : input.manager.trim();
   if (!manager) throw new Error("Rəhbəri yazın.");
+  const phone = customerPhone(input.phone === undefined ? (current.phone as string | null) : input.phone);
   const duplicate = voen ? await db().prepare("SELECT id, name FROM customers WHERE voen = ? AND COALESCE(country, '') = COALESCE(?, '') AND id != ?").bind(voen, country, input.id).first<{ id: number; name: string }>() : null;
   if (duplicate) throw new Error(`Bu VÖEN/FİN artıq "${duplicate.name}" müştərisində qeydə alınıb. Təkrar müştəri kartı yaradıla bilməz.`);
-  await db().prepare("UPDATE customers SET entity_type = ?, country = ?, voen = ?, name = ?, legal_address = ?, legal_address2 = ?, manager = ? WHERE id = ?")
+  await db().prepare("UPDATE customers SET entity_type = ?, country = ?, voen = ?, name = ?, legal_address = ?, legal_address2 = ?, manager = ?, phone = ? WHERE id = ?")
     .bind(
       entityType,
       country,
@@ -1960,6 +1973,7 @@ export async function updateCustomer(input: { id: number; entityType?: string; c
       legalAddress,
       input.legalAddress2 ?? current.legal_address2,
       manager,
+      phone,
       input.id,
     ).run();
 }

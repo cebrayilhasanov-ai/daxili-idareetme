@@ -5,6 +5,7 @@ import { Plus, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ColGroup, SortableTh, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
 import {
   CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, LEAVE_KINDS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
   leaveDaysBetween, leaveKindLabel, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
@@ -28,7 +29,7 @@ type HrEmployee = {
 };
 type HrFamily = { id: number; hr_employee_id: number; relation: string; last_name: string | null; first_name: string; patronymic: string | null; birth_date: string | null; workplace: string | null; phone: string | null };
 type HrEducation = { id: number; hr_employee_id: number; level: string; institution: string; specialty: string | null; start_year: number | null; end_year: number | null; diploma_no: string | null; diploma_key: string | null; diploma_name: string | null };
-type HrPriorJob = { id: number; hr_employee_id: number; customer_id: number; customer_name: string | null; customer_voen: string | null; position: string; start_date: string; end_date: string };
+type HrPriorJob = { id: number; hr_employee_id: number; customer_id: number; customer_name: string | null; customer_voen: string | null; position: string; start_date: string; end_date: string; termination_reason: string | null };
 type HrCustomer = { id: number; voen: string | null; name: string; country: string | null };
 type HrLeave = { id: number; hr_employee_id: number; kind: string; start_date: string; end_date: string; days: number; order_no: string | null; order_date: string | null; note: string | null };
 type HrSalary = { hr_employee_id: number; period: string; amount: number };
@@ -91,6 +92,26 @@ export function HrPage({ section }: { section: HrSection }) {
 }
 
 // ---------------------------------------------------------------- İşçilər
+type PersonnelRow = { e: HrEmployee; balance: ReturnType<typeof leaveBalance>; id: { cls: string; text: string } };
+type PersonnelColumn = ExcelColumn<PersonnelRow> & { width: number; render: (row: PersonnelRow) => React.ReactNode };
+const PERSONNEL_COLUMNS: { key: string; width: number }[] = [
+  { key: "name", width: 230 }, { key: "company", width: 180 }, { key: "position", width: 160 }, { key: "phone", width: 140 }, { key: "hire", width: 110 },
+  { key: "service", width: 130 }, { key: "balance", width: 130 }, { key: "idcard", width: 140 }, { key: "status", width: 120 },
+];
+function personnelColumns(today: string): PersonnelColumn[] {
+  const width = (key: string) => PERSONNEL_COLUMNS.find((c) => c.key === key)?.width || 140;
+  return [
+    { key: "name", label: "İşçi", width: width("name"), search: (r) => fullName(r.e), render: (r) => <span className="hrperson"><HrAvatar employee={r.e} /><span><b>{fullName(r.e)}</b>{r.e.fin && <small className="hrsub">FİN {r.e.fin}</small>}</span></span> },
+    { key: "company", label: "Firma / şöbə", width: width("company"), search: (r) => r.e.company_name || "", render: (r) => <>{r.e.company_name || "—"}{r.e.department && <small className="hrsub">{r.e.department}</small>}</> },
+    { key: "position", label: "Vəzifə", width: width("position"), search: (r) => r.e.position || "", render: (r) => <>{r.e.position || "—"}</> },
+    { key: "phone", label: "Telefon", width: width("phone"), search: (r) => r.e.phone || "", render: (r) => <>{r.e.phone || "—"}</> },
+    { key: "hire", label: "İşə qəbul", width: width("hire"), search: (r) => formatDay(r.e.hire_date), sort: (r) => r.e.hire_date, render: (r) => <>{formatDay(r.e.hire_date)}</> },
+    { key: "service", label: "Staj (bu firmada)", width: width("service"), search: (r) => serviceText(serviceParts(r.e.hire_date, r.e.termination_date || today)), sort: (r) => r.e.hire_date, render: (r) => <>{serviceText(serviceParts(r.e.hire_date, r.e.termination_date || today))}</> },
+    { key: "balance", label: "Məzuniyyət qalığı", width: width("balance"), search: (r) => `${days(r.balance.balance)} gün`, sort: (r) => r.balance.balance, render: (r) => <b className={r.balance.balance < 0 ? "hrneg" : "hrpos"}>{days(r.balance.balance)} gün</b> },
+    { key: "idcard", label: "Vəsiqə etibarlıdır", width: width("idcard"), search: (r) => r.id.text, sort: (r) => r.e.id_valid_until || "", render: (r) => <span className={r.id.cls}>{r.id.text}</span> },
+    { key: "status", label: "Status", width: width("status"), search: (r) => r.e.termination_date ? "İşdən çıxıb" : "İşləyir", render: (r) => r.e.termination_date ? <span className="hrtag off">Çıxıb {formatDay(r.e.termination_date)}</span> : <span className="hrtag on">İşləyir</span> },
+  ];
+}
 function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
   const today = todayIso();
   const [companyId, setCompanyId] = useState("");
@@ -111,8 +132,16 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
     && (status === "all" || (status === "active" && !e.termination_date) || (status === "terminated" && Boolean(e.termination_date)) || (status === "idalert" && !e.termination_date && Boolean(id.cls)) || (status === "contractalert" && contractAlert(e, today) !== null))
     && (!q || `${fullName(e)} ${e.fin || ""} ${e.position || ""} ${e.department || ""}`.toLocaleLowerCase("az").includes(q)));
   const open = openId === "new" ? null : data.employees.find((e) => e.id === openId) || null;
+  // Columns work like the other lists: drag to reorder, resize from the right edge, Excel-like filter and sort in each header.
+  const { order, widths, setWidth, moveColumn } = useTableColumns("hrpersonnel", PERSONNEL_COLUMNS.map((c) => c.key));
+  const resize = useEdgeResize(setWidth, 60);
+  const { dragProps } = useColumnDrag(moveColumn);
+  const columns = personnelColumns(today);
+  const columnsByKey = Object.fromEntries(columns.map((c) => [c.key, c]));
+  const defaultWidths = Object.fromEntries(columns.map((c) => [c.key, c.width]));
+  const excel = useExcelFilters("hrpersonnel", columns, shown);
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Personallar</h2><p>{shown.length} işçi göstərilir · qalıqlar {formatDay(today)} tarixinə</p></div><Button onClick={() => setOpenId("new")}><Plus />Yeni işçi</Button></div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Personallar</h2><p>{excel.rows.length} işçi göstərilir · qalıqlar {formatDay(today)} tarixinə</p></div><Button onClick={() => setOpenId("new")}><Plus />Yeni işçi</Button></div>
     {idAlerts.length > 0 && <button className="hralert" onClick={() => setStatus("idalert")}>⚠ {idAlerts.length} işçinin şəxsiyyət vəsiqəsinin müddəti bitib və ya 30 gün ərzində bitir — göstər</button>}
     {contractAlerts.length > 0 && <button className="hralert" onClick={() => setStatus("contractalert")}>⚠ {contractAlerts.length} işçinin müddətli əmək müqaviləsinin müddəti bitib və ya 30 gün ərzində bitir — göstər</button>}
     <div className="hrfilters">
@@ -120,18 +149,12 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
       <label>Status<select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="active">İşləyənlər</option><option value="terminated">İşdən çıxanlar</option><option value="idalert">Vəsiqəsi bitənlər</option><option value="contractalert">Müqaviləsi bitənlər</option><option value="all">Hamısı</option></select></label>
       <label className="hrsearch">Axtarış<Input value={query} placeholder="Ad, FİN, vəzifə, şöbə..." onChange={(e) => setQuery(e.target.value)} /></label>
     </div>
-    <div className="tasktablewrap"><table className="tasktable hrtable"><thead><tr><th>İşçi</th><th>Firma / şöbə</th><th>Vəzifə</th><th>İşə qəbul</th><th>Staj (bu firmada)</th><th>Məzuniyyət qalığı</th><th>Vəsiqə etibarlıdır</th><th>Status</th></tr></thead>
-      <tbody>{shown.map(({ e, balance, id }) => <tr key={e.id} className="hrrow" onClick={() => setOpenId(e.id)}>
-        <td data-label="İşçi"><span className="hrperson"><HrAvatar employee={e} /><span><b>{fullName(e)}</b>{e.fin && <small className="hrsub">FİN {e.fin}</small>}</span></span></td>
-        <td data-label="Firma / şöbə">{e.company_name || "—"}{e.department && <small className="hrsub">{e.department}</small>}</td>
-        <td data-label="Vəzifə">{e.position || "—"}</td>
-        <td data-label="İşə qəbul">{formatDay(e.hire_date)}</td>
-        <td data-label="Staj">{serviceText(serviceParts(e.hire_date, e.termination_date || today))}</td>
-        <td data-label="Qalıq"><b className={balance.balance < 0 ? "hrneg" : "hrpos"}>{days(balance.balance)} gün</b></td>
-        <td data-label="Vəsiqə"><span className={id.cls}>{id.text}</span></td>
-        <td data-label="Status">{e.termination_date ? <span className="hrtag off">Çıxıb {formatDay(e.termination_date)}</span> : <span className="hrtag on">İşləyir</span>}</td>
+    <div className="tasktablewrap"><table className="tasktable hrtable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} />
+      <thead><tr>{order.map((key) => <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(columnsByKey[key])}</SortableTh>)}</tr></thead>
+      <tbody>{excel.rows.map((row) => <tr key={row.e.id} className="hrrow" onClick={() => setOpenId(row.e.id)}>
+        {order.map((key) => <td key={key} data-label={columnsByKey[key].label}>{columnsByKey[key].render(row)}</td>)}
       </tr>)}</tbody></table>
-      {!shown.length && <div className="empty"><p>{data.employees.length ? "Filtrə uyğun işçi tapılmadı." : "Hələ işçi əlavə edilməyib. “Yeni işçi” düyməsi ilə başlayın."}</p></div>}
+      {!excel.rows.length && <div className="empty"><p>{data.employees.length ? "Filtrə uyğun işçi tapılmadı." : "Hələ işçi əlavə edilməyib. “Yeni işçi” düyməsi ilə başlayın."}</p></div>}
     </div>
     <Dialog open={openId !== null} onOpenChange={(v) => { if (!v) setOpenId(null); }}>
       <DialogContent className="businessdialog hrdialog" resizable>
@@ -176,15 +199,15 @@ function toForm(e: HrEmployee | null): Record<string, string> {
     hireOrderNo: s(e?.hire_order_no), hireOrderDate: s(e?.hire_order_date), emergencyName: s(e?.emergency_name), emergencyRelation: s(e?.emergency_relation), emergencyPhone: s(e?.emergency_phone),
   };
 }
-type JobRow = { key: string; customerId: string; position: string; startDate: string; endDate: string };
+type JobRow = { key: string; customerId: string; position: string; startDate: string; endDate: string; terminationReason: string };
 let jobKey = 0;
-const newJobRow = (): JobRow => ({ key: `job${++jobKey}`, customerId: "", position: "", startDate: "", endDate: "" });
+const newJobRow = (): JobRow => ({ key: `job${++jobKey}`, customerId: "", position: "", startDate: "", endDate: "", terminationReason: "" });
 const toJobRows = (employee: HrEmployee | null, jobs: HrPriorJob[]): JobRow[] => employee
-  ? jobs.filter((j) => j.hr_employee_id === employee.id).map((j) => ({ key: `db${j.id}`, customerId: String(j.customer_id), position: j.position, startDate: j.start_date, endDate: j.end_date }))
+  ? jobs.filter((j) => j.hr_employee_id === employee.id).map((j) => ({ key: `db${j.id}`, customerId: String(j.customer_id), position: j.position, startDate: j.start_date, endDate: j.end_date, terminationReason: j.termination_reason || "" }))
   : [];
 const toPayload = (f: Record<string, string>, jobs: JobRow[]) => ({
   action: "employee", ...f, priorExperienceMonths: (Number(f.priorYears) || 0) * 12 + (Number(f.priorMonths) || 0), priorExperienceDays: Number(f.priorDays) || 0,
-  priorJobs: jobs.map((j) => ({ customerId: Number(j.customerId) || null, position: j.position, startDate: j.startDate, endDate: j.endDate })),
+  priorJobs: jobs.map((j) => ({ customerId: Number(j.customerId) || null, position: j.position, startDate: j.startDate, endDate: j.endDate, terminationReason: j.terminationReason })),
 });
 const RELATIONS = ["Həyat yoldaşı", "Ata", "Ana", "Qardaş", "Bacı", "Övlad", "Digər qohum", "Dost"];
 const CUSTOMER_TYPES = ["Hüquqi şəxs", "Fərdi sahibkar", "Fiziki şəxs"];
@@ -226,12 +249,13 @@ function PriorJobRow({ row, index, customers, onChange, onRemove, onCreateCustom
           ? <span className="hrjobchosen"><b>{chosen.name}</b><small>{chosen.voen ? `VÖEN ${chosen.voen}` : chosen.country || ""}</small><button type="button" className="hrlink" onClick={() => onChange({ ...row, customerId: "" })}>dəyiş</button></span>
           : <span className="hrjobpick"><Input value={query} placeholder="VÖEN və ya ad yazın" onChange={(e) => { setQuery(e.target.value); setCreating(null); }} />
             {matches.length > 0 && <span className="hrjobmatches">{matches.map((c) => <button type="button" key={c.id} onClick={() => pick(c.id)}><b>{c.name}</b><small>{c.voen || c.country || ""}</small></button>)}</span>}
-            {unknownVoen && !creating && <small className="hrwarn">VÖEN {typedVoen} müştəri siyahısında yoxdur · <button type="button" className="hrlink hrlinkok" onClick={() => setCreating({ entityType: "Hüquqi şəxs", name: "", legalAddress: "", manager: "" })}>müştəri kartını yarat</button></small>}
+            {unknownVoen && !creating && <small className="hrwarn">VÖEN {typedVoen} müştəri siyahısında yoxdur · <button type="button" className="hrlink hrlinkok" onClick={() => setCreating({ entityType: "Hüquqi şəxs", name: "", legalAddress: "", manager: "", phone: "" })}>müştəri kartını yarat</button></small>}
           </span>}
       </label>
       <label className="field">Vəzifə *<Input value={row.position} onChange={(e) => onChange({ ...row, position: e.target.value })} /></label>
       <label className="field">Başlama tarixi *<Input type="date" value={row.startDate} onChange={(e) => onChange({ ...row, startDate: e.target.value })} /></label>
       <label className="field">Bitmə tarixi *<Input type="date" value={row.endDate} onChange={(e) => onChange({ ...row, endDate: e.target.value })} /></label>
+      <label className="field">İşdən çıxma əsası *<select value={row.terminationReason} onChange={(e) => onChange({ ...row, terminationReason: e.target.value })}><option value="">Seçin</option>{TERMINATION_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
       <span className="field hrjobservice">Staj<b>{own}</b></span>
     </div>
     <button type="button" className="hrlink hrjobremove" title="Sətri sil" onClick={onRemove}>✕</button>
@@ -242,9 +266,10 @@ function PriorJobRow({ row, index, customers, onChange, onRemove, onCreateCustom
         <label className="field">Adı *<Input value={creating.name} onChange={(e) => setCreating({ ...creating, name: e.target.value })} /></label>
         <label className="field">Hüquqi ünvanı *<Input value={creating.legalAddress} onChange={(e) => setCreating({ ...creating, legalAddress: e.target.value })} /></label>
         <label className="field">Rəhbəri *<Input value={creating.manager} onChange={(e) => setCreating({ ...creating, manager: e.target.value })} /></label>
+        <label className="field">Telefonu *<Input inputMode="tel" placeholder="+994 12 345 67 89" value={creating.phone} onChange={(e) => setCreating({ ...creating, phone: e.target.value })} /></label>
       </div>
       {error && <small className="hrbad">{error}</small>}
-      <div className="hractions"><button type="button" className="inlinecancel" disabled={busy} onClick={() => setCreating(null)}>Ləğv et</button><Button type="button" disabled={busy || !creating.name.trim() || !creating.legalAddress.trim() || !creating.manager.trim()} onClick={() => void create()}>{busy ? "Yaradılır..." : "Müştəri siyahısına əlavə et"}</Button></div>
+      <div className="hractions"><button type="button" className="inlinecancel" disabled={busy} onClick={() => setCreating(null)}>Ləğv et</button><Button type="button" disabled={busy || !creating.name.trim() || !creating.legalAddress.trim() || !creating.manager.trim() || !creating.phone.trim()} onClick={() => void create()}>{busy ? "Yaradılır..." : "Müştəri siyahısına əlavə et"}</Button></div>
     </div>}
   </div>;
 }
@@ -460,7 +485,7 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
 }
 
 // ---------------------------------------------------------------- Müştərilər üzrə hesabat
-type CustomerReportRow = { customer_id: number; hr_employee_id: number; last_name: string; first_name: string; patronymic: string | null; prior_position: string; start_date: string; end_date: string; current_position: string | null; company_name: string | null; termination_date: string | null };
+type CustomerReportRow = { customer_id: number; hr_employee_id: number; last_name: string; first_name: string; patronymic: string | null; prior_position: string; start_date: string; end_date: string; prior_termination_reason: string | null; current_position: string | null; company_name: string | null; termination_date: string | null };
 const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
 function CustomerReportSection({ data }: { data: HrData }) {
   const [rows, setRows] = useState<CustomerReportRow[] | null>(null);
@@ -482,8 +507,8 @@ function CustomerReportSection({ data }: { data: HrData }) {
     .sort((a, b) => b.list.length - a.list.length || (a.customer?.name || "").localeCompare(b.customer?.name || "", "az"));
   const now = (r: CustomerReportRow) => r.termination_date ? `İşdən çıxıb (${formatDay(r.termination_date)})` : [r.company_name, r.current_position].filter(Boolean).join(" · ") || "—";
   const exportCsv = () => {
-    const header = ["Müştəri", "VÖEN", "İşçi", "Oradakı vəzifəsi", "Başlama", "Bitmə", "Staj", "İndi bizdə"];
-    const lines = groups.flatMap((g) => g.list.map((r) => [g.customer?.name || `#${g.id}`, g.customer?.voen || "", person(r), r.prior_position, formatDay(r.start_date), formatDay(r.end_date), serviceText(serviceParts(r.start_date, r.end_date)), now(r)]));
+    const header = ["Müştəri", "VÖEN", "İşçi", "Oradakı vəzifəsi", "Başlama", "Bitmə", "Staj", "Oradan çıxma əsası", "İndi bizdə"];
+    const lines = groups.flatMap((g) => g.list.map((r) => [g.customer?.name || `#${g.id}`, g.customer?.voen || "", person(r), r.prior_position, formatDay(r.start_date), formatDay(r.end_date), serviceText(serviceParts(r.start_date, r.end_date)), r.prior_termination_reason ? reasonLabel(r.prior_termination_reason) : "", now(r)]));
     const csv = "\uFEFF" + [header, ...lines].map((line) => line.map(csvCell).join(";")).join("\r\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -499,9 +524,9 @@ function CustomerReportSection({ data }: { data: HrData }) {
       <label className="hrcheck"><input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />Yalnız hazırda işləyənlər</label>
     </div>
     {error ? <div className="errorbox">{error}</div> : !rows ? <div className="loading">Yüklənir...</div> : !groups.length ? <div className="empty"><p>{rows.length ? "Filtrə uyğun nəticə tapılmadı." : "Hələ heç bir işçinin kartında əvvəlki iş yeri qeyd olunmayıb."}</p></div>
-      : <div className="tasktablewrap"><table className="tasktable hrtable"><thead><tr><th>İşçi</th><th>Oradakı vəzifəsi</th><th>Dövr</th><th>Staj</th><th>İndi bizdə</th></tr></thead>
-        {groups.map((g) => <tbody key={g.id}><tr className="hrreportgroup"><td colSpan={5}><b>{g.customer?.name || `Müştəri #${g.id}`}</b>{g.customer?.voen && <small> · VÖEN {g.customer.voen}</small>}<em>{g.list.length} işçi</em></td></tr>
-          {g.list.map((r, i) => <tr key={`${r.hr_employee_id}-${i}`}><td>{person(r)}</td><td>{r.prior_position}</td><td>{formatDay(r.start_date)} – {formatDay(r.end_date)}</td><td>{serviceText(serviceParts(r.start_date, r.end_date))}</td><td className={r.termination_date ? "hrsub" : ""}>{now(r)}</td></tr>)}
+      : <div className="tasktablewrap"><table className="tasktable hrtable"><thead><tr><th>İşçi</th><th>Oradakı vəzifəsi</th><th>Dövr</th><th>Staj</th><th>Oradan çıxma əsası</th><th>İndi bizdə</th></tr></thead>
+        {groups.map((g) => <tbody key={g.id}><tr className="hrreportgroup"><td colSpan={6}><b>{g.customer?.name || `Müştəri #${g.id}`}</b>{g.customer?.voen && <small> · VÖEN {g.customer.voen}</small>}<em>{g.list.length} işçi</em></td></tr>
+          {g.list.map((r, i) => <tr key={`${r.hr_employee_id}-${i}`}><td>{person(r)}</td><td>{r.prior_position}</td><td>{formatDay(r.start_date)} – {formatDay(r.end_date)}</td><td>{serviceText(serviceParts(r.start_date, r.end_date))}</td><td>{r.prior_termination_reason ? reasonLabel(r.prior_termination_reason) : "—"}</td><td className={r.termination_date ? "hrsub" : ""}>{now(r)}</td></tr>)}
         </tbody>)}</table></div>}
   </section>;
 }
