@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownAZ, ArrowDownZA, Bell, Briefcase, ChevronDown, Funnel, Building2, CheckCircle2, CircleAlert, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
+import { ArrowDownAZ, ArrowDownZA, Bell, Briefcase, ChevronDown, Funnel, Building2, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,6 @@ export default function Home(){
   const [page,setPage]=useState<Page>("dashboard");
   // Status picked on the dashboard donut; it only narrows the Tasks page until cleared or the user leaves that page.
   const [taskStatusFilter,setTaskStatusFilter]=useState<string|null>(null);
-  useEffect(()=>{if(page!=="tasks")setTaskStatusFilter(null)},[page]);
   // Likewise the employee picked on the dashboard HR chart narrows the Noqsanlar page.
   const [violationEmployeeFilter,setViolationEmployeeFilter]=useState<{id:number;name:string}|null>(null);
   const [menu,setMenu]=useState(false);
@@ -89,7 +88,13 @@ export default function Home(){
   const [documentsMenuOpen,setDocumentsMenuOpen]=useState(false);
   const [hrMenuOpen,setHrMenuOpen]=useState(false);
   const [hrSubTab,setHrSubTab]=useState<"violations"|HrSection>("violations");
-  useEffect(()=>{if(page!=="hr"||hrSubTab!=="violations")setViolationEmployeeFilter(null)},[page,hrSubTab]);
+  // Leaving the page a dashboard filter was opened for drops that filter (adjusted during render, as React recommends over an effect).
+  const [filterNavKey,setFilterNavKey]=useState(`${page}|${hrSubTab}`);
+  if(filterNavKey!==`${page}|${hrSubTab}`){
+    setFilterNavKey(`${page}|${hrSubTab}`);
+    if(page!=="tasks")setTaskStatusFilter(null);
+    if(page!=="hr"||hrSubTab!=="violations")setViolationEmployeeFilter(null);
+  }
   const [documentSubTab,setDocumentSubTab]=useState<"templates"|"outgoing"|"incoming">("templates");
   const [notifOpen,setNotifOpen]=useState(false);
   const [seenOverdue,setSeenOverdue]=useState<number[]>([]);
@@ -151,7 +156,6 @@ export default function Home(){
   const unseenOverdue=overdue.filter(t=>!seenOverdue.includes(t.id));
   useEffect(()=>{if(!user)return;try{const raw=localStorage.getItem(`seenOverdue:${user.id}`);setSeenOverdue(raw?JSON.parse(raw):[])}catch{setSeenOverdue([])}},[user]);
   useEffect(()=>{if(!user||(!notifOpen&&page!=="tasks"))return;const ids=overdue.map(t=>t.id);if(ids.every(id=>seenOverdue.includes(id)))return;const next=Array.from(new Set([...seenOverdue,...ids]));setSeenOverdue(next);try{localStorage.setItem(`seenOverdue:${user.id}`,JSON.stringify(next))}catch{}},[user,notifOpen,page,overdue,seenOverdue]);
-  const completed=visibleTasks.filter(t=>t.status==="Təsdiqlənib");
   const activeEmployees=data.employees.filter(e=>Boolean(e.active));
   const title:Record<Page,string>={dashboard:"İdarə paneli",tasks:"Tapşırıqlar",requests:"Sorğular",chat:"Çat",employees:"Personal",companies:"Firmalar",customers:"Müştəri siyahısı",audit:"Tarixçə",documents:"Sənədlər",hr:"HR"};
   const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","HR",Briefcase],["chat","Çat",MessageCircle]];
@@ -166,7 +170,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.48</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.49</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -192,7 +196,7 @@ export default function Home(){
       {error&&<div className="errorbox">{error}</div>}
       {loading?<div className="loading">Məlumatlar yüklənir...</div>:<>
         {!pageAllowed&&<PlaceholderPage title="Bu bölmə bağlıdır" text="Admin bu bölməni sizin üçün bağlayıb."/>}
-        {page==="dashboard"&&<Dashboard showDocuments={can("documents.outgoing")} showViolations={can("hr.violations")} userName={user.name} avatarKey={ownAvatarKey} onEditAvatar={()=>{setOwnAvatarFile(null);setDialog("avatar")}} tasks={visibleTasks} active={activeTasks.length} overdue={overdue.length} completed={completed.length} employees={effectiveView?1:activeEmployees.length} goTasks={status=>{setTaskStatusFilter(status||null);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}} goViolations={employee=>{setViolationEmployeeFilter(employee);setHrSubTab("violations");setPage("hr")}} evaluationEmployees={effectiveView?[effectiveView]:data.employees} ownEmployeeId={effectiveView?effectiveView.id:null} activeCompanyId={activeCompanyId}/>}
+        {page==="dashboard"&&<Dashboard showDocuments={can("documents.outgoing")} showViolations={can("hr.violations")} userName={user.name} avatarKey={ownAvatarKey} onEditAvatar={()=>{setOwnAvatarFile(null);setDialog("avatar")}} tasks={visibleTasks} goTasks={status=>{setTaskStatusFilter(status||null);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}} goViolations={employee=>{setViolationEmployeeFilter(employee);setHrSubTab("violations");setPage("hr")}} evaluationEmployees={effectiveView?[effectiveView]:data.employees} ownEmployeeId={effectiveView?effectiveView.id:null} activeCompanyId={activeCompanyId}/>}
         {pageAllowed&&page==="tasks"&&<>
         {taskSubTab==="tasks"&&<>
         {tasksSection==="manager"&&<TasksPage employeeView={Boolean(effectiveView)} statusFilter={taskStatusFilter} onClearStatusFilter={()=>setTaskStatusFilter(null)} tasks={visibleTasks} onDelete={task=>void deleteTaskItem(task)} onStatus={(task,status,extra)=>void request("PATCH",{action:"task",id:task.id,status,userMode:Boolean(effectiveView),...(extra||{})})} onEvaluate={(task)=>{setSelectedTask(task);open("evaluate",{evaluation:String(task.evaluation||10),evaluationNote:task.evaluation_note||""})}} dateRequests={data.dateRequests} onRequestDate={(taskId,proposedDueAt,reason)=>void request("POST",{action:"date-request",taskId,proposedDueAt,reason})} onResolveDateRequest={(id,approve,adminNote,finalDueAt)=>void request("PATCH",{action:"resolve-date-request",id,approve,adminNote,finalDueAt})} employees={data.employees} isAdmin={isAdmin}/>}
@@ -285,7 +289,7 @@ function chatFileSize(size:number){if(!size)return "";if(size<1024)return `${siz
 function threadTime(iso:string){const d=new Date(iso);const now=new Date();if(d.toDateString()===now.toDateString())return new Intl.DateTimeFormat("az-AZ",{hour:"2-digit",minute:"2-digit"}).format(d);const yesterday=new Date(now);yesterday.setDate(now.getDate()-1);if(d.toDateString()===yesterday.toDateString())return "Dünən";return new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"2-digit"}).format(d)}
 function dayLabel(iso:string){const d=new Date(iso);const now=new Date();if(d.toDateString()===now.toDateString())return "Bugün";const yesterday=new Date(now);yesterday.setDate(now.getDate()-1);if(d.toDateString()===yesterday.toDateString())return "Dünən";return new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(d)}
 
-function Dashboard({showDocuments=true,showViolations=true,userName,avatarKey,onEditAvatar,tasks,active,overdue,completed,employees,goTasks,goViolations,evaluationEmployees,ownEmployeeId,activeCompanyId}:{showDocuments?:boolean;showViolations?:boolean;goViolations?:(employee:{id:number;name:string})=>void;userName:string;avatarKey:string|null;onEditAvatar:()=>void;tasks:Task[];active:number;overdue:number;completed:number;employees:number;goTasks:(status?:string)=>void;evaluationEmployees:Employee[];ownEmployeeId:number|null;activeCompanyId?:number|null}){return <><section className="welcome"><div><small>{new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(new Date()).toUpperCase()}</small><h2>Salam, {userName}</h2><p>Bu gün komandanızın iş vəziyyətini buradan izləyə bilərsiniz.</p></div><div className="welcomeaside"><button className={avatarKey?"welcomephotobtn":"welcomephotobtn empty"} title={avatarKey?"Profil şəklini dəyiş":"Profil şəkli əlavə et"} onClick={onEditAvatar}>{avatarKey?<img className="welcomephoto" src={`/api/file?key=${encodeURIComponent(avatarKey)}`} alt={userName}/>:<span className="welcomephoto">{initials(userName)}</span>}</button><Bell/></div></section><EvaluationSection employees={evaluationEmployees} tasks={tasks}/><section className="stats"><Stat icon={<ClipboardList/>} tone="blue" label="Aktiv tapşırıq" value={active}/><Stat icon={<CircleAlert/>} tone="red" label="Gecikən" value={overdue}/><Stat icon={<CheckCircle2/>} tone="green" label="Tamamlanan" value={completed}/><Stat icon={<Users/>} tone="gold" label="Aktiv personal" value={employees}/></section>{ownEmployeeId&&showViolations&&<MyViolationsPanel employeeId={ownEmployeeId} activeCompanyId={activeCompanyId}/>}<div className="modulecharts"><TaskStatusChart tasks={tasks} onViewAll={goTasks}/>{showDocuments&&<DocumentsOverviewChart/>}{showViolations&&<ViolationsChart onOpenEmployee={goViolations}/>}</div></>}
+function Dashboard({showDocuments=true,showViolations=true,userName,avatarKey,onEditAvatar,tasks,goTasks,goViolations,evaluationEmployees,ownEmployeeId,activeCompanyId}:{showDocuments?:boolean;showViolations?:boolean;goViolations?:(employee:{id:number;name:string})=>void;userName:string;avatarKey:string|null;onEditAvatar:()=>void;tasks:Task[];goTasks:(status?:string)=>void;evaluationEmployees:Employee[];ownEmployeeId:number|null;activeCompanyId?:number|null}){return <><section className="welcome"><div><small>{new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(new Date()).toUpperCase()}</small><h2>Salam, {userName}</h2><p>Bu gün komandanızın iş vəziyyətini buradan izləyə bilərsiniz.</p></div><div className="welcomeaside"><button className={avatarKey?"welcomephotobtn":"welcomephotobtn empty"} title={avatarKey?"Profil şəklini dəyiş":"Profil şəkli əlavə et"} onClick={onEditAvatar}>{avatarKey?<img className="welcomephoto" src={`/api/file?key=${encodeURIComponent(avatarKey)}`} alt={userName}/>:<span className="welcomephoto">{initials(userName)}</span>}</button><Bell/></div></section><EvaluationSection employees={evaluationEmployees} tasks={tasks}/>{ownEmployeeId&&showViolations&&<MyViolationsPanel employeeId={ownEmployeeId} activeCompanyId={activeCompanyId}/>}<div className="modulecharts"><TaskStatusChart tasks={tasks} onViewAll={goTasks}/>{showDocuments&&<DocumentsOverviewChart/>}{showViolations&&<ViolationsChart onOpenEmployee={goViolations}/>}</div></>}
 // The dashboard groups "Bağlandı" with "Təsdiqlənib"; the donut and the status filter it opens on the Tasks page share this label.
 const TASK_STATUS_COLORS:[string,string][]=[["Yeni","#64748b"],["İcradadır","#0C8599"],["Geri qaytarılıb","#7c3aed"],["Təqdim edilib","#f59e0b"],["Qiymətləndirmə gözləyir","#ea580c"],["Təsdiqlənib","#16a34a"],["Gecikib","#dc2626"]];
 function dashboardTaskStatus(t:Task){const shown=displayStatus(t);return shown==="Bağlandı"?"Təsdiqlənib":shown}
@@ -297,8 +301,7 @@ function TaskStatusChart({tasks,onViewAll}:{tasks:Task[];onViewAll:(status?:stri
   const total=rows.reduce((sum,[label])=>sum+counts[label],0);
   const pct=(n:number)=>total?Math.round(n/total*100):0;
   // A circle of circumference 100, so each segment's dash length is its percentage; segments start at 12 o'clock.
-  let offset=0;
-  const segments=rows.map(([label,color])=>{const share=counts[label]/total*100;const seg={label,color,share,start:offset};offset+=share;return seg});
+  const segments=rows.reduce<{label:string;color:string;share:number;start:number}[]>((acc,[label,color])=>{const prev=acc[acc.length-1];acc.push({label,color,share:counts[label]/total*100,start:prev?prev.start+prev.share:0});return acc},[]);
   const focus=hover&&counts[hover]?hover:null;
   return <section className="panel modulepanel"><div className="head"><div><h3>Tapşırıqlar</h3><p>Status üzrə paylanma</p></div><button onClick={()=>onViewAll()}>Hamısına bax</button></div>
     {rows.length?<div className="donutwrap">
@@ -1863,6 +1866,8 @@ function WorkList({employeeView,tab,frequency,items,assignments,completions,empl
 const evaluatedAt=(t:Task)=>new Date(t.completed_at||t.created_at);
 const averageScore=(list:Task[])=>list.length?list.reduce((s,t)=>s+(t.evaluation||0),0)/list.length:null;
 const FEW_EVALUATIONS=3;
+const EVAL_ROWS_SHOWN=8;
+type EvalSortKey="name"|"score"|"trend"|"given"|"late";
 function ScoreSparkline({points}:{points:(number|null)[]}){
   const w=84,h=26,step=w/(points.length-1);
   const y=(v:number)=>h-2-(v-1)/9*(h-4);
@@ -1882,14 +1887,33 @@ function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}
   const histogram=Array.from({length:10},(_,i)=>({score:i+1,count:rated.filter(t=>t.evaluation===i+1).length}));
   const histMax=Math.max(...histogram.map(x=>x.count),1);
   const monthStarts=Array.from({length:7},(_,i)=>new Date(now.getFullYear(),now.getMonth()-5+i,1));
-  const cards=employees.map((e,index)=>{
+  const [sort,setSort]=useState<{key:EvalSortKey;desc:boolean}>({key:"score",desc:true});
+  const [expanded,setExpanded]=useState(false);
+  const nowMs=now.getTime();
+  const rows=employees.map(e=>{
     const own=tasks.filter(t=>t.employee_id===e.id);
     const ownRated=own.filter(t=>t.evaluation);
     const periodRated=ownRated.filter(inPeriod);
     const monthly=monthStarts.slice(0,6).map((start,i)=>averageScore(ownRated.filter(t=>{const at=evaluatedAt(t);return at>=start&&at<monthStarts[i+1]})));
-    return {e,index,own,periodRated,avg:averageScore(periodRated),monthly};
-  }).filter(c=>c.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0)||b.periodRated.length-a.periodRated.length);
-  const nowMs=now.getTime();
+    const known=monthly.filter((v):v is number=>v!==null);
+    // Rated, in progress, new and the rest never overlap, so they stack into one bar of all given tasks; late overlaps them and gets its own column.
+    const inProgress=own.filter(t=>t.status==="İcradadır"&&!t.evaluation).length;
+    const pending=own.filter(t=>t.status==="Yeni"&&!t.evaluation).length;
+    return {e,own,given:own.length,ratedAll:ownRated.length,periodRated:periodRated.length,inProgress,pending,other:own.length-ownRated.length-inProgress-pending,
+      late:own.filter(t=>t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at).getTime()<nowMs).length,
+      avg:averageScore(periodRated),monthly,trend:known.length>=2?Math.round((known[known.length-1]-known[known.length-2])*10)/10:null};
+  }).filter(r=>r.avg!==null);
+  type EvalRow=typeof rows[number];
+  const sortValue=(r:EvalRow):number|string|null=>sort.key==="name"?r.e.name:sort.key==="score"?r.avg:sort.key==="trend"?r.trend:sort.key==="given"?r.given:r.late;
+  const sorted=[...rows].sort((a,b)=>{
+    const x=sortValue(a),y=sortValue(b);
+    if(x===null||y===null)return x===y?0:x===null?1:-1;// rows without a value stay at the bottom either way
+    const diff=typeof x==="string"&&typeof y==="string"?x.localeCompare(y,"az"):(x as number)-(y as number);
+    return (sort.desc?-diff:diff)||(b.avg||0)-(a.avg||0)||b.periodRated-a.periodRated;
+  });
+  const shown=expanded?sorted:sorted.slice(0,EVAL_ROWS_SHOWN);
+  const givenMax=Math.max(...rows.map(r=>r.given),1);
+  const sortHeader=(key:EvalSortKey,label:string,className="")=><button type="button" className={`${className}${sort.key===key?" on":""}`} onClick={()=>setSort(s=>s.key===key?{key,desc:!s.desc}:{key,desc:key!=="name"})}>{label}{sort.key===key?(sort.desc?" ↓":" ↑"):""}</button>;
   return <section className="panel evalpanel"><div className="head"><div><h3>Qiymətləndirmə</h3><p>Təsdiqlənmiş işlər üzrə nəticələr</p></div><div className="hrperiods evalperiods">{VIOLATION_PERIODS.map(([key,label])=><button key={key} className={period===key?"on":""} onClick={()=>setPeriod(key)}>{label}</button>)}</div></div>
     {!allRated.length?<Empty text="Hələ qiymətləndirilmiş iş yoxdur."/>:<>
       <div className="evaloverview">
@@ -1899,22 +1923,23 @@ function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}
         </div>
         <div className="evalhist"><small>Balların paylanması</small><div className="evalhistbars">{histogram.map(x=><div key={x.score} title={`${x.score} bal: ${x.count} iş`}><small>{x.count||""}</small><span className={scoreTier(x.score)} style={{height:`${x.count?Math.max(x.count/histMax*100,6):0}%`}}/><i>{x.score}</i></div>)}</div></div>
       </div>
-      {cards.length?<div className="evaluationrows">{cards.map(({e,index,own,periodRated,avg,monthly})=>{
-        const avgNum=avg||0;
-        const inProgress=own.filter(t=>t.status==="İcradadır").length;
-        const pending=own.filter(t=>t.status==="Yeni").length;
-        const late=own.filter(t=>t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at).getTime()<nowMs).length;
-        const known=monthly.filter((v):v is number=>v!==null);
-        const trend=known.length>=2?Math.round((known[known.length-1]-known[known.length-2])*10)/10:null;
-        return <article key={e.id} className={`hue${index%4}`}>
-          <i>{initials(e.name)}</i>
-          <div>
-            <div className="evalrowtop"><h3>{e.name}</h3>{periodRated.length<FEW_EVALUATIONS&&<span className="evalfew" title={`${FEW_EVALUATIONS}-dən az qiymətləndirilmiş iş — orta bal hələ etibarlı deyil`}>az məlumat</span>}<RatingStars value={Math.round(avgNum)}/><strong className={`scorepill ${scoreTier(avgNum)}`}>{avgNum.toFixed(1)}<small>/10</small></strong></div>
-            <div className="evalmetrics"><span className="rated">Qiymətləndirilmiş<b>{periodRated.length}</b></span><span className="given">Verilmiş<b>{own.length}</b></span><span className="progress">İcrada<b>{inProgress}</b></span><span className="pending">Qalan<b>{pending}</b></span><span className={late?"warn":"ontime"}>Gecikən<b>{late}</b></span></div>
-            {known.length>0&&<div className="evaltrend" title={`Son 6 ay üzrə aylıq orta bal: ${monthly.map((v,i)=>`${SHORT_MONTHS[monthStarts[i].getMonth()]} ${v===null?"—":v.toFixed(1)}`).join(", ")}`}><small>Son 6 ay</small><ScoreSparkline points={monthly}/>{trend!==null&&<em className={trend>0?"up":trend<0?"down":""}>{trend>0?`↑ ${trend.toFixed(1)}`:trend<0?`↓ ${(-trend).toFixed(1)}`:"→ 0.0"}</em>}</div>}
-          </div>
-        </article>;
-      })}</div>:<Empty text="Bu dövrdə qiymətləndirilmiş iş yoxdur."/>}
+      {rows.length?<div className="evaltable">
+        <div className="evalthead">{sortHeader("score","#","evalrank")}{sortHeader("name","İşçi")}{sortHeader("score","Bal")}{sortHeader("trend","Son 6 ay","evalhidesm")}{sortHeader("given","Tapşırıqlar")}{sortHeader("late","Gecikən","evalright")}</div>
+        {shown.map((r,i)=>{
+          const avgNum=r.avg||0;
+          const pct=(n:number)=>`${n/givenMax*100}%`;
+          const breakdown=`Verilmiş: ${r.given}\nQiymətləndirilmiş: ${r.ratedAll} (seçilmiş dövrdə ${r.periodRated})\nİcrada: ${r.inProgress}\nQalan: ${r.pending}${r.other?`\nDigər (təqdim edilib, yoxlamada və s.): ${r.other}`:""}\nGecikən: ${r.late}`;
+          return <div className="evalrow" key={r.e.id}>
+            <span className="evalrank">{i+1}</span>
+            <span className="evalname" title={r.e.name}>{r.e.name}</span>
+            <span className="evalscore"><strong className={`scorepill ${scoreTier(avgNum)}`}>{avgNum.toFixed(1)}</strong>{r.periodRated<FEW_EVALUATIONS&&<b className="evalfew" title={`Seçilmiş dövrdə ${FEW_EVALUATIONS}-dən az qiymətləndirilmiş iş (${r.periodRated}) — orta bal hələ etibarlı deyil`}>⚠</b>}</span>
+            <span className="evaltrend evalhidesm" title={`Son 6 ay üzrə aylıq orta bal: ${r.monthly.map((v,m)=>`${SHORT_MONTHS[monthStarts[m].getMonth()]} ${v===null?"—":v.toFixed(1)}`).join(", ")}`}>{r.monthly.some(v=>v!==null)&&<ScoreSparkline points={r.monthly}/>}{r.trend!==null&&<em className={r.trend>0?"up":r.trend<0?"down":""}>{r.trend>0?`↑${r.trend.toFixed(1)}`:r.trend<0?`↓${(-r.trend).toFixed(1)}`:"→0.0"}</em>}</span>
+            <span className="evalbar" title={breakdown}><span className="evalbartrack"><span className="rated" style={{width:pct(r.ratedAll)}}/><span className="progress" style={{width:pct(r.inProgress)}}/><span className="pending" style={{width:pct(r.pending)}}/><span className="other" style={{width:pct(r.other)}}/></span><small>{r.ratedAll}/{r.given}</small></span>
+            <span className={`evallate${r.late?" warn":""}`}>{r.late}</span>
+          </div>;
+        })}
+        <div className="evalfoot"><span className="evallegend"><i className="rated"/>Qiymətləndirilmiş<i className="progress"/>İcrada<i className="pending"/>Qalan<i className="other"/>Digər</span>{sorted.length>EVAL_ROWS_SHOWN&&<button type="button" onClick={()=>setExpanded(v=>!v)}>{expanded?"Daha az göstər":`Hamısını göstər (${sorted.length-EVAL_ROWS_SHOWN} işçi daha)`}</button>}</div>
+      </div>:<Empty text="Bu dövrdə qiymətləndirilmiş iş yoxdur."/>}
     </>}
   </section>;
 }
@@ -1947,7 +1972,6 @@ function DateTimeField({label,value,set}:{label:string;value:string;set:(v:strin
 }
 function TextField({label,value,set}:{label:string;value:string;set:(v:string)=>void}){return <label className="field">{label}<Textarea value={value} onChange={e=>set(e.target.value)}/></label>}
 function SelectCompany({companies,value,set}:{companies:Company[];value:string;set:(v:string)=>void}){return <label className="field">Firma<select value={value} onChange={e=>set(e.target.value)}><option value="">Firma seçin</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
-function Stat({icon,tone,label,value}:{icon:React.ReactNode;tone:string;label:string;value:number}){return <article className="stat"><i className={tone}>{icon}</i><div><p>{label}</p><strong>{value}</strong></div></article>}
 function Empty({text}:{text:string}){return <div className="empty"><ClipboardList/><p>{text}</p></div>}
 function useTableColumns(storageKey:string,defaultKeys:string[]){
   const heal=(order:string[])=>{
