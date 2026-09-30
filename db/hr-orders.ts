@@ -1,10 +1,10 @@
 import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { ensureHrSchema, getHrParams } from "@/db/hr";
-import { isIsoDate, todayIso, type CalendarDay } from "@/lib/hr-calc";
+import { TERMINATION_REASONS, indexCalendar, isIsoDate, settlement, todayIso, type CalendarDay, type SalaryRow } from "@/lib/hr-calc";
 import {
-  ORDER_GROUPS, ORDER_LEAVE_KINDS, leaveOrderText, normalizeLeaveLegal, orderNumber, planLeaveOrder,
-  type LeaveLegal, type OrderEmployee, type OrderGroup,
+  ORDER_GROUPS, ORDER_LEAVE_KINDS, leaveOrderText, normalizeLeaveLegal, normalizeTerminationLegal, orderNumber, planLeaveOrder, settlementSnapshot, terminationOrderText,
+  type LeaveLegal, type OrderEmployee, type OrderGroup, type TerminationExtra, type TerminationLegal,
 } from "@/lib/hr-orders";
 
 // HR orders (əmrlər): a register per firm, numbered per group and year from the firm's own pattern. An order is printed from
@@ -55,10 +55,17 @@ async function ensureOrdersSchema() {
     pattern TEXT NOT NULL,
     PRIMARY KEY (company_id, grp)
   )`).run();
+  const orderColumns = (await db().prepare("PRAGMA table_info(hr_orders)").all<{ name: string }>()).results;
+  if (!orderColumns.some((c: { name: string }) => c.name === "extra")) await db().prepare("ALTER TABLE hr_orders ADD COLUMN extra TEXT").run();
   ready = true;
 }
 
 const text = (value: unknown) => { const v = String(value ?? "").trim(); return v || null; };
+
+async function getTerminationLegal(): Promise<TerminationLegal> {
+  const row = await db().prepare("SELECT value FROM hr_settings WHERE key = 'orders_termination_legal'").first<{ value: string | null }>();
+  try { return normalizeTerminationLegal(row?.value ? JSON.parse(row.value) : {}); } catch { return normalizeTerminationLegal({}); }
+}
 
 async function getLegal(): Promise<LeaveLegal> {
   const row = await db().prepare("SELECT value FROM hr_settings WHERE key = 'orders_legal'").first<{ value: string | null }>();
@@ -69,11 +76,11 @@ async function getLegal(): Promise<LeaveLegal> {
 const EMPLOYEE_COLUMNS = `hr_employees.id, hr_employees.company_id, hr_employees.department, hr_employees.position, hr_employees.last_name, hr_employees.first_name,
   hr_employees.patronymic, hr_employees.gender, hr_employees.hire_date, hr_employees.termination_date, hr_employees.prior_experience_months,
   hr_employees.base_leave_days, hr_employees.extra_leave_days, hr_employees.extra_leave_note, hr_employees.work_week,
-  hr_employees.opening_balance_date, hr_employees.opening_balance_days`;
+  hr_employees.opening_balance_date, hr_employees.opening_balance_days, hr_employees.contract_no, hr_employees.contract_date, hr_employees.termination_reason`;
 
 export async function getOrdersData() {
   await ensureOrdersSchema();
-  const [orders, employees, leaves, calendar, children, companies, numbering, params, legal] = await Promise.all([
+  const [orders, employees, leaves, calendar, children, companies, numbering, params, legal, terminationLegal] = await Promise.all([
     db().prepare(`SELECT hr_orders.*, companies.name AS company_name, hr_employees.last_name, hr_employees.first_name, hr_employees.patronymic
       FROM hr_orders LEFT JOIN companies ON companies.id = hr_orders.company_id LEFT JOIN hr_employees ON hr_employees.id = hr_orders.hr_employee_id
       ORDER BY hr_orders.order_date DESC, hr_orders.id DESC`).all(),
@@ -85,8 +92,9 @@ export async function getOrdersData() {
     db().prepare("SELECT company_id, grp, pattern FROM hr_order_numbering").all(),
     getHrParams(),
     getLegal(),
+    getTerminationLegal(),
   ]);
-  return { orders: orders.results, employees: employees.results, leaves: leaves.results, calendar: calendar.results, children: children.results, companies: companies.results, numbering: numbering.results, params, legal };
+  return { terminationLegal, orders: orders.results, employees: employees.results, leaves: leaves.results, calendar: calendar.results, children: children.results, companies: companies.results, numbering: numbering.results, params, legal };
 }
 
 function childrenUnder14(rows: { birth_date: string | null }[], on: string) {
@@ -183,6 +191,13 @@ export async function signOrder(input: Record<string, unknown>) {
   const now = new Date().toISOString();
   const statements = [db().prepare("UPDATE hr_orders SET status = 'signed', signed_key = ?, signed_name = ?, signed_size = ?, signed_type = ?, signed_at = COALESCE(signed_at, ?), updated_at = ? WHERE id = ?")
     .bind(key, name, Number(input.size) || null, text(input.type), now, now, id)];
+  if (order.grp === "termination" && order.status === "pending") {
+    const extra = parseExtra(order.extra);
+    const { snapshot } = await settlementFor(Number(order.hr_employee_id), String(order.start_date), String(order.kind), extra);
+    statements.push(db().prepare("UPDATE hr_employees SET termination_date = ?, termination_reason = ?, termination_order_id = ?, updated_at = ? WHERE id = ?")
+      .bind(order.start_date, order.kind, id, now, order.hr_employee_id));
+    statements.push(db().prepare("UPDATE hr_orders SET extra = ? WHERE id = ?").bind(JSON.stringify({ ...extra, settlement: snapshot }), id));
+  }
   if (order.grp === "leave" && order.status === "pending") {
     statements.push(db().prepare("INSERT INTO hr_leaves (hr_employee_id, kind, start_date, end_date, days, order_no, order_date, note, created_at, order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(order.hr_employee_id, order.kind, order.start_date, order.end_date, order.days, order.order_no, order.order_date, order.basis, now, id));
@@ -201,6 +216,7 @@ export async function cancelOrder(input: Record<string, unknown>) {
   await db().batch([
     db().prepare("UPDATE hr_orders SET status = 'cancelled', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?").bind(new Date().toISOString(), reason, new Date().toISOString(), id),
     db().prepare("DELETE FROM hr_leaves WHERE order_id = ?").bind(id),
+    db().prepare("UPDATE hr_employees SET termination_date = NULL, termination_reason = NULL, termination_order_id = NULL WHERE termination_order_id = ?").bind(id),
   ]);
   return order;
 }
@@ -218,8 +234,91 @@ export async function saveOrderSettings(input: Record<string, unknown>) {
       ? db().prepare("INSERT INTO hr_order_numbering (company_id, grp, pattern) VALUES (?, ?, ?) ON CONFLICT(company_id, grp) DO UPDATE SET pattern = excluded.pattern").bind(companyId, grp, pattern)
       : db().prepare("DELETE FROM hr_order_numbering WHERE company_id = ? AND grp = ?").bind(companyId, grp));
   }
+  if (input.terminationLegal) statements.push(db().prepare("INSERT INTO hr_settings (key, value) VALUES ('orders_termination_legal', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(normalizeTerminationLegal(input.terminationLegal))));
   if (input.legal) statements.push(db().prepare("INSERT INTO hr_settings (key, value) VALUES ('orders_legal', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(normalizeLeaveLegal(input.legal))));
   if (statements.length) await db().batch(statements);
+}
+
+// ---------------------------------------------------------------- termination orders
+const parseExtra = (raw: unknown): TerminationExtra => {
+  try { const v = JSON.parse(String(raw || "{}")); return { severance: Boolean(v.severance), workedDays: v.workedDays === null || v.workedDays === undefined || v.workedDays === "" ? null : Number(v.workedDays), deductOverused: Boolean(v.deductOverused), settlement: v.settlement }; }
+  catch { return { severance: false, workedDays: null, deductOverused: false }; }
+};
+
+// Salaries are needed only for the final settlement of the worker being dismissed.
+export async function getEmployeeSalaries(employeeId: number) {
+  await ensureOrdersSchema();
+  const [emp, salaries] = await Promise.all([
+    db().prepare("SELECT monthly_salary FROM hr_employees WHERE id = ?").bind(employeeId).first<{ monthly_salary: number | null }>(),
+    db().prepare("SELECT period, amount FROM hr_salaries WHERE hr_employee_id = ? ORDER BY period").bind(employeeId).all<SalaryRow>(),
+  ]);
+  return { monthlySalary: emp?.monthly_salary ?? null, salaries: salaries.results };
+}
+
+async function settlementFor(employeeId: number, date: string, reasonKey: string, extra: TerminationExtra) {
+  const emp = await db().prepare(`SELECT ${EMPLOYEE_COLUMNS}, hr_employees.monthly_salary FROM hr_employees WHERE id = ?`).bind(employeeId).first<OrderEmployee & { monthly_salary: number | null }>();
+  if (!emp) throw new Error("İşçi tapılmadı.");
+  const [leaves, calendar, pay, params] = await Promise.all([
+    db().prepare("SELECT id, kind, start_date, end_date, days, order_no FROM hr_leaves WHERE hr_employee_id = ?").bind(employeeId).all(),
+    db().prepare("SELECT date, kind, name FROM hr_calendar ORDER BY date").all<CalendarDay>(),
+    getEmployeeSalaries(employeeId),
+    getHrParams(),
+  ]);
+  const result = settlement({ ...emp, termination_date: null }, leaves.results as never, pay.salaries, indexCalendar(calendar.results), params, { date, reasonKey, severance: extra.severance, workedDays: extra.workedDays, deductOverused: extra.deductOverused });
+  return { result, snapshot: settlementSnapshot(result, pay.monthlySalary, extra.severance, extra.deductOverused, date), emp };
+}
+
+async function buildTerminationOrder(input: Record<string, unknown>, selfId: number | null) {
+  const employeeId = Number(input.hrEmployeeId);
+  if (!employeeId) throw new Error("İşçini seçin.");
+  const emp = await db().prepare(`SELECT ${EMPLOYEE_COLUMNS} FROM hr_employees WHERE id = ?`).bind(employeeId).first<OrderEmployee & { contract_no: string | null; contract_date: string | null }>();
+  if (!emp) throw new Error("İşçi tapılmadı.");
+  if (!emp.company_id) throw new Error("İşçinin kartında firma seçilməyib — əmr firmanın adından verilir.");
+  if (emp.termination_date) throw new Error(`İşçi artıq ${emp.termination_date} tarixində işdən çıxıb.`);
+  const date = String(input.terminationDate || "");
+  if (!isIsoDate(date)) throw new Error("İşdən çıxma tarixini daxil edin.");
+  if (date < emp.hire_date) throw new Error("İşdən çıxma tarixi işə qəbul tarixindən əvvəl ola bilməz.");
+  const reasonKey = String(input.reasonKey || "");
+  if (!TERMINATION_REASONS.some((r) => r.key === reasonKey)) throw new Error("İşdən çıxma əsasını seçin.");
+  const orderDate = String(input.orderDate || todayIso());
+  if (!isIsoDate(orderDate)) throw new Error("Əmrin tarixi düzgün deyil.");
+  const other = await db().prepare("SELECT order_no FROM hr_orders WHERE hr_employee_id = ? AND grp = 'termination' AND status = 'pending' AND id != ?").bind(employeeId, selfId || 0).first<{ order_no: string }>();
+  if (other) throw new Error(`Bu işçi üçün imza gözləyən işdən çıxma əmri artıq var (№ ${other.order_no}).`);
+  const worked = input.workedDays === null || input.workedDays === undefined || String(input.workedDays).trim() === "" ? null : Number(input.workedDays);
+  if (worked !== null && (!Number.isFinite(worked) || worked < 0)) throw new Error("İşlənmiş gün sayı düzgün deyil.");
+  const extra: TerminationExtra = { severance: Boolean(input.severance), workedDays: worked, deductOverused: Boolean(input.deductOverused) };
+  const { result } = await settlementFor(employeeId, date, reasonKey, extra);
+  const legal = (await getTerminationLegal())[reasonKey] || "";
+  const basis = text(input.basis) || (reasonKey === "own" ? "İşçinin ərizəsi" : "");
+  const body = terminationOrderText(emp, { date, reasonKey, basis, severance: extra.severance, contractNo: emp.contract_no, contractDate: emp.contract_date }, result);
+  return { emp, date, reasonKey, orderDate, basis, extra, legal, body };
+}
+
+export async function createTerminationOrder(user: SessionUser, input: Record<string, unknown>) {
+  await ensureOrdersSchema();
+  const built = await buildTerminationOrder(input, null);
+  const companyId = built.emp.company_id as number;
+  const year = Number(built.orderDate.slice(0, 4));
+  const pattern = await patternFor(companyId, "termination");
+  const next = await db().prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM hr_orders WHERE company_id = ? AND grp = 'termination' AND year = ?").bind(companyId, year).first<{ seq: number }>();
+  const seq = next?.seq || 1;
+  const result = await db().prepare(`INSERT INTO hr_orders (company_id, grp, year, seq, order_no, order_date, hr_employee_id, status, kind, start_date, end_date, days, basis, title, legal_text, items, extra, created_by, created_at)
+    VALUES (?, 'termination', ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(companyId, year, seq, orderNumber(pattern, seq, built.orderDate), built.orderDate, built.emp.id, built.reasonKey, built.date, built.basis,
+      built.body.title, built.legal, JSON.stringify(built.body.items), JSON.stringify(built.extra), user.name, new Date().toISOString()).run();
+  return Number(result.meta.last_row_id);
+}
+
+export async function updateTerminationOrder(input: Record<string, unknown>) {
+  await ensureOrdersSchema();
+  const id = Number(input.id);
+  const current = await orderById(id);
+  if (current.status !== "pending") throw new Error("İmzalanmış və ya ləğv edilmiş əmr dəyişdirilə bilməz.");
+  const built = await buildTerminationOrder(input, id);
+  if (built.emp.id !== Number(current.hr_employee_id)) throw new Error("Əmrin işçisi dəyişdirilə bilməz — bu əmri ləğv edib yenisini verin.");
+  if (built.orderDate.slice(0, 4) !== String(current.year)) throw new Error("Əmrin tarixi başqa ilə keçirilə bilməz (nömrə il üzrə verilib).");
+  await db().prepare("UPDATE hr_orders SET order_date = ?, kind = ?, start_date = ?, basis = ?, title = ?, legal_text = ?, items = ?, extra = ?, updated_at = ? WHERE id = ?")
+    .bind(built.orderDate, built.reasonKey, built.date, built.basis, built.body.title, built.legal, JSON.stringify(built.body.items), JSON.stringify(built.extra), new Date().toISOString(), id).run();
 }
 
 export async function orderLabel(id: number) {

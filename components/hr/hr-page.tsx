@@ -25,7 +25,7 @@ type HrEmployee = {
   opening_balance_days: number | null; user_employee_id: number | null; user_employee_name: string | null; note: string | null;
   photo_key: string | null; photo_name: string | null; prior_experience_days: number | null;
   contract_no: string | null; contract_date: string | null; contract_type: string | null; contract_end_date: string | null; probation_months: number | null;
-  hire_order_no: string | null; hire_order_date: string | null; emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; marital_status: string | null;
+  hire_order_no: string | null; hire_order_date: string | null; termination_order_id: number | null; emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; marital_status: string | null;
 };
 type HrFamily = { id: number; hr_employee_id: number; relation: string; last_name: string | null; first_name: string; patronymic: string | null; birth_date: string | null; workplace: string | null; phone: string | null };
 type HrEducation = { id: number; hr_employee_id: number; level: string; institution: string; specialty: string | null; start_year: number | null; end_year: number | null; diploma_no: string | null; diploma_key: string | null; diploma_name: string | null };
@@ -294,7 +294,7 @@ function EmployeeDialog({ employee, data, call, onSaved, onClose }: { employee: 
       {employee && tab === "family" && <FamilyTab employee={employee} data={data} call={call} />}
       {employee && tab === "leaves" && <LeavesTab employee={employee} data={data} call={call} />}
       {employee && tab === "salary" && <SalaryTab employee={employee} data={data} call={call} />}
-      {employee && tab === "settlement" && <SettlementTab employee={employee} data={data} call={call} />}
+      {employee && tab === "settlement" && <SettlementTab employee={employee} data={data} />}
     </div>
   </>;
 }
@@ -510,10 +510,12 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       {field("Başlanğıc qalığın tarixi", "openingBalanceDate", { type: "date" })}
       {field("Həmin tarixə qalıq (gün)", "openingBalanceDays", { inputMode: "decimal" })}
     </div><small className="hrhint">Staja görə əlavə günlər parametrlərə əsasən avtomatik hesablanır (əvvəlki stajın il və ayı nəzərə alınır). “Başlanğıc qalıq” köhnə məzuniyyət tarixçəsini daxil etmədən, sistemə köçürülən günə qalığı yazmaq üçündür; ondan əvvəlki məzuniyyətlər hesaba düşmür.</small></fieldset>
-    {employee && <fieldset><legend>İşdən çıxma</legend><div className="hrgrid">
-      {field("İşdən çıxma tarixi", "terminationDate", { type: "date" })}
-      <label className="field hrwide">Əsas<select value={form.terminationReason} onChange={(e) => set("terminationReason")(e.target.value)}><option value="">—</option>{TERMINATION_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
-    </div></fieldset>}
+    {employee && <fieldset><legend>İşdən çıxma</legend>
+      {employee.termination_date
+        ? <div className="hrgrid"><span className="field">İşdən çıxma tarixi<b className="hrreadonly">{formatDay(employee.termination_date)}</b></span><span className="field hrwide">Əsas<b className="hrreadonly">{reasonLabel(employee.termination_reason)}</b></span></div>
+        : <small className="hrhint">İşçi işləyir.</small>}
+      <small className="hrhint">İşdən çıxma yalnız əmr əsasında qeydə alınır: <b>HR → Əmrlər → İşdən çıxma əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə tarix və əsas buraya yazılır; əmr ləğv edilərsə, silinir.{employee.termination_date && !employee.termination_order_id ? " (Bu qeyd əmrlər bölməsindən əvvəl əl ilə yazılıb.)" : ""}</small>
+    </fieldset>}
     <label className="field">Qeyd<Input value={form.note} onChange={(e) => set("note")(e.target.value)} /></label>
     {error && <div className="errorbox">{error}</div>}
     <div className="hractions">{employee && <button className="deletetaskbtn" disabled={busy} onClick={() => void remove()}>Kartı sil</button>}{!form.phone.trim() && <small className="hrwarn">Telefon nömrəsi məcburidir</small>}<Button disabled={busy || !canSave} onClick={() => void save()}>{busy ? "Saxlanılır..." : employee ? "Dəyişiklikləri saxla" : "İşçini əlavə et"}</Button></div>
@@ -740,7 +742,7 @@ function SalaryTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   </div>;
 }
 
-function SettlementTab({ employee, data, call }: { employee: HrEmployee; data: HrData; call: Call }) {
+function SettlementTab({ employee, data }: { employee: HrEmployee; data: HrData }) {
   const params = normalizeParams(data.params);
   const calendar = useMemo(() => indexCalendar(data.calendar), [data.calendar]);
   const initialReason = employee.termination_reason && TERMINATION_REASONS.some((r) => r.key === employee.termination_reason) ? employee.termination_reason : "own";
@@ -749,9 +751,6 @@ function SettlementTab({ employee, data, call }: { employee: HrEmployee; data: H
   const [severance, setSeverance] = useState(Boolean(TERMINATION_REASONS.find((r) => r.key === initialReason)?.severance));
   const [worked, setWorked] = useState("");
   const [deduct, setDeduct] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState("");
   const leaves = data.leaves.filter((l) => l.hr_employee_id === employee.id);
   const salaries = data.salaries.filter((s) => s.hr_employee_id === employee.id);
   const valid = isIsoDate(date) && date >= employee.hire_date;
@@ -762,12 +761,6 @@ function SettlementTab({ employee, data, call }: { employee: HrEmployee; data: H
     ...(severance ? [{ label: "İşdən çıxma müavinəti", detail: `${result.severanceMultiplier} × ${money(result.average.monthly)} (orta aylıq), bu firmada staj ${result.serviceYears} il`, amount: result.severance }] : []),
     ...(result.overusedDays > 0 ? [{ label: "Artıq istifadə olunmuş məzuniyyətə görə tutulma", detail: deduct ? `${days(result.overusedDays)} gün × ${money(result.average.daily)}` : `${days(result.overusedDays)} gün artıq istifadə olunub — tutulma seçilməyib`, amount: -result.overusedDeduction }] : []),
   ] : [];
-  const markTerminated = async () => {
-    if (!window.confirm(`${fullName(employee)} üçün işdən çıxma tarixi ${formatDay(date)} və əsas “${reasonLabel(reasonKey)}” karta yazılsın?`)) return;
-    setBusy(true); setError(""); setSaved("");
-    try { await call("POST", { ...toPayload(toForm(employee), toJobRows(employee, data.priorJobs)), terminationDate: date, terminationReason: reasonKey }); setSaved("İşdən çıxma karta yazıldı."); }
-    catch (e) { setError(e instanceof Error ? e.message : "Saxlanmadı."); } finally { setBusy(false); }
-  };
   const print = () => {
     if (!result) return;
     const w = window.open("", "_blank", "width=820,height=900");
@@ -805,9 +798,8 @@ function SettlementTab({ employee, data, call }: { employee: HrEmployee; data: H
         <tr className="hrtotalrow"><td colSpan={2}>Cəmi (vergi və sosial sığorta tutulmalarından əvvəl)</td><td className="hrnum">{money(result.total)}</td></tr>
       </tbody></table></div>
     </>}
-    {error && <div className="errorbox">{error}</div>}
-    {saved && <div className="hrok">{saved}</div>}
-    <div className="hractions"><Button variant="outline" disabled={!result} onClick={print}><Printer />Çap et</Button><Button disabled={busy || !valid || (employee.termination_date === date && employee.termination_reason === reasonKey)} onClick={() => void markTerminated()}>{busy ? "Saxlanılır..." : "İşdən çıxmanı karta yaz"}</Button></div>
+    <div className="hractions"><Button variant="outline" disabled={!result} onClick={print}><Printer />Çap et</Button></div>
+    <small className="hrhint">Bu tab hesablamaya baxmaq və çap etmək üçündür. İşdən çıxmanı rəsmiləşdirmək üçün <b>HR → Əmrlər → İşdən çıxma əmrləri</b> bölməsində əmr verin — əmrlə birlikdə bu hesablaşma da çap olunur.</small>
   </div>;
 }
 

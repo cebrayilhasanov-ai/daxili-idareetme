@@ -15,7 +15,7 @@ const EXTRA_COLUMNS: [string, string][] = [
   ["photo_key", "TEXT"], ["photo_name", "TEXT"], ["prior_experience_days", "INTEGER NOT NULL DEFAULT 0"],
   ["contract_no", "TEXT"], ["contract_date", "TEXT"], ["contract_type", "TEXT"], ["contract_end_date", "TEXT"], ["probation_months", "INTEGER"],
   ["hire_order_no", "TEXT"], ["hire_order_date", "TEXT"],
-  ["emergency_name", "TEXT"], ["emergency_relation", "TEXT"], ["emergency_phone", "TEXT"], ["marital_status", "TEXT"],
+  ["emergency_name", "TEXT"], ["emergency_relation", "TEXT"], ["emergency_phone", "TEXT"], ["marital_status", "TEXT"], ["termination_order_id", "INTEGER"],
 ];
 
 let schemaReady = false;
@@ -239,8 +239,10 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
     const same = await db().prepare("SELECT id, last_name, first_name FROM hr_employees WHERE fin = ? AND id != ?").bind(fin, id || 0).first<{ id: number; last_name: string; first_name: string }>();
     if (same) throw new Error(`Bu FİN artıq ${same.last_name} ${same.first_name} adlı işçidə qeydə alınıb.`);
   }
-  const terminationDate = date(input.terminationDate, "İşdən çıxma tarixi");
-  if (terminationDate && terminationDate < hireDate) throw new Error("İşdən çıxma tarixi işə qəbul tarixindən əvvəl ola bilməz.");
+  // Termination is recorded by a signed termination order (HR → Əmrlər), never from the card: the card keeps what is stored.
+  const stored = id ? await db().prepare("SELECT termination_date, termination_reason FROM hr_employees WHERE id = ?").bind(id).first<{ termination_date: string | null; termination_reason: string | null }>() : null;
+  const terminationDate = stored?.termination_date || null;
+  if (terminationDate && terminationDate < hireDate) throw new Error("İşə qəbul tarixi işdən çıxma tarixindən sonra ola bilməz.");
   const openingDate = date(input.openingBalanceDate, "Başlanğıc qalığın tarixi");
   const openingDays = input.openingBalanceDays === null || input.openingBalanceDays === undefined || String(input.openingBalanceDays).trim() === "" ? null : Number(String(input.openingBalanceDays).replace(",", "."));
   if (openingDays !== null && !Number.isFinite(openingDays)) throw new Error("Başlanğıc qalıq düzgün rəqəm deyil.");
@@ -266,7 +268,7 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
     fin, text(input.idSeries)?.toUpperCase() || null, text(input.idNumber), text(input.idIssuedBy), date(input.idIssuedAt, "Vəsiqənin verilmə tarixi"), date(input.idValidUntil, "Vəsiqənin etibarlılıq tarixi"),
     date(input.birthDate, "Doğum tarixi"), text(input.gender), text(input.regAddress), phone,
     text(input.idFrontKey), text(input.idFrontName), text(input.idBackKey), text(input.idBackName),
-    hireDate, terminationDate, terminationDate ? text(input.terminationReason) : null,
+    hireDate, terminationDate, terminationDate ? stored?.termination_reason || null : null,
     priorMonths, number(input.baseLeaveDays, "Əsas məzuniyyət günü"), Math.round(number(input.extraLeaveDays, "Əlavə məzuniyyət günü") || 0), text(input.extraLeaveNote),
     workWeek, number(input.monthlySalary, "Vəzifə maaşı"), openingDate, openingDays, Number(input.userEmployeeId) || null, text(input.note),
     text(input.photoKey), text(input.photoName), priorDays,

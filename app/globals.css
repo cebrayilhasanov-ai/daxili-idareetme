@@ -692,3 +692,8 @@ nav button>em+.navcaret{margin-left:6px}
 .orderstatus{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px}.orderstatus.pending{background:#fee2e2;color:#b91c1c}.orderstatus.signed{background:#dcfce7;color:#15803d}.orderstatus.cancelled{background:#f1f5f9;color:#64748b}
 tr.ordercancelled td{color:#94a3b8;text-decoration:line-through}tr.ordercancelled td:last-child{text-decoration:none}
 .orderupload{position:relative;overflow:hidden;cursor:pointer;display:inline-flex;align-items:center;gap:4px}.orderupload input{position:absolute;inset:0;opacity:0;cursor:pointer}.orderupload.need{border-color:#fca5a5!important;color:#b91c1c!important}
+.hrreadonly{display:flex;align-items:center;min-height:36px;padding:0 10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;font-size:12px;color:#0f172a}
+.ordertabs button em{font-style:normal;margin-left:6px;background:#dc2626;color:#fff;border-radius:9px;padding:0 6px;font-size:10px}
+.orderfacts span.ordertotal{border-color:#0C8599;background:#f0fafb}.orderfacts span.ordertotal b{color:#0b6b7b}
+.orderlegalgrid{display:grid;gap:8px}.orderlegalgrid .field{font-size:10px;font-weight:700;color:#334155}.orderlegalgrid input{width:100%;height:36px;border:1px solid #b9c8da;border-radius:8px;padding:0 9px;font-size:12px}
+.orderform .hrcheck{align-self:end}

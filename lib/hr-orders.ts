@@ -1,6 +1,6 @@
 import {
-  addDays, addMonths, formatDay, indexCalendar, isIsoDate, isWorkingDay, leaveDaysBetween, stageExtraDays, workYears,
-  type CalendarDay, type HrEmployeeCalc, type HrLeaveCalc, type HrParams,
+  TERMINATION_REASONS, addDays, addMonths, formatDay, indexCalendar, isIsoDate, isWorkingDay, leaveDaysBetween, stageExtraDays, workYears,
+  type CalendarDay, type HrEmployeeCalc, type HrLeaveCalc, type HrParams, type Settlement,
 } from "@/lib/hr-calc";
 
 // HR orders (əmrlər): numbering, the Labour Code basis of a leave order and its printed text. Shared by the API and the page,
@@ -140,4 +140,58 @@ export function leaveOrderText(emp: OrderEmployee, input: LeaveOrderInput, plan:
   if (plan.returnDate) items.push(`İşçi ${formatDay(plan.returnDate)} tarixində işə çıxsın.`);
   if (kind.paid) items.push("Mühasibatlığa tapşırılsın ki, məzuniyyət haqqını qanunvericiliyə uyğun olaraq hesablayıb ödəsin.");
   return { title: kind.title, items };
+}
+
+// ---------- termination orders ----------
+// The legal basis of each termination ground is free text (clause-level references such as "68-ci maddənin 1-ci hissəsinin
+// «a» bəndi" do not fit a list of numbers), editable in the order settings and checked by HR's lawyer.
+export type TerminationLegal = Record<string, string>;
+export const DEFAULT_TERMINATION_LEGAL: TerminationLegal = {
+  own: "Azərbaycan Respublikası Əmək Məcəlləsinin 68 və 69-cu maddələrinə əsasən",
+  agreement: "Azərbaycan Respublikası Əmək Məcəlləsinin 68-ci maddəsinə əsasən",
+  term: "Azərbaycan Respublikası Əmək Məcəlləsinin 68-ci maddəsinə əsasən",
+  liquidation: "Azərbaycan Respublikası Əmək Məcəlləsinin 68-ci maddəsinə əsasən",
+  reduction: "Azərbaycan Respublikası Əmək Məcəlləsinin 68-ci maddəsinə əsasən",
+  employer: "Azərbaycan Respublikası Əmək Məcəlləsinin 68-ci maddəsinə əsasən",
+  other: "",
+};
+export function normalizeTerminationLegal(raw: unknown): TerminationLegal {
+  const input = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out = { ...DEFAULT_TERMINATION_LEGAL };
+  for (const key of Object.keys(out)) if (typeof input[key] === "string") out[key] = (input[key] as string).trim();
+  return out;
+}
+
+export type TerminationExtra = { severance: boolean; workedDays: number | null; deductOverused: boolean; settlement?: SettlementSnapshot };
+export type SettlementSnapshot = { lines: { label: string; detail: string; amount: number }[]; total: number; average: { months: number; total: number; monthly: number; daily: number; rows: { period: string; amount: number | null }[] }; balanceDays: number };
+
+const MONTH_NAMES = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun", "İyul", "Avqust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
+export const money = (value: number) => `${value.toLocaleString("az-AZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₼`;
+const dayText = (value: number) => String(Math.round(value * 100) / 100);
+
+// The settlement as printed: the same lines the card's "Son hesablaşma" tab shows.
+export function settlementSnapshot(result: Settlement, monthlySalary: number | null, severance: boolean, deduct: boolean, date: string): SettlementSnapshot {
+  const lines = [
+    { label: `${MONTH_NAMES[Number(date.slice(5, 7)) - 1]} ayı üçün əmək haqqı`, detail: `${monthlySalary ? money(monthlySalary) : "vəzifə maaşı yoxdur"} × ${result.workedDays} işlənmiş gün / ${result.norm.days} iş günü (norma)`, amount: result.salaryPart },
+    { label: "İstifadə olunmamış məzuniyyətə görə kompensasiya", detail: `${dayText(result.compensationDays)} gün × ${money(result.average.daily)} (orta günlük)`, amount: result.compensation },
+    ...(severance ? [{ label: "İşdən çıxma müavinəti", detail: `${result.severanceMultiplier} × ${money(result.average.monthly)} (orta aylıq), bu firmada staj ${result.serviceYears} il`, amount: result.severance }] : []),
+    ...(result.overusedDays > 0 ? [{ label: "Artıq istifadə olunmuş məzuniyyətə görə tutulma", detail: deduct ? `${dayText(result.overusedDays)} gün × ${money(result.average.daily)}` : `${dayText(result.overusedDays)} gün artıq istifadə olunub — tutulma seçilməyib`, amount: -result.overusedDeduction }] : []),
+  ];
+  return { lines, total: result.total, average: { months: result.average.months, total: result.average.total, monthly: result.average.monthly, daily: result.average.daily, rows: result.average.rows }, balanceDays: result.balance.balance };
+}
+
+export type TerminationInput = { date: string; reasonKey: string; basis: string; severance: boolean; contractNo: string | null; contractDate: string | null };
+export function terminationOrderText(emp: OrderEmployee, input: TerminationInput, result: Settlement | null) {
+  const who = [emp.department, emp.position].filter(Boolean).join(", ");
+  const reason = TERMINATION_REASONS.find((r) => r.key === input.reasonKey)?.label || "";
+  const contract = input.contractDate || input.contractNo ? ` ${[input.contractDate ? `${formatDay(input.contractDate)} tarixli` : "", input.contractNo ? `№ ${input.contractNo}` : ""].filter(Boolean).join(" ")}` : "";
+  const pay = ["son iş ayında işlənmiş günlər üçün əmək haqqı"];
+  if (result && result.compensationDays > 0) pay.push(`istifadə olunmamış ${dayText(result.compensationDays)} gün məzuniyyətə görə kompensasiya`);
+  if (input.severance) pay.push("işdən çıxma müavinəti");
+  const items = [
+    `${personName(emp)}${who ? ` (${who})` : ""} ilə bağlanmış${contract} əmək müqaviləsinə ${formatDay(input.date)} tarixindən ${reason ? reason.charAt(0).toLocaleLowerCase("az") + reason.slice(1) : ""} xitam verilsin.`,
+    `Mühasibatlığa tapşırılsın ki, işçi ilə son hesablaşma aparılsın: ${pay.join(", ")} ödənilsin${result && result.overusedDays > 0 ? ", artıq istifadə olunmuş məzuniyyət günləri qanunvericiliyə uyğun nəzərə alınsın" : ""}.`,
+    "Əmək müqaviləsinə xitam verilməsi barədə bildiriş qanunvericiliklə müəyyən edilmiş qaydada elektron informasiya sisteminə daxil edilsin.",
+  ];
+  return { title: "Əmək müqaviləsinə xitam verilməsi haqqında", items };
 }
