@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Printer } from "lucide-react";
+import { Download, Plus, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ColGroup, SortableTh, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
+import { ActionsHeader, ColGroup, SortableTh, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
 import {
   CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, LEAVE_KINDS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
   leaveDaysBetween, leaveKindLabel, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
@@ -91,6 +91,110 @@ export function HrPage({ section }: { section: HrSection }) {
   return <PersonnelSection data={data} call={call} />;
 }
 
+// ---------------------------------------------------------------- Kartın çapı və Excel faylları
+// One description of the personnel card feeds both the print page and the .xlsx file, so the two always list the same
+// sections in the same order as the card itself.
+type CardSection = { title: string; fields?: [string, string][]; table?: { head: string[]; rows: string[][] }; note?: string };
+const dash = (value: unknown) => (value === null || value === undefined || String(value).trim() === "" ? "—" : String(value));
+const dayOrDash = (value: string | null | undefined) => (value ? formatDay(value) : "—");
+const contractTypeLabel = (value: string | null) => (value === "fixed" ? "Müddətli" : value === "indefinite" ? "Müddətsiz" : "—");
+const safeFileName = (value: string) => value.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+
+function priorOf(e: HrEmployee, data: HrData) {
+  const jobs = data.priorJobs.filter((j) => j.hr_employee_id === e.id);
+  if (jobs.length) return { jobs, total: priorService(jobs) };
+  const months = e.prior_experience_months || 0;
+  return { jobs, total: { years: Math.floor(months / 12), months: months % 12, days: e.prior_experience_days || 0 } };
+}
+function highestEducation(e: HrEmployee, data: HrData) {
+  const levels = data.education.filter((x) => x.hr_employee_id === e.id).map((x) => x.level);
+  return [...EDUCATION_LEVELS].reverse().find((level) => level !== "Kurs / sertifikat" && levels.includes(level)) || levels[0] || "";
+}
+
+function employeeCard(e: HrEmployee, data: HrData, today: string): CardSection[] {
+  const params = normalizeParams(data.params);
+  const asOf = e.termination_date || today;
+  const balance = leaveBalance(e, data.leaves.filter((l) => l.hr_employee_id === e.id), params, asOf);
+  const prior = priorOf(e, data);
+  const family = data.family.filter((f) => f.hr_employee_id === e.id);
+  const education = data.education.filter((x) => x.hr_employee_id === e.id);
+  const sections: CardSection[] = [
+    { title: "Şəxsi məlumatlar", fields: [["Soyad", dash(e.last_name)], ["Ad", dash(e.first_name)], ["Ata adı", dash(e.patronymic)], ["Doğum tarixi", dayOrDash(e.birth_date)], ["Cins", dash(e.gender)], ["Telefon", dash(e.phone)]] },
+    { title: "Təcili əlaqə şəxsi", fields: [["Adı, soyadı", dash(e.emergency_name)], ["Qohumluq", dash(e.emergency_relation)], ["Telefon", dash(e.emergency_phone)]] },
+    { title: "Şəxsiyyət vəsiqəsi", fields: [["FİN", dash(e.fin)], ["Seriya və nömrə", dash([e.id_series, e.id_number].filter(Boolean).join(" "))], ["Verən orqan", dash(e.id_issued_by)], ["Verilmə tarixi", dayOrDash(e.id_issued_at)], ["Etibarlıdır (tarixədək)", dayOrDash(e.id_valid_until)], ["Qeydiyyat ünvanı", dash(e.reg_address)]] },
+    { title: "İş yeri", fields: [["Firma", dash(e.company_name)], ["Şöbə", dash(e.department)], ["Vəzifə", dash(e.position)], ["İşə qəbul tarixi", dayOrDash(e.hire_date)], ["Bu firmada staj", serviceText(serviceParts(e.hire_date, asOf))], ["İş həftəsi", `${e.work_week || 5} günlük`], ["Vəzifə maaşı", e.monthly_salary ? money(e.monthly_salary) : "—"], ["Sistem istifadəçisi", dash(e.user_employee_name)]] },
+    { title: "Əvvəlki iş yerləri", table: prior.jobs.length ? { head: ["İş yeri", "VÖEN", "Vəzifə", "Dövr", "Staj", "İşdən çıxma əsası"], rows: prior.jobs.map((j) => [dash(j.customer_name), dash(j.customer_voen), j.position, `${formatDay(j.start_date)} – ${formatDay(j.end_date)}`, serviceText(serviceParts(j.start_date, j.end_date)), j.termination_reason ? reasonLabel(j.termination_reason) : "—"]) } : undefined,
+      note: `Əvvəlki iş yerlərindəki ümumi staj: ${serviceText(prior.total)}${prior.jobs.length ? "" : " (əl ilə daxil edilib)"}` },
+    { title: "Əmək müqaviləsi", fields: [["Müqavilənin nömrəsi", dash(e.contract_no)], ["Müqavilənin tarixi", dayOrDash(e.contract_date)], ["Növü", contractTypeLabel(e.contract_type)], ...(e.contract_type === "fixed" ? [["Bitmə tarixi", dayOrDash(e.contract_end_date)] as [string, string]] : []), ["Sınaq müddəti", e.probation_months === null || e.probation_months === undefined ? "—" : e.probation_months ? `${e.probation_months} ay` : "Yoxdur"], ["İşə qəbul əmri", dash([e.hire_order_no ? `№ ${e.hire_order_no}` : "", e.hire_order_date ? formatDay(e.hire_order_date) : ""].filter(Boolean).join(", "))]] },
+    { title: "Məzuniyyət hüququ", fields: [["Əsas məzuniyyət", `${e.base_leave_days ?? params.baseLeaveDays} gün`], ["Digər əlavə günlər", e.extra_leave_days ? `${e.extra_leave_days} gün${e.extra_leave_note ? ` (${e.extra_leave_note})` : ""}` : "—"], [`Məzuniyyət qalığı (${formatDay(asOf)})`, `${days(balance.balance)} gün`]] },
+    { title: "Ailə məlumatları", fields: [["Ailə vəziyyəti", dash(e.marital_status)]], table: family.length ? { head: ["Qohumluq", "Soyadı, adı, ata adı", "Doğum tarixi", "Yaşı", "İş / təhsil yeri", "Telefon"], rows: family.map((f) => [f.relation, [f.last_name, f.first_name, f.patronymic].filter(Boolean).join(" "), dayOrDash(f.birth_date), dash(ageOn(f.birth_date, today)), dash(f.workplace), dash(f.phone)]) } : undefined },
+    { title: "Təhsil", table: education.length ? { head: ["Səviyyə", "Təhsil müəssisəsi", "İxtisas", "İllər", "Diplom №"], rows: education.map((x) => [x.level, x.institution, dash(x.specialty), x.start_year || x.end_year ? `${x.start_year || "…"} – ${x.end_year || "…"}` : "—", dash(x.diploma_no)]) } : undefined, note: education.length ? undefined : "Təhsil qeydi yoxdur." },
+  ];
+  if (e.termination_date) sections.push({ title: "İşdən çıxma", fields: [["İşdən çıxma tarixi", formatDay(e.termination_date)], ["Əsas", reasonLabel(e.termination_reason)]] });
+  if (e.note) sections.push({ title: "Qeyd", fields: [["Qeyd", e.note]] });
+  return sections;
+}
+
+function printEmployeeCard(e: HrEmployee, data: HrData) {
+  const today = todayIso();
+  const w = window.open("", "_blank", "width=860,height=960");
+  if (!w) { window.alert("Çap pəncərəsi açılmadı — brauzerdə bu sayt üçün açılan pəncərələrə icazə verin."); return; }
+  const h = escapeHtml;
+  const body = employeeCard(e, data, today).map((s) => `<h2>${h(s.title)}</h2>`
+    + (s.fields ? `<table class="fields">${s.fields.map(([label, value]) => `<tr><th>${h(label)}</th><td>${h(value)}</td></tr>`).join("")}</table>` : "")
+    + (s.table ? `<table class="list"><tr>${s.table.head.map((c) => `<th>${h(c)}</th>`).join("")}</tr>${s.table.rows.map((r) => `<tr>${r.map((c) => `<td>${h(c)}</td>`).join("")}</tr>`).join("")}</table>` : "")
+    + (s.note ? `<p class="note">${h(s.note)}</p>` : "")).join("");
+  const photo = e.photo_key ? `<img class="photo" src="${location.origin}/api/file?key=${encodeURIComponent(e.photo_key)}" alt="">` : "";
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Şəxsi kart — ${h(fullName(e))}</title><style>
+    body{font:12px/1.4 Arial,sans-serif;color:#111;margin:28px}header{display:flex;gap:18px;align-items:flex-start;margin-bottom:6px}.photo{width:96px;height:120px;object-fit:cover;border:1px solid #999}
+    h1{font-size:18px;margin:0 0 4px}header p{margin:2px 0;color:#444}h2{font-size:13px;margin:16px 0 5px;padding-bottom:3px;border-bottom:2px solid #0b6b7b;color:#0b6b7b;page-break-after:avoid}
+    table{width:100%;border-collapse:collapse;page-break-inside:avoid}td,th{border:1px solid #bbb;padding:4px 7px;text-align:left;vertical-align:top}.fields th{width:34%;background:#f3f6f8;font-weight:600}.list th{background:#f3f6f8;font-weight:600}
+    .note{margin:5px 0 0;color:#444}footer{margin-top:22px;color:#666;font-size:10px}@media print{body{margin:12mm}}
+  </style></head><body><header>${photo}<div><h1>İşçinin şəxsi kartı</h1><p><b>${h(fullName(e))}</b></p><p>${h([e.position, e.department, e.company_name].filter(Boolean).join(" · ") || "—")}</p></div></header>
+  ${body}<footer>Hazırlanma tarixi: ${formatDay(today)}</footer><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+  w.document.close();
+}
+
+type XlsxCell = { value?: string | number; fontWeight?: "bold"; backgroundColor?: string; textColor?: string; wrap?: boolean; alignVertical?: "top" };
+async function saveXlsx(rows: (XlsxCell | null)[][], widths: number[], sheet: string, fileName: string, stickyRowsCount?: number) {
+  const { default: writeXlsxFile } = await import("write-excel-file/browser");
+  await writeXlsxFile(rows, { sheet, columns: widths.map((width) => ({ width })), stickyRowsCount }).toFile(fileName);
+}
+
+async function downloadEmployeeCard(e: HrEmployee, data: HrData) {
+  const today = todayIso();
+  const titleRow = (text: string): XlsxCell[] => [{ value: text, fontWeight: "bold", backgroundColor: "#DDEFF2", textColor: "#0B6B7B" }, ...Array.from({ length: 5 }, () => ({ backgroundColor: "#DDEFF2" }))];
+  const rows: (XlsxCell | null)[][] = [
+    [{ value: "İşçinin şəxsi kartı", fontWeight: "bold" }],
+    [{ value: fullName(e), fontWeight: "bold" }, { value: [e.position, e.company_name].filter(Boolean).join(" · ") }],
+    [{ value: `Hazırlanma tarixi: ${formatDay(today)}` }],
+  ];
+  for (const s of employeeCard(e, data, today)) {
+    rows.push([null], titleRow(s.title));
+    for (const [label, value] of s.fields || []) rows.push([{ value: label, fontWeight: "bold" }, { value, wrap: true }]);
+    if (s.table) {
+      rows.push(s.table.head.map((c) => ({ value: c, fontWeight: "bold", backgroundColor: "#F3F6F8" })));
+      for (const r of s.table.rows) rows.push(r.map((c) => ({ value: c, wrap: true, alignVertical: "top" })));
+    }
+    if (s.note) rows.push([{ value: s.note }]);
+  }
+  await saveXlsx(rows, [30, 34, 24, 24, 18, 32], "Şəxsi kart", `${safeFileName(fullName(e))} — şəxsi kart.xlsx`);
+}
+
+async function downloadPersonnelList(list: PersonnelRow[], data: HrData, today: string) {
+  const head = ["Soyad", "Ad", "Ata adı", "FİN", "Doğum tarixi", "Cins", "Telefon", "Firma", "Şöbə", "Vəzifə", "İşə qəbul tarixi", "Bu firmada staj", "Əvvəlki staj",
+    "Müqavilənin növü", "Müqavilənin bitmə tarixi", "Vəzifə maaşı (₼)", "Məzuniyyət qalığı (gün)", "Vəsiqə etibarlıdır", "Ailə vəziyyəti", "Təhsil", "Status", "İşdən çıxma tarixi", "İşdən çıxma əsası"];
+  const rows: (XlsxCell | null)[][] = [head.map((c) => ({ value: c, fontWeight: "bold", backgroundColor: "#DDEFF2", wrap: true }))];
+  for (const { e, balance } of list) {
+    rows.push([e.last_name, e.first_name, e.patronymic, e.fin, dayOrDash(e.birth_date), e.gender, e.phone, e.company_name, e.department, e.position, dayOrDash(e.hire_date),
+      serviceText(serviceParts(e.hire_date, e.termination_date || today)), serviceText(priorOf(e, data).total), e.contract_type ? contractTypeLabel(e.contract_type) : "",
+      e.contract_type === "fixed" ? dayOrDash(e.contract_end_date) : "", e.monthly_salary ?? undefined, Math.round(balance.balance * 100) / 100, dayOrDash(e.id_valid_until), e.marital_status,
+      highestEducation(e, data), e.termination_date ? "İşdən çıxıb" : "İşləyir", e.termination_date ? formatDay(e.termination_date) : "", e.termination_date ? reasonLabel(e.termination_reason) : ""]
+      .map((value) => ({ value: value === null || value === undefined || value === "—" ? undefined : value })));
+  }
+  await saveXlsx(rows, [16, 14, 16, 10, 12, 8, 18, 22, 18, 22, 12, 16, 16, 12, 14, 12, 12, 14, 12, 14, 11, 13, 30], "Personallar", `Personallar ${formatDay(today)}.xlsx`, 1);
+}
+
 // ---------------------------------------------------------------- İşçilər
 type PersonnelRow = { e: HrEmployee; balance: ReturnType<typeof leaveBalance>; id: { cls: string; text: string } };
 type PersonnelColumn = ExcelColumn<PersonnelRow> & { width: number; render: (row: PersonnelRow) => React.ReactNode };
@@ -140,8 +244,15 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
   const columnsByKey = Object.fromEntries(columns.map((c) => [c.key, c]));
   const defaultWidths = Object.fromEntries(columns.map((c) => [c.key, c.width]));
   const excel = useExcelFilters("hrpersonnel", columns, shown);
+  const [exporting, setExporting] = useState("");
+  const [exportError, setExportError] = useState("");
+  const runExport = async (key: string, work: () => Promise<void>) => {
+    setExporting(key); setExportError("");
+    try { await work(); } catch (e) { setExportError(e instanceof Error ? e.message : "Fayl hazırlanmadı."); } finally { setExporting(""); }
+  };
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Personallar</h2><p>{excel.rows.length} işçi göstərilir · qalıqlar {formatDay(today)} tarixinə</p></div><Button onClick={() => setOpenId("new")}><Plus />Yeni işçi</Button></div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Personallar</h2><p>{excel.rows.length} işçi göstərilir · qalıqlar {formatDay(today)} tarixinə</p></div><div className="hrheadactions"><Button variant="outline" disabled={!excel.rows.length || Boolean(exporting)} onClick={() => void runExport("list", () => downloadPersonnelList(excel.rows, data, today))}><Download />{exporting === "list" ? "Hazırlanır..." : "Siyahını XLS endir"}</Button><Button onClick={() => setOpenId("new")}><Plus />Yeni işçi</Button></div></div>
+    {exportError && <div className="errorbox">{exportError}</div>}
     {idAlerts.length > 0 && <button className="hralert" onClick={() => setStatus("idalert")}>⚠ {idAlerts.length} işçinin şəxsiyyət vəsiqəsinin müddəti bitib və ya 30 gün ərzində bitir — göstər</button>}
     {contractAlerts.length > 0 && <button className="hralert" onClick={() => setStatus("contractalert")}>⚠ {contractAlerts.length} işçinin müddətli əmək müqaviləsinin müddəti bitib və ya 30 gün ərzində bitir — göstər</button>}
     <div className="hrfilters">
@@ -149,10 +260,14 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
       <label>Status<select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="active">İşləyənlər</option><option value="terminated">İşdən çıxanlar</option><option value="idalert">Vəsiqəsi bitənlər</option><option value="contractalert">Müqaviləsi bitənlər</option><option value="all">Hamısı</option></select></label>
       <label className="hrsearch">Axtarış<Input value={query} placeholder="Ad, FİN, vəzifə, şöbə..." onChange={(e) => setQuery(e.target.value)} /></label>
     </div>
-    <div className="tasktablewrap"><table className="tasktable hrtable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} />
-      <thead><tr>{order.map((key) => <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(columnsByKey[key])}</SortableTh>)}</tr></thead>
+    <div className="tasktablewrap"><table className="tasktable hrtable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]} />
+      <thead><tr>{order.map((key) => <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(columnsByKey[key])}</SortableTh>)}<th {...resize("actions")} className={`opencolumn${resize("actions").className ? ` ${resize("actions").className}` : ""}`}><ActionsHeader /></th></tr></thead>
       <tbody>{excel.rows.map((row) => <tr key={row.e.id} className="hrrow" onClick={() => setOpenId(row.e.id)}>
         {order.map((key) => <td key={key} data-label={columnsByKey[key].label}>{columnsByKey[key].render(row)}</td>)}
+        <td data-label="Əməliyyat" onClick={(ev) => ev.stopPropagation()}><div className="tableactions">
+          <button className="editcompanybtn" title="Şəxsi kartı çap et" onClick={() => printEmployeeCard(row.e, data)}><Printer />Çap et</button>
+          <button className="editcompanybtn" title="Şəxsi kartı Excel faylı kimi endir" disabled={Boolean(exporting)} onClick={() => void runExport(`card${row.e.id}`, () => downloadEmployeeCard(row.e, data))}><Download />{exporting === `card${row.e.id}` ? "..." : "XLS"}</button>
+        </div></td>
       </tr>)}</tbody></table>
       {!excel.rows.length && <div className="empty"><p>{data.employees.length ? "Filtrə uyğun işçi tapılmadı." : "Hələ işçi əlavə edilməyib. “Yeni işçi” düyməsi ilə başlayın."}</p></div>}
     </div>
