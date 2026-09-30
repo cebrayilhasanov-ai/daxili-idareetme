@@ -284,7 +284,8 @@ function EmployeeDialog({ employee, data, call, onSaved, onClose }: { employee: 
   const [tab, setTab] = useState<Tab>("card");
   return <>
     <DialogHeader className="businessdialogheader"><span className="formeyebrow">KADR UÇOTU</span><DialogTitle className="hrdialogtitle">{employee && <HrAvatar employee={employee} size={40} />}{employee ? fullName(employee) : "Yeni işçi"}</DialogTitle>
-      <DialogDescription>{employee ? [employee.position, employee.company_name, `işə qəbul ${formatDay(employee.hire_date)}`].filter(Boolean).join(" · ") : "Şəxsiyyət vəsiqəsi, iş yeri və məzuniyyət məlumatlarını daxil edin. Bu işçi sistemə giriş almır."}</DialogDescription></DialogHeader>
+      <DialogDescription>{employee ? [employee.position, employee.company_name, `işə qəbul ${formatDay(employee.hire_date)}`].filter(Boolean).join(" · ") : "Şəxsiyyət vəsiqəsi, iş yeri və məzuniyyət məlumatlarını daxil edin. Bu işçi sistemə giriş almır."}</DialogDescription>
+      {employee && <Button variant="outline" className="hrcardprint" title="Şəxsi kartı çap et (saxlanmış məlumatlarla)" onClick={() => printEmployeeCard(employee, data)}><Printer />Çap et</Button>}</DialogHeader>
     {employee && <div className="fixedsubtabs hrtabs">
       {([["card", "Şəxsi kart"], ["family", "Ailə və təhsil"], ["leaves", "Məzuniyyətlər"], ["salary", "Əmək haqqı"], ["settlement", "Son hesablaşma"]] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>)}
     </div>}

@@ -679,3 +679,5 @@ nav button>em+.navcaret{margin-left:6px}
 @media(max-width:600px){.hrjobfields{grid-template-columns:1fr}}
 .hrheadactions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .hrtable .tableactions{flex-wrap:nowrap}.hrtable .tableactions button{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.hrtable .tableactions svg{width:13px;height:13px}
+.hrdialog .businessdialogheader{position:relative}.hrcardprint{position:absolute;top:20px;right:60px;height:32px!important;padding:0 12px!important;font-size:12px!important;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12)!important;color:#fff!important;border:1px solid rgba(255,255,255,.4)!important}.hrcardprint:hover{background:rgba(255,255,255,.22)!important}.hrcardprint svg{width:14px;height:14px}
+@media(max-width:600px){.hrcardprint{position:static;margin-top:10px}}
