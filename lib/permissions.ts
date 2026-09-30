@@ -16,13 +16,14 @@ export const SECTION_KEYS = [
   "documents.incoming",
   "hr.violations",
   "hr.personnel",
+  "hr.orders",
   "chat",
 ] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
 // Sections that start CLOSED (personal ID data, salaries): for these keys the stored list names the ones the admin has
 // opened, the reverse of every other key. deniedSections() turns the stored list into the set of sections that are locked.
-export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel"];
+export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel", "hr.orders"];
 export function deniedSections(stored: SectionKey[]): Set<SectionKey> {
   const denied = new Set(stored.filter((key) => !OPT_IN_SECTIONS.includes(key)));
   for (const key of OPT_IN_SECTIONS) if (!stored.includes(key)) denied.add(key);

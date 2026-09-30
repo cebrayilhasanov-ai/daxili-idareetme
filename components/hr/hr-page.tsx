@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { ActionsHeader, ColGroup, SortableTh, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
 import {
-  CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, LEAVE_KINDS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
+  CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
   leaveDaysBetween, leaveKindLabel, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
   weekday, workNorm, type CalendarDay, type CalendarKind, type HrParams,
 } from "@/lib/hr-calc";
@@ -31,7 +31,7 @@ type HrFamily = { id: number; hr_employee_id: number; relation: string; last_nam
 type HrEducation = { id: number; hr_employee_id: number; level: string; institution: string; specialty: string | null; start_year: number | null; end_year: number | null; diploma_no: string | null; diploma_key: string | null; diploma_name: string | null };
 type HrPriorJob = { id: number; hr_employee_id: number; customer_id: number; customer_name: string | null; customer_voen: string | null; position: string; start_date: string; end_date: string; termination_reason: string | null };
 type HrCustomer = { id: number; voen: string | null; name: string; country: string | null };
-type HrLeave = { id: number; hr_employee_id: number; kind: string; start_date: string; end_date: string; days: number; order_no: string | null; order_date: string | null; note: string | null };
+type HrLeave = { id: number; hr_employee_id: number; kind: string; start_date: string; end_date: string; days: number; order_no: string | null; order_date: string | null; note: string | null; order_id: number | null };
 type HrSalary = { hr_employee_id: number; period: string; amount: number };
 type HrData = {
   employees: HrEmployee[]; leaves: HrLeave[]; salaries: HrSalary[]; calendar: CalendarDay[]; params: HrParams;
@@ -647,7 +647,7 @@ function CustomerReportSection({ data }: { data: HrData }) {
   </section>;
 }
 
-const emptyLeave = (): Record<string, string> => ({ id: "", kind: "annual", startDate: "", endDate: "", days: "", orderNo: "", orderDate: "", note: "" });
+const emptyLeave = (): Record<string, string> => ({ id: "", kind: "sick", startDate: "", endDate: "", days: "", orderNo: "", orderDate: "", note: "" });
 function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrData; call: Call }) {
   const params = normalizeParams(data.params);
   const calendar = useMemo(() => indexCalendar(data.calendar), [data.calendar]);
@@ -676,14 +676,14 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <span><small>İstifadə olunub</small><b>{days(balance.used)}</b></span>
       {balance.current && <span><small>Cari iş ili</small><b className="hrsmall">{formatDay(balance.current.start)} – {formatDay(balance.current.end)}</b><small>{balance.current.entitlement} gün hüquq · ümumi staj {balance.current.stageYears} il</small></span>}
     </div>
-    <h4>{form.id ? "Məzuniyyəti redaktə et" : "Yeni məzuniyyət"}</h4>
+    <small className="hrhint">Məzuniyyətlər yalnız əmr əsasında qeydə alınır: <b>HR → Əmrlər → Məzuniyyət əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə məzuniyyət bu siyahıya düşür və qalıqdan çıxılır. Kartda yalnız xəstəlik vərəqəsi qeyd olunur.</small>
+    <h4>{form.id ? "Xəstəlik vərəqəsini redaktə et" : "Xəstəlik vərəqəsi"}</h4>
     <div className="hrgrid hrleaveform">
-      <label className="field">Növ<select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>{LEAVE_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
       <label className="field">Başlama<Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></label>
       <label className="field">Bitmə (son gün)<Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></label>
       <label className="field">Gün sayı<Input inputMode="decimal" value={form.days} placeholder={autoDays ? `${autoDays} (təqvimə görə)` : ""} onChange={(e) => setForm({ ...form, days: e.target.value })} /></label>
-      <label className="field">Əmr №<Input value={form.orderNo} onChange={(e) => setForm({ ...form, orderNo: e.target.value })} /></label>
-      <label className="field">Əmrin tarixi<Input type="date" value={form.orderDate} onChange={(e) => setForm({ ...form, orderDate: e.target.value })} /></label>
+      <label className="field">Vərəqənin №<Input value={form.orderNo} onChange={(e) => setForm({ ...form, orderNo: e.target.value })} /></label>
+      <label className="field">Vərəqənin tarixi<Input type="date" value={form.orderDate} onChange={(e) => setForm({ ...form, orderDate: e.target.value })} /></label>
       <label className="field hrwide">Qeyd<Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
     </div>
     {holidaysInside.length > 0 && <small className="hrhint">Bu dövrə düşən {holidaysInside.length} bayram günü hesablanmır: {holidaysInside.map((d) => `${formatDay(d.date)}${d.name ? ` (${d.name})` : ""}`).join(", ")}.</small>}
@@ -693,7 +693,7 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
     <h4>Qeydə alınmış məzuniyyətlər</h4>
     <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Növ</th><th>Dövr</th><th>Gün</th><th>Əmr</th><th>Qeyd</th><th></th></tr></thead><tbody>
       {leaves.map((l) => <tr key={l.id}><td>{leaveKindLabel(l.kind)}</td><td>{formatDay(l.start_date)} – {formatDay(l.end_date)}</td><td>{days(Number(l.days))}</td><td>{l.order_no ? `№ ${l.order_no}` : "—"}{l.order_date && <small className="hrsub">{formatDay(l.order_date)}</small>}</td><td>{l.note || "—"}</td>
-        <td><div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ id: String(l.id), kind: l.kind, startDate: l.start_date, endDate: l.end_date, days: String(l.days), orderNo: l.order_no || "", orderDate: l.order_date || "", note: l.note || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => void remove(l)}>Sil</button></div></td></tr>)}
+        <td>{l.order_id ? <small className="hrsub">əmrlə</small> : <div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ id: String(l.id), kind: l.kind, startDate: l.start_date, endDate: l.end_date, days: String(l.days), orderNo: l.order_no || "", orderDate: l.order_date || "", note: l.note || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => void remove(l)}>Sil</button></div>}</td></tr>)}
     </tbody></table>{!leaves.length && <div className="empty"><p>Hələ məzuniyyət qeydə alınmayıb.</p></div>}</div>
     <h4>Qalığın hesablanması ({formatDay(balance.asOf)} tarixinə)</h4>
     <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Tarix</th><th>Əməliyyat</th><th>+ gün</th><th>− gün</th><th>Qalıq</th></tr></thead><tbody>
