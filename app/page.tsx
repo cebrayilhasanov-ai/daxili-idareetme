@@ -12,7 +12,7 @@ import { MONTH_NAMES, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, formatBakuDate
 
 type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; is_department_head?:number };
 type Company = { id:number; name:string; voen:string|null; manager:string|null; active:number; created_at:string };
-type Task = { id:number; request_id?:number|null; request_from?:string|null; request_status?:string|null; employee_id:number; employee_name:string; employee_position:string; company_id:number|null; company_name:string|null; title:string; description:string|null; due_at:string; original_due_at:string|null; status:string; evaluation:number|null; evaluation_note:string|null; employee_status_changed:number; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; submission_attachment_type:string|null; recurring_task_id:number|null; period_key:string|null; created_at:string; assigned_by:string|null };
+type Task = { id:number; request_id?:number|null; request_from?:string|null; request_status?:string|null; employee_id:number; employee_name:string; employee_position:string; company_id:number|null; company_name:string|null; title:string; description:string|null; due_at:string; original_due_at:string|null; status:string; evaluation:number|null; evaluation_note:string|null; employee_status_changed:number; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; submission_attachment_type:string|null; recurring_task_id:number|null; period_key:string|null; created_at:string; completed_at?:string|null; assigned_by:string|null };
 type DateRequest = { id:number; task_id:number; task_title:string; employee_id:number; employee_name:string; proposed_due_at:string; reason:string|null; status:string; admin_note:string|null; created_at:string; resolved_at:string|null };
 type Recurring = { id:number; employee_id:number; employee_name:string; title:string; description:string|null; due_day:number; frequency:"monthly"|"weekly"|"daily"; weekday:number|null; due_time:string; active:number };
 type WorkItem = { id:number; title:string; description:string|null; frequency:"monthly"|"weekly"|"daily"; company_ids:string|null; due_day:number|null };
@@ -166,7 +166,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.47</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.48</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1859,26 +1859,64 @@ function WorkList({employeeView,tab,frequency,items,assignments,completions,empl
   const periodGroup=()=>rows.length?<><div className="workmatrix periodmatrix"><div className="workmatrixhead" style={periodColumns}><span {...resizePeriod("no")}>№</span><span {...resizePeriod("title")}>İşlərin siyahısı</span><span {...resizePeriod("description")}>İşin açıqlaması</span>{showCompany&&<span {...resizePeriod("company")}>Firma</span>}{!employeeView&&<span {...resizePeriod("user")}>İstifadəçi</span>}<span {...resizePeriod("due")}>{dueHeader}</span>{periods.map(p=><span key={p.key} {...resizePeriod(p.col)}>{p.label}</span>)}</div>{rows.map((a,index)=><article key={a.id} style={periodColumns}><b className="rownumber">{index+1}</b><h3 title={a.title}>{a.title}</h3><p className="workdescription" title={a.description||""}>{a.description||"—"}</p>{showCompany&&<span className="matrixuser" title={a.company_name}>{a.company_name}</span>}{!employeeView&&<span className="matrixuser" title={a.employee_name}>{a.employee_name}</span>}<span className="matrixuser">{dueLabel(a)}</span>{periods.map(p=>periodCell(a,p))}</article>)}</div><div className="periodlegend"><span><i className="periodcell active"/>Açıqdır — icra etmək vaxtıdır</span><span><i className="periodcell done"/>Vaxtında icra edilib</span><span><i className="periodcell late-done"/>Gecikməklə icra edilib</span><span><i className="periodcell overdue"/>Gecikib</span><span><i className="periodcell future"/>Hələ açılmayıb</span></div></>:<Empty text={employeeView?"Sizə hələ sabit iş təyin edilməyib.":"Hələ personala sabit iş təyin edilməyib."}/>;
   const frequencyEyebrow=frequency==="monthly"?"AYLIQ SABİT İŞLƏR":"HƏFTƏLİK SABİT İŞLƏR";
   return <section className={`panel pagepanel recurringpage ${frequency}`}><div className="pageactions recurringhead"><div><span className="sectioneyebrow">{frequencyEyebrow}</span><h2>{employeeView?"Mənim sabit işlərim":assignmentView?"Personal sabit işlər":"Sabit işlərin siyahısı"}</h2><p>{employeeView?"Sizə sabit olaraq həvalə edilmiş işlər və firmalar":assignmentView?"Sabit işlərin personal və firmalar üzrə bölgüsü":"Sabit işlərin ümumi siyahısı"}</p></div>{!employeeView&&assignmentView&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Sabit iş yarat</Button>}</div>{!assignmentView?<><div className="catalogfilters"><label><span>Firma</span><select value={catalogCompanyFilter} onChange={e=>setCatalogCompanyFilter(e.target.value)}><option value="all">Bütün firmalar</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label><span>İstifadəçi</span><select value={catalogEmployeeFilter} onChange={e=>setCatalogEmployeeFilter(e.target.value)}><option value="all">Bütün istifadəçilər</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label></div><div className="workadd catalogadd"><Input placeholder="Yeni sabit işin adını yazın" value={form.workTitle||""} onChange={e=>setForm({...form,workTitle:e.target.value})}/><Input placeholder="İşin açıqlamasını yazın" value={form.workDescription||""} onChange={e=>setForm({...form,workDescription:e.target.value})}/><Button disabled={!form.workTitle?.trim()} onClick={onAdd}><Plus/>Siyahıya əlavə et</Button></div>{filteredCatalogItems.length?catalogGroup(frequency):<Empty text={items.length?"Seçilmiş filtrlərə uyğun sabit iş tapılmadı.":"Sabit işlərin siyahısı hələ boşdur."}/>}</>:<><div className="periodfilters">{!employeeView&&<label><span>Firma</span><select value={catalogCompanyFilter} onChange={e=>setCatalogCompanyFilter(e.target.value)}><option value="all">Bütün firmalar</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}<label><span>İl</span><select value={year} onChange={e=>setYear(Number(e.target.value))}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select></label>{frequency==="weekly"&&<label><span>Ay</span><select value={month} onChange={e=>setMonth(Number(e.target.value))}>{MONTH_NAMES.map((name,i)=><option key={name} value={i}>{name}</option>)}</select></label>}</div>{creating&&<div className="fixedtaskcreate"><div className="fixedtaskfields"><label>Sabit iş<select value={form.assignWorkId||""} onChange={e=>setForm({...form,assignWorkId:e.target.value})}><option value="">Sabit işi seçin</option>{items.filter(i=>i.frequency===frequency).map(i=><option key={i.id} value={i.id}>{i.title}</option>)}</select></label><label>İstifadəçi<select value={form.assignEmployeeId||""} onChange={e=>setForm({...form,assignEmployeeId:e.target.value})}><option value="">İstifadəçini seçin</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label></div><div className="fixedcompanies"><b>Firmaları seçin</b><div>{companies.map(c=><label key={c.id}><input type="checkbox" checked={selectedCompanies.has(c.id)} onChange={e=>toggleAssignCompany(c.id,e.target.checked)}/><span>✓</span>{c.name}</label>)}</div></div><div className="fixedtaskactions"><button onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={!form.assignWorkId||!form.assignEmployeeId||!selectedCompanies.size} onClick={()=>{onAssign();setCreating(false)}}>Sabit işi yarat</Button></div></div>}{periodGroup()}</>}</section>}
+// An evaluation is dated by when the task was approved; older approved tasks have no completed_at, so they fall back to created_at.
+const evaluatedAt=(t:Task)=>new Date(t.completed_at||t.created_at);
+const averageScore=(list:Task[])=>list.length?list.reduce((s,t)=>s+(t.evaluation||0),0)/list.length:null;
+const FEW_EVALUATIONS=3;
+function ScoreSparkline({points}:{points:(number|null)[]}){
+  const w=84,h=26,step=w/(points.length-1);
+  const y=(v:number)=>h-2-(v-1)/9*(h-4);
+  const known=points.map((v,i)=>v===null?null:{x:i*step,y:y(v)}).filter((p):p is {x:number;y:number}=>p!==null);
+  return <svg className="evalspark" viewBox={`-3 -3 ${w+6} ${h+6}`} aria-hidden="true"><polyline points={known.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>{known.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={i===known.length-1?2.6:1.8} fill="currentColor"/>)}</svg>;
+}
 function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}){
-  const now=Date.now();
-  return <section className="panel evalpanel"><div className="head"><div><h3>Qiymətləndirmə</h3><p>Təsdiqlənmiş işlər üzrə nəticələr</p></div></div><div className="evaluationrows">{employees.map((e,index)=>{
+  const [period,setPeriod]=useState<ViolationPeriod>("3m");
+  const [now]=useState(()=>new Date());
+  const range=violationPeriodRange(period,now);
+  const allRated=tasks.filter(t=>t.evaluation);
+  const inPeriod=(t:Task)=>!range||evaluatedAt(t)>=range.start;
+  const rated=allRated.filter(inPeriod);
+  const teamAvg=averageScore(rated);
+  const prevAvg=range?averageScore(allRated.filter(t=>{const at=evaluatedAt(t);return at>=range.prevStart&&at<range.prevEnd})):null;
+  const delta=teamAvg!==null&&prevAvg!==null?Math.round((teamAvg-prevAvg)*10)/10:null;
+  const histogram=Array.from({length:10},(_,i)=>({score:i+1,count:rated.filter(t=>t.evaluation===i+1).length}));
+  const histMax=Math.max(...histogram.map(x=>x.count),1);
+  const monthStarts=Array.from({length:7},(_,i)=>new Date(now.getFullYear(),now.getMonth()-5+i,1));
+  const cards=employees.map((e,index)=>{
     const own=tasks.filter(t=>t.employee_id===e.id);
-    const rated=own.filter(t=>t.evaluation);
-    if(!rated.length)return null;
-    const avgNum=rated.reduce((s,t)=>s+(t.evaluation||0),0)/rated.length;
-    const avg=avgNum.toFixed(1);
-    const tier=scoreTier(avgNum);
-    const inProgress=own.filter(t=>t.status==="İcradadır").length;
-    const pending=own.filter(t=>t.status==="Yeni").length;
-    const late=own.filter(t=>t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at).getTime()<now).length;
-    return <article key={e.id} className={`hue${index%4}`}>
-      <i>{initials(e.name)}</i>
-      <div>
-        <div className="evalrowtop"><h3>{e.name}</h3><RatingStars value={Math.round(avgNum)}/><strong className={`scorepill ${tier}`}>{avg}<small>/10</small></strong></div>
-        <div className="evalmetrics"><span className="rated">Qiymətləndirilmiş<b>{rated.length}</b></span><span className="given">Verilmiş<b>{own.length}</b></span><span className="progress">İcrada<b>{inProgress}</b></span><span className="pending">Qalan<b>{pending}</b></span><span className={late?"warn":"ontime"}>Gecikən<b>{late}</b></span></div>
+    const ownRated=own.filter(t=>t.evaluation);
+    const periodRated=ownRated.filter(inPeriod);
+    const monthly=monthStarts.slice(0,6).map((start,i)=>averageScore(ownRated.filter(t=>{const at=evaluatedAt(t);return at>=start&&at<monthStarts[i+1]})));
+    return {e,index,own,periodRated,avg:averageScore(periodRated),monthly};
+  }).filter(c=>c.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0)||b.periodRated.length-a.periodRated.length);
+  const nowMs=now.getTime();
+  return <section className="panel evalpanel"><div className="head"><div><h3>Qiymətləndirmə</h3><p>Təsdiqlənmiş işlər üzrə nəticələr</p></div><div className="hrperiods evalperiods">{VIOLATION_PERIODS.map(([key,label])=><button key={key} className={period===key?"on":""} onClick={()=>setPeriod(key)}>{label}</button>)}</div></div>
+    {!allRated.length?<Empty text="Hələ qiymətləndirilmiş iş yoxdur."/>:<>
+      <div className="evaloverview">
+        <div className="evalsummary"><small>Komanda üzrə orta bal</small><div><b className={teamAvg!==null?`scoretext ${scoreTier(teamAvg)}`:""}>{teamAvg!==null?teamAvg.toFixed(1):"—"}</b><span>/10</span></div>
+          <p>{rated.length} qiymətləndirilmiş iş</p>
+          {range&&<p className="evaldelta">{delta===null?<small>Əvvəlki dövrdə qiymət yoxdur</small>:<><em className={delta>0?"up":delta<0?"down":""}>{delta>0?`+${delta.toFixed(1)} ↑`:delta<0?`−${(-delta).toFixed(1)} ↓`:"dəyişməyib"}</em> <small>{range.prevLabel}</small></>}</p>}
+        </div>
+        <div className="evalhist"><small>Balların paylanması</small><div className="evalhistbars">{histogram.map(x=><div key={x.score} title={`${x.score} bal: ${x.count} iş`}><small>{x.count||""}</small><span className={scoreTier(x.score)} style={{height:`${x.count?Math.max(x.count/histMax*100,6):0}%`}}/><i>{x.score}</i></div>)}</div></div>
       </div>
-    </article>;
-  })}</div>{!tasks.some(t=>t.evaluation)&&<Empty text="Hələ qiymətləndirilmiş iş yoxdur."/>}</section>;
+      {cards.length?<div className="evaluationrows">{cards.map(({e,index,own,periodRated,avg,monthly})=>{
+        const avgNum=avg||0;
+        const inProgress=own.filter(t=>t.status==="İcradadır").length;
+        const pending=own.filter(t=>t.status==="Yeni").length;
+        const late=own.filter(t=>t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at).getTime()<nowMs).length;
+        const known=monthly.filter((v):v is number=>v!==null);
+        const trend=known.length>=2?Math.round((known[known.length-1]-known[known.length-2])*10)/10:null;
+        return <article key={e.id} className={`hue${index%4}`}>
+          <i>{initials(e.name)}</i>
+          <div>
+            <div className="evalrowtop"><h3>{e.name}</h3>{periodRated.length<FEW_EVALUATIONS&&<span className="evalfew" title={`${FEW_EVALUATIONS}-dən az qiymətləndirilmiş iş — orta bal hələ etibarlı deyil`}>az məlumat</span>}<RatingStars value={Math.round(avgNum)}/><strong className={`scorepill ${scoreTier(avgNum)}`}>{avgNum.toFixed(1)}<small>/10</small></strong></div>
+            <div className="evalmetrics"><span className="rated">Qiymətləndirilmiş<b>{periodRated.length}</b></span><span className="given">Verilmiş<b>{own.length}</b></span><span className="progress">İcrada<b>{inProgress}</b></span><span className="pending">Qalan<b>{pending}</b></span><span className={late?"warn":"ontime"}>Gecikən<b>{late}</b></span></div>
+            {known.length>0&&<div className="evaltrend" title={`Son 6 ay üzrə aylıq orta bal: ${monthly.map((v,i)=>`${SHORT_MONTHS[monthStarts[i].getMonth()]} ${v===null?"—":v.toFixed(1)}`).join(", ")}`}><small>Son 6 ay</small><ScoreSparkline points={monthly}/>{trend!==null&&<em className={trend>0?"up":trend<0?"down":""}>{trend>0?`↑ ${trend.toFixed(1)}`:trend<0?`↓ ${(-trend).toFixed(1)}`:"→ 0.0"}</em>}</div>}
+          </div>
+        </article>;
+      })}</div>:<Empty text="Bu dövrdə qiymətləndirilmiş iş yoxdur."/>}
+    </>}
+  </section>;
 }
 function ChecklistFileButton({busy,onPick}:{busy:boolean;onPick:(file:File)=>void}){
   const input=useRef<HTMLInputElement>(null);
