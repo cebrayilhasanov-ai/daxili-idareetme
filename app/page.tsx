@@ -60,6 +60,8 @@ export default function Home(){
   // Status picked on the dashboard donut; it only narrows the Tasks page until cleared or the user leaves that page.
   const [taskStatusFilter,setTaskStatusFilter]=useState<string|null>(null);
   useEffect(()=>{if(page!=="tasks")setTaskStatusFilter(null)},[page]);
+  // Likewise the employee picked on the dashboard HR chart narrows the Noqsanlar page.
+  const [violationEmployeeFilter,setViolationEmployeeFilter]=useState<{id:number;name:string}|null>(null);
   const [menu,setMenu]=useState(false);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
@@ -87,6 +89,7 @@ export default function Home(){
   const [documentsMenuOpen,setDocumentsMenuOpen]=useState(false);
   const [hrMenuOpen,setHrMenuOpen]=useState(false);
   const [hrSubTab,setHrSubTab]=useState<"violations"|HrSection>("violations");
+  useEffect(()=>{if(page!=="hr"||hrSubTab!=="violations")setViolationEmployeeFilter(null)},[page,hrSubTab]);
   const [documentSubTab,setDocumentSubTab]=useState<"templates"|"outgoing"|"incoming">("templates");
   const [notifOpen,setNotifOpen]=useState(false);
   const [seenOverdue,setSeenOverdue]=useState<number[]>([]);
@@ -163,7 +166,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.46</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.47</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>Personal</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -189,7 +192,7 @@ export default function Home(){
       {error&&<div className="errorbox">{error}</div>}
       {loading?<div className="loading">Məlumatlar yüklənir...</div>:<>
         {!pageAllowed&&<PlaceholderPage title="Bu bölmə bağlıdır" text="Admin bu bölməni sizin üçün bağlayıb."/>}
-        {page==="dashboard"&&<Dashboard showDocuments={can("documents.outgoing")} showViolations={can("hr.violations")} userName={user.name} avatarKey={ownAvatarKey} onEditAvatar={()=>{setOwnAvatarFile(null);setDialog("avatar")}} tasks={visibleTasks} active={activeTasks.length} overdue={overdue.length} completed={completed.length} employees={effectiveView?1:activeEmployees.length} goTasks={status=>{setTaskStatusFilter(status||null);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}} evaluationEmployees={effectiveView?[effectiveView]:data.employees} ownEmployeeId={effectiveView?effectiveView.id:null} activeCompanyId={activeCompanyId}/>}
+        {page==="dashboard"&&<Dashboard showDocuments={can("documents.outgoing")} showViolations={can("hr.violations")} userName={user.name} avatarKey={ownAvatarKey} onEditAvatar={()=>{setOwnAvatarFile(null);setDialog("avatar")}} tasks={visibleTasks} active={activeTasks.length} overdue={overdue.length} completed={completed.length} employees={effectiveView?1:activeEmployees.length} goTasks={status=>{setTaskStatusFilter(status||null);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}} goViolations={employee=>{setViolationEmployeeFilter(employee);setHrSubTab("violations");setPage("hr")}} evaluationEmployees={effectiveView?[effectiveView]:data.employees} ownEmployeeId={effectiveView?effectiveView.id:null} activeCompanyId={activeCompanyId}/>}
         {pageAllowed&&page==="tasks"&&<>
         {taskSubTab==="tasks"&&<>
         {tasksSection==="manager"&&<TasksPage employeeView={Boolean(effectiveView)} statusFilter={taskStatusFilter} onClearStatusFilter={()=>setTaskStatusFilter(null)} tasks={visibleTasks} onDelete={task=>void deleteTaskItem(task)} onStatus={(task,status,extra)=>void request("PATCH",{action:"task",id:task.id,status,userMode:Boolean(effectiveView),...(extra||{})})} onEvaluate={(task)=>{setSelectedTask(task);open("evaluate",{evaluation:String(task.evaluation||10),evaluationNote:task.evaluation_note||""})}} dateRequests={data.dateRequests} onRequestDate={(taskId,proposedDueAt,reason)=>void request("POST",{action:"date-request",taskId,proposedDueAt,reason})} onResolveDateRequest={(id,approve,adminNote,finalDueAt)=>void request("PATCH",{action:"resolve-date-request",id,approve,adminNote,finalDueAt})} employees={data.employees} isAdmin={isAdmin}/>}
@@ -206,7 +209,7 @@ export default function Home(){
         {documentSubTab==="outgoing"&&<OutgoingDocumentsPage isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null}/>}
         {documentSubTab==="incoming"&&<IncomingDocumentsPage onPending={n=>{if(!viewAs)setIncomingPending(n)}} isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null}/>}</>}
         {pageAllowed&&page==="hr"&&hrSubTab!=="violations"&&<HrPage section={hrSubTab}/>}
-        {pageAllowed&&page==="hr"&&hrSubTab==="violations"&&<ViolationsPage isAdmin={isAdmin} employees={data.employees} companies={data.companies} activeCompanyId={activeCompanyId}/>}
+        {pageAllowed&&page==="hr"&&hrSubTab==="violations"&&<ViolationsPage isAdmin={isAdmin} employeeFilter={violationEmployeeFilter} onClearEmployeeFilter={()=>setViolationEmployeeFilter(null)} employees={data.employees} companies={data.companies} activeCompanyId={activeCompanyId}/>}
       </>}
     </main>
     <Dialog open={dialog!==null} onOpenChange={v=>!v&&setDialog(null)}><DialogContent className="businessdialog" resizable>
@@ -282,7 +285,7 @@ function chatFileSize(size:number){if(!size)return "";if(size<1024)return `${siz
 function threadTime(iso:string){const d=new Date(iso);const now=new Date();if(d.toDateString()===now.toDateString())return new Intl.DateTimeFormat("az-AZ",{hour:"2-digit",minute:"2-digit"}).format(d);const yesterday=new Date(now);yesterday.setDate(now.getDate()-1);if(d.toDateString()===yesterday.toDateString())return "Dünən";return new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"2-digit"}).format(d)}
 function dayLabel(iso:string){const d=new Date(iso);const now=new Date();if(d.toDateString()===now.toDateString())return "Bugün";const yesterday=new Date(now);yesterday.setDate(now.getDate()-1);if(d.toDateString()===yesterday.toDateString())return "Dünən";return new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(d)}
 
-function Dashboard({showDocuments=true,showViolations=true,userName,avatarKey,onEditAvatar,tasks,active,overdue,completed,employees,goTasks,evaluationEmployees,ownEmployeeId,activeCompanyId}:{showDocuments?:boolean;showViolations?:boolean;userName:string;avatarKey:string|null;onEditAvatar:()=>void;tasks:Task[];active:number;overdue:number;completed:number;employees:number;goTasks:(status?:string)=>void;evaluationEmployees:Employee[];ownEmployeeId:number|null;activeCompanyId?:number|null}){return <><section className="welcome"><div><small>{new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(new Date()).toUpperCase()}</small><h2>Salam, {userName}</h2><p>Bu gün komandanızın iş vəziyyətini buradan izləyə bilərsiniz.</p></div><div className="welcomeaside"><button className={avatarKey?"welcomephotobtn":"welcomephotobtn empty"} title={avatarKey?"Profil şəklini dəyiş":"Profil şəkli əlavə et"} onClick={onEditAvatar}>{avatarKey?<img className="welcomephoto" src={`/api/file?key=${encodeURIComponent(avatarKey)}`} alt={userName}/>:<span className="welcomephoto">{initials(userName)}</span>}</button><Bell/></div></section><EvaluationSection employees={evaluationEmployees} tasks={tasks}/><section className="stats"><Stat icon={<ClipboardList/>} tone="blue" label="Aktiv tapşırıq" value={active}/><Stat icon={<CircleAlert/>} tone="red" label="Gecikən" value={overdue}/><Stat icon={<CheckCircle2/>} tone="green" label="Tamamlanan" value={completed}/><Stat icon={<Users/>} tone="gold" label="Aktiv personal" value={employees}/></section>{ownEmployeeId&&showViolations&&<MyViolationsPanel employeeId={ownEmployeeId} activeCompanyId={activeCompanyId}/>}<div className="modulecharts"><TaskStatusChart tasks={tasks} onViewAll={goTasks}/>{showDocuments&&<DocumentsOverviewChart/>}{showViolations&&<ViolationsChart/>}</div></>}
+function Dashboard({showDocuments=true,showViolations=true,userName,avatarKey,onEditAvatar,tasks,active,overdue,completed,employees,goTasks,goViolations,evaluationEmployees,ownEmployeeId,activeCompanyId}:{showDocuments?:boolean;showViolations?:boolean;goViolations?:(employee:{id:number;name:string})=>void;userName:string;avatarKey:string|null;onEditAvatar:()=>void;tasks:Task[];active:number;overdue:number;completed:number;employees:number;goTasks:(status?:string)=>void;evaluationEmployees:Employee[];ownEmployeeId:number|null;activeCompanyId?:number|null}){return <><section className="welcome"><div><small>{new Intl.DateTimeFormat("az-AZ",{day:"2-digit",month:"long",year:"numeric"}).format(new Date()).toUpperCase()}</small><h2>Salam, {userName}</h2><p>Bu gün komandanızın iş vəziyyətini buradan izləyə bilərsiniz.</p></div><div className="welcomeaside"><button className={avatarKey?"welcomephotobtn":"welcomephotobtn empty"} title={avatarKey?"Profil şəklini dəyiş":"Profil şəkli əlavə et"} onClick={onEditAvatar}>{avatarKey?<img className="welcomephoto" src={`/api/file?key=${encodeURIComponent(avatarKey)}`} alt={userName}/>:<span className="welcomephoto">{initials(userName)}</span>}</button><Bell/></div></section><EvaluationSection employees={evaluationEmployees} tasks={tasks}/><section className="stats"><Stat icon={<ClipboardList/>} tone="blue" label="Aktiv tapşırıq" value={active}/><Stat icon={<CircleAlert/>} tone="red" label="Gecikən" value={overdue}/><Stat icon={<CheckCircle2/>} tone="green" label="Tamamlanan" value={completed}/><Stat icon={<Users/>} tone="gold" label="Aktiv personal" value={employees}/></section>{ownEmployeeId&&showViolations&&<MyViolationsPanel employeeId={ownEmployeeId} activeCompanyId={activeCompanyId}/>}<div className="modulecharts"><TaskStatusChart tasks={tasks} onViewAll={goTasks}/>{showDocuments&&<DocumentsOverviewChart/>}{showViolations&&<ViolationsChart onOpenEmployee={goViolations}/>}</div></>}
 // The dashboard groups "Bağlandı" with "Təsdiqlənib"; the donut and the status filter it opens on the Tasks page share this label.
 const TASK_STATUS_COLORS:[string,string][]=[["Yeni","#64748b"],["İcradadır","#0C8599"],["Geri qaytarılıb","#7c3aed"],["Təqdim edilib","#f59e0b"],["Qiymətləndirmə gözləyir","#ea580c"],["Təsdiqlənib","#16a34a"],["Gecikib","#dc2626"]];
 function dashboardTaskStatus(t:Task){const shown=displayStatus(t);return shown==="Bağlandı"?"Təsdiqlənib":shown}
@@ -315,15 +318,41 @@ function DocumentsOverviewChart(){
     {!counts?<small className="checklistempty">Yüklənir...</small>:<div className="doccounts">{cards.map(([label,count,color])=><div className="doccount" key={label} style={{borderTopColor:color}}><small>{label}</small><b style={{color}}>{count}</b></div>)}</div>}
   </section>;
 }
-function ViolationsChart(){
+type ViolationPeriod="month"|"3m"|"year"|"all";
+const VIOLATION_PERIODS:[ViolationPeriod,string][]=[["month","Bu ay"],["3m","3 ay"],["year","Bu il"],["all","Hamısı"]];
+const SHORT_MONTHS=["Yan","Fev","Mar","Apr","May","İyn","İyl","Avq","Sen","Okt","Noy","Dek"];
+// The chosen period and the equally long stretch right before it ("Bu ay"/"Bu il" compare to the same days of last month/year).
+function violationPeriodRange(period:ViolationPeriod,now:Date){
+  const y=now.getFullYear(),m=now.getMonth(),d=now.getDate();
+  const shift=(months:number)=>{const first=new Date(y,m+months,1);const last=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();return new Date(first.getFullYear(),first.getMonth(),Math.min(d,last),now.getHours(),now.getMinutes(),now.getSeconds())};
+  if(period==="month")return {start:new Date(y,m,1),prevStart:new Date(y,m-1,1),prevEnd:shift(-1),prevLabel:"keçən ayın eyni dövrü ilə müqayisədə"};
+  if(period==="3m")return {start:shift(-3),prevStart:shift(-6),prevEnd:shift(-3),prevLabel:"əvvəlki 3 ay ilə müqayisədə"};
+  if(period==="year")return {start:new Date(y,0,1),prevStart:new Date(y-1,0,1),prevEnd:shift(-12),prevLabel:"keçən ilin eyni dövrü ilə müqayisədə"};
+  return null;
+}
+function ViolationsChart({onOpenEmployee}:{onOpenEmployee?:(employee:{id:number;name:string})=>void}){
   const [items,setItems]=useState<Violation[]|null>(null);
+  const [period,setPeriod]=useState<ViolationPeriod>("3m");
+  const [now]=useState(()=>new Date());
   useEffect(()=>{let cancelled=false;fetch("/api/violations").then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled)setItems(body.items||[])}).catch(()=>{if(!cancelled)setItems([])});return()=>{cancelled=true}},[]);
-  const byEmployee=new Map<string,number>();
-  (items||[]).forEach(v=>byEmployee.set(v.employee_name,(byEmployee.get(v.employee_name)||0)+1));
-  const rows=[...byEmployee.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6);
-  const max=Math.max(...rows.map(r=>r[1]),1);
-  return <section className="panel modulepanel"><div className="head"><div><h3>HR</h3><p>Personal üzrə qeydə alınan noqsanlar</p></div></div>
-    {items===null?<small className="checklistempty">Yüklənir...</small>:rows.length?<div className="trendbars">{rows.map(([name,count])=><div className="trendrow" key={name}><span className="trendname">{name}</span><div className="trendtrack"><span className="trendfill" style={{left:0,width:`${(count/max)*100}%`,background:"#dc2626",borderRadius:6}}/></div><span className="trendcount">{count}</span></div>)}</div>:<Empty text="Qeydə alınmış noqsan yoxdur."/>}
+  const all=(items||[]).map(v=>({v,at:new Date(v.created_at)}));
+  const range=violationPeriodRange(period,now);
+  const current=range?all.filter(x=>x.at>=range.start):all;
+  const previous=range?all.filter(x=>x.at>=range.prevStart&&x.at<range.prevEnd).length:0;
+  const delta=current.length-previous;
+  const byEmployee=new Map<number,{id:number;name:string;count:number;companies:Set<string>}>();
+  current.forEach(({v})=>{const row=byEmployee.get(v.employee_id)||{id:v.employee_id,name:v.employee_name,count:0,companies:new Set<string>()};row.count++;if(v.company_name)row.companies.add(v.company_name);byEmployee.set(v.employee_id,row)});
+  const ranked=[...byEmployee.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name,"az"));
+  const rows=ranked.slice(0,6);
+  const max=Math.max(...rows.map(r=>r.count),1);
+  const months=Array.from({length:6},(_,i)=>{const start=new Date(now.getFullYear(),now.getMonth()-5+i,1);const end=new Date(start.getFullYear(),start.getMonth()+1,1);return {key:`${start.getFullYear()}-${start.getMonth()}`,label:SHORT_MONTHS[start.getMonth()],count:all.filter(x=>x.at>=start&&x.at<end).length}});
+  const monthMax=Math.max(...months.map(x=>x.count),1);
+  return <section className="panel modulepanel"><div className="head"><div><h3>HR</h3><p>Personal üzrə qeydə alınan noqsanlar</p></div><div className="hrperiods">{VIOLATION_PERIODS.map(([key,label])=><button key={key} className={period===key?"on":""} onClick={()=>setPeriod(key)}>{label}</button>)}</div></div>
+    {items===null?<small className="checklistempty">Yüklənir...</small>:!items.length?<Empty text="Qeydə alınmış noqsan yoxdur."/>:<div className="hrchart">
+      <div className="hrsummary"><b>{current.length}</b><span>noqsan</span>{range&&<><em className={delta>0?"up":delta<0?"down":""}>{delta>0?`+${delta} ↑`:delta<0?`−${-delta} ↓`:"dəyişməyib"}</em><small>{range.prevLabel}</small></>}</div>
+      <div className="hrtrend" aria-label="Son 6 ay üzrə noqsanlar">{months.map((x,i)=><div key={x.key} className={i===months.length-1?"now":""} title={`${x.label}: ${x.count} noqsan`}><small>{x.count||""}</small><span style={{height:`${x.count?Math.max(x.count/monthMax*100,6):0}%`}}/><i>{x.label}</i></div>)}</div>
+      {rows.length?<div className="trendbars">{rows.map(r=><button type="button" className="trendrow hrrow" key={r.id} onClick={()=>onOpenEmployee?.({id:r.id,name:r.name})} title={`${r.name} — noqsanlara bax`}><span className="trendname">{r.name}{r.companies.size>0&&<small>{[...r.companies].join(", ")}</small>}</span><div className="trendtrack"><span className="trendfill" style={{left:0,width:`${(r.count/max)*100}%`,background:"#dc2626",borderRadius:6}}/></div><span className="trendcount">{r.count}</span></button>)}{ranked.length>rows.length&&<small className="hrmore">+{ranked.length-rows.length} işçi daha</small>}</div>:<small className="checklistempty">Bu dövrdə noqsan qeydə alınmayıb.</small>}
+    </div>}
   </section>;
 }
 function MyViolationsPanel({employeeId,activeCompanyId}:{employeeId:number;activeCompanyId?:number|null}){
@@ -1011,7 +1040,7 @@ const violationColumns:Array<{key:string;label:string;width:number;search:(item:
   {key:"note",label:"Qeyd",width:220,search:i=>i.note||"",render:i=><>{i.note||"—"}</>},
   {key:"author",label:"Qeyd edən",width:160,search:i=>i.created_by_name||"",render:i=><>{i.created_by_name||"—"}</>},
 ];
-function ViolationsPage({isAdmin,employees,companies,activeCompanyId}:{isAdmin:boolean;employees:Employee[];companies:Company[];activeCompanyId?:number|null}){
+function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,companies,activeCompanyId}:{isAdmin:boolean;employeeFilter?:{id:number;name:string}|null;onClearEmployeeFilter?:()=>void;employees:Employee[];companies:Company[];activeCompanyId?:number|null}){
   const {order,widths,setWidth,moveColumn}=useTableColumns("violations2",violationColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
@@ -1046,16 +1075,17 @@ function ViolationsPage({isAdmin,employees,companies,activeCompanyId}:{isAdmin:b
       setItems(result.items||[]);
     }catch(e){setError(e instanceof Error?e.message:"Qeyd silinmədi.")}
   };
-  const counts=Object.values(items.reduce((acc,item)=>{
+  const shownItems=employeeFilter?items.filter(item=>item.employee_id===employeeFilter.id):items;
+  const counts=Object.values(shownItems.reduce((acc,item)=>{
     const existing=acc[item.employee_id];
     if(existing){existing.count+=1;if(item.created_at>existing.last)existing.last=item.created_at}
     else acc[item.employee_id]={employeeId:item.employee_id,name:item.employee_name,count:1,last:item.created_at};
     return acc;
   },{} as Record<number,{employeeId:number;name:string;count:number;last:string}>)).sort((a,b)=>b.count-a.count);
-  const excel=useExcelFilters("violations",violationColumns,items.filter(item=>isAdmin||!activeCompanyId||item.company_id===activeCompanyId));
+  const excel=useExcelFilters("violations",violationColumns,shownItems.filter(item=>isAdmin||!activeCompanyId||item.company_id===activeCompanyId));
   const filtered=excel.rows;
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Noqsanlar</h2><p>{isAdmin?`${filtered.length} qeyd göstərilir`:"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni qeyd</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Noqsanlar</h2><p>{isAdmin?`${filtered.length} qeyd göstərilir`:"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{employeeFilter&&<button className="statusfilterchip" onClick={onClearEmployeeFilter} title="Süzgəci sil">İşçi: {employeeFilter.name} <X/></button>}{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni qeyd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">
       <label className="field">İşçi<select value={form.employeeId||""} onChange={e=>setForm({...form,employeeId:e.target.value})}><option value="">Seçin</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
       <label className="field">Firma (istəyə bağlı)<select value={form.companyId||""} onChange={e=>setForm({...form,companyId:e.target.value})}><option value="">Seçin</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
