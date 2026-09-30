@@ -1,5 +1,6 @@
 import { env } from "@/lib/runtime";
-import { CALENDAR_KINDS, LEAVE_KINDS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, normalizeParams, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
+import { createCustomer, findCustomerByVoen, getCustomers } from "@/db/catalog";
+import { CALENDAR_KINDS, LEAVE_KINDS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
 
 // HR register (kadr uçotu): every worker of every firm, kept apart from the app's login users (`employees` / `app_users`).
 // Most workers never sign in; a card may optionally point at a Personal entry (user_employee_id) when that person also uses the app.
@@ -8,6 +9,14 @@ function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
   return env.DB;
 }
+
+// Columns added after the first version: photo, the leftover days of prior service, the employment contract and an emergency contact.
+const EXTRA_COLUMNS: [string, string][] = [
+  ["photo_key", "TEXT"], ["photo_name", "TEXT"], ["prior_experience_days", "INTEGER NOT NULL DEFAULT 0"],
+  ["contract_no", "TEXT"], ["contract_date", "TEXT"], ["contract_type", "TEXT"], ["contract_end_date", "TEXT"], ["probation_months", "INTEGER"],
+  ["hire_order_no", "TEXT"], ["hire_order_date", "TEXT"],
+  ["emergency_name", "TEXT"], ["emergency_relation", "TEXT"], ["emergency_phone", "TEXT"],
+];
 
 let schemaReady = false;
 async function ensureHrSchema() {
@@ -76,6 +85,20 @@ async function ensureHrSchema() {
     name TEXT
   )`).run();
   await db().prepare("CREATE TABLE IF NOT EXISTS hr_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
+  // Earlier employers: always a card in the customer list, so the customer report can show which of our people worked there.
+  await db().prepare(`CREATE TABLE IF NOT EXISTS hr_prior_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    hr_employee_id INTEGER NOT NULL,
+    customer_id INTEGER NOT NULL,
+    position TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`).run();
+  await db().prepare("CREATE INDEX IF NOT EXISTS hr_prior_jobs_customer ON hr_prior_jobs(customer_id)").run();
+  const existing = new Set((await db().prepare("PRAGMA table_info(hr_employees)").all<{ name: string }>()).results.map((c: { name: string }) => c.name));
+  const added = EXTRA_COLUMNS.filter(([name]) => !existing.has(name));
+  if (added.length) await db().batch(added.map(([name, type]) => db().prepare(`ALTER TABLE hr_employees ADD COLUMN ${name} ${type}`)));
   schemaReady = true;
 }
 
@@ -111,7 +134,9 @@ async function calendarDays(): Promise<CalendarDay[]> {
 
 export async function getHrData() {
   await ensureHrSchema();
-  const [employees, leaves, salaries, calendar, params, companies, users] = await Promise.all([
+  // Loads the customer list first: that also creates its table, which the prior-jobs join below needs on a fresh database.
+  const customers = (await getCustomers()) as { id: number; voen: string | null; name: string; country: string | null }[];
+  const [employees, leaves, salaries, calendar, params, companies, users, priorJobs] = await Promise.all([
     db().prepare(`SELECT hr_employees.*, companies.name AS company_name, employees.name AS user_employee_name FROM hr_employees
       LEFT JOIN companies ON companies.id = hr_employees.company_id
       LEFT JOIN employees ON employees.id = hr_employees.user_employee_id
@@ -122,11 +147,48 @@ export async function getHrData() {
     getHrParams(),
     db().prepare("SELECT id, name FROM companies WHERE active = 1 ORDER BY name").all(),
     db().prepare("SELECT id, name FROM employees WHERE active = 1 ORDER BY name").all(),
+    db().prepare(`SELECT hr_prior_jobs.*, customers.name AS customer_name, customers.voen AS customer_voen FROM hr_prior_jobs
+      LEFT JOIN customers ON customers.id = hr_prior_jobs.customer_id ORDER BY hr_prior_jobs.hr_employee_id, hr_prior_jobs.start_date`).all(),
   ]);
   // Departments and positions come from each firm's structure (Firmalar → Struktur); the table may not exist on a fresh database.
   let structure: { company_id: number; department: string; title: string }[] = [];
   try { structure = (await db().prepare("SELECT company_id, department, title FROM company_structure_positions ORDER BY sort_order, id").all<{ company_id: number; department: string; title: string }>()).results; } catch { structure = []; }
-  return { employees: employees.results, leaves: leaves.results, salaries: salaries.results, calendar, params, companies: companies.results, users: users.results, structure };
+  return { employees: employees.results, leaves: leaves.results, salaries: salaries.results, calendar, params, companies: companies.results, users: users.results, structure, priorJobs: priorJobs.results, customers: customers.map((c) => ({ id: c.id, voen: c.voen, name: c.name, country: c.country })) };
+}
+
+// Phone numbers: digits with an optional leading +, spaces, dashes and brackets, 9–15 digits in all.
+function phoneValue(value: unknown, label: string, required: boolean) {
+  const v = text(value);
+  if (!v) { if (required) throw new Error(`${label} daxil edin.`); return null; }
+  if (!/^\+?[\d\s()-]+$/.test(v)) throw new Error(`${label} yalnız rəqəm, boşluq, "+", "-" və mötərizədən ibarət ola bilər.`);
+  const digits = v.replace(/\D/g, "").length;
+  if (digits < 9 || digits > 15) throw new Error(`${label} 9–15 rəqəmdən ibarət olmalıdır.`);
+  return v.replace(/\s+/g, " ");
+}
+
+type PriorJobInput = { customerId: number; position: string; startDate: string; endDate: string };
+async function readPriorJobs(raw: unknown): Promise<PriorJobInput[]> {
+  if (!Array.isArray(raw)) return [];
+  const jobs: PriorJobInput[] = [];
+  for (const [index, row] of raw.entries()) {
+    const item = (row || {}) as Record<string, unknown>;
+    const label = `Əvvəlki iş yeri ${index + 1}`;
+    const customerId = Number(item.customerId);
+    if (!customerId) throw new Error(`${label}: iş yerini müştəri siyahısından seçin.`);
+    const position = text(item.position);
+    if (!position) throw new Error(`${label}: vəzifəni yazın.`);
+    const startDate = date(item.startDate, `${label}: başlama tarixi`), endDate = date(item.endDate, `${label}: bitmə tarixi`);
+    if (!startDate || !endDate) throw new Error(`${label}: başlama və bitmə tarixlərini daxil edin.`);
+    if (endDate < startDate) throw new Error(`${label}: bitmə tarixi başlama tarixindən əvvəl ola bilməz.`);
+    if (endDate > todayIso()) throw new Error(`${label}: bitmə tarixi gələcəkdə ola bilməz.`);
+    jobs.push({ customerId, position, startDate, endDate });
+  }
+  const ids = [...new Set(jobs.map((j) => j.customerId))];
+  if (ids.length) {
+    const found = await db().prepare(`SELECT id FROM customers WHERE id IN (${ids.map(() => "?").join(", ")})`).bind(...ids).all<{ id: number }>();
+    if (found.results.length !== ids.length) throw new Error("Seçilmiş iş yerlərindən biri müştəri siyahısında artıq yoxdur — yenidən seçin.");
+  }
+  return jobs;
 }
 
 export async function saveHrEmployee(input: Record<string, unknown>) {
@@ -134,6 +196,7 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
   const id = Number(input.id) || null;
   const lastName = text(input.lastName), firstName = text(input.firstName);
   if (!lastName || !firstName) throw new Error("Soyad və ad daxil edin.");
+  const phone = phoneValue(input.phone, "Telefon nömrəsini", true);
   const hireDate = date(input.hireDate, "İşə qəbul tarixi");
   if (!hireDate) throw new Error("İşə qəbul tarixini daxil edin.");
   const fin = text(input.fin)?.toUpperCase() || null;
@@ -149,24 +212,63 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
   if (openingDays !== null && !Number.isFinite(openingDays)) throw new Error("Başlanğıc qalıq düzgün rəqəm deyil.");
   if ((openingDate === null) !== (openingDays === null)) throw new Error("Başlanğıc qalıq üçün həm tarixi, həm gün sayını daxil edin.");
   const workWeek = Number(input.workWeek) === 6 ? 6 : 5;
+  const contractType = input.contractType === "fixed" || input.contractType === "indefinite" ? input.contractType : null;
+  const contractDate = date(input.contractDate, "Müqavilənin tarixi");
+  const contractEnd = contractType === "fixed" ? date(input.contractEndDate, "Müqavilənin bitmə tarixi") : null;
+  if (contractType === "fixed" && !contractEnd) throw new Error("Müddətli müqavilənin bitmə tarixini daxil edin.");
+  if (contractEnd && contractEnd < (contractDate || hireDate)) throw new Error("Müqavilənin bitmə tarixi başlama tarixindən əvvəl ola bilməz.");
+  const probation = number(input.probationMonths, "Sınaq müddəti");
+  if (probation !== null && (!Number.isInteger(probation) || probation > 3)) throw new Error("Sınaq müddəti 0–3 ay ola bilər.");
+  const emergencyName = text(input.emergencyName);
+  const emergencyPhone = phoneValue(input.emergencyPhone, "Təcili əlaqə şəxsinin telefonunu", Boolean(emergencyName));
+  // With earlier employers listed, prior service is worked out from their dates; without them the typed figures are kept.
+  const priorJobs = await readPriorJobs(input.priorJobs);
+  const prior = priorJobs.length ? priorService(priorJobs.map((j) => ({ start_date: j.startDate, end_date: j.endDate }))) : null;
+  const priorMonths = prior ? prior.totalMonths : Math.round(number(input.priorExperienceMonths, "Əvvəlki staj") || 0);
+  const priorDays = prior ? prior.days : Math.round(number(input.priorExperienceDays, "Əvvəlki staj (gün)") || 0);
+  if (!prior && priorDays > 29) throw new Error("Əvvəlki staj (gün) 0–29 arası olmalıdır — 30 gün 1 ay sayılır.");
   const values = [
     Number(input.companyId) || null, text(input.department), text(input.position), lastName, firstName, text(input.patronymic),
     fin, text(input.idSeries)?.toUpperCase() || null, text(input.idNumber), text(input.idIssuedBy), date(input.idIssuedAt, "Vəsiqənin verilmə tarixi"), date(input.idValidUntil, "Vəsiqənin etibarlılıq tarixi"),
-    date(input.birthDate, "Doğum tarixi"), text(input.gender), text(input.regAddress), text(input.phone),
+    date(input.birthDate, "Doğum tarixi"), text(input.gender), text(input.regAddress), phone,
     text(input.idFrontKey), text(input.idFrontName), text(input.idBackKey), text(input.idBackName),
     hireDate, terminationDate, terminationDate ? text(input.terminationReason) : null,
-    Math.round(number(input.priorExperienceMonths, "Əvvəlki staj") || 0), number(input.baseLeaveDays, "Əsas məzuniyyət günü"), Math.round(number(input.extraLeaveDays, "Əlavə məzuniyyət günü") || 0), text(input.extraLeaveNote),
+    priorMonths, number(input.baseLeaveDays, "Əsas məzuniyyət günü"), Math.round(number(input.extraLeaveDays, "Əlavə məzuniyyət günü") || 0), text(input.extraLeaveNote),
     workWeek, number(input.monthlySalary, "Vəzifə maaşı"), openingDate, openingDays, Number(input.userEmployeeId) || null, text(input.note),
+    text(input.photoKey), text(input.photoName), priorDays,
+    text(input.contractNo), contractDate, contractType, contractEnd, probation,
+    text(input.hireOrderNo), date(input.hireOrderDate, "İşə qəbul əmrinin tarixi"),
+    emergencyName, text(input.emergencyRelation), emergencyPhone,
   ];
-  const columns = "company_id, department, position, last_name, first_name, patronymic, fin, id_series, id_number, id_issued_by, id_issued_at, id_valid_until, birth_date, gender, reg_address, phone, id_front_key, id_front_name, id_back_key, id_back_name, hire_date, termination_date, termination_reason, prior_experience_months, base_leave_days, extra_leave_days, extra_leave_note, work_week, monthly_salary, opening_balance_date, opening_balance_days, user_employee_id, note";
+  const columns = "company_id, department, position, last_name, first_name, patronymic, fin, id_series, id_number, id_issued_by, id_issued_at, id_valid_until, birth_date, gender, reg_address, phone, id_front_key, id_front_name, id_back_key, id_back_name, hire_date, termination_date, termination_reason, prior_experience_months, base_leave_days, extra_leave_days, extra_leave_note, work_week, monthly_salary, opening_balance_date, opening_balance_days, user_employee_id, note, "
+    + "photo_key, photo_name, prior_experience_days, contract_no, contract_date, contract_type, contract_end_date, probation_months, hire_order_no, hire_order_date, emergency_name, emergency_relation, emergency_phone";
   const now = new Date().toISOString();
+  let savedId: number;
   if (id) {
     const sets = columns.split(", ").map((c) => `${c} = ?`).join(", ");
     await db().prepare(`UPDATE hr_employees SET ${sets}, updated_at = ? WHERE id = ?`).bind(...values, now, id).run();
-    return id;
+    savedId = id;
+  } else {
+    const result = await db().prepare(`INSERT INTO hr_employees (${columns}, created_at) VALUES (${values.map(() => "?").join(", ")}, ?)`).bind(...values, now).run();
+    savedId = Number(result.meta.last_row_id);
   }
-  const result = await db().prepare(`INSERT INTO hr_employees (${columns}, created_at) VALUES (${values.map(() => "?").join(", ")}, ?)`).bind(...values, now).run();
-  return Number(result.meta.last_row_id);
+  await db().batch([
+    db().prepare("DELETE FROM hr_prior_jobs WHERE hr_employee_id = ?").bind(savedId),
+    ...priorJobs.map((j, i) => db().prepare("INSERT INTO hr_prior_jobs (hr_employee_id, customer_id, position, start_date, end_date, sort_order) VALUES (?, ?, ?, ?, ?, ?)").bind(savedId, j.customerId, j.position, j.startDate, j.endDate, i)),
+  ]);
+  return savedId;
+}
+
+// A new earlier employer typed in the HR card goes straight into the customer list (HR users may not have the Customers section).
+export async function createHrCustomer(input: Record<string, unknown>) {
+  await ensureHrSchema();
+  const voen = text(input.voen);
+  if (!voen) throw new Error("VÖEN daxil edin.");
+  if (await findCustomerByVoen(voen)) throw new Error("Bu VÖEN artıq müştəri siyahısında var — siyahıdan seçin.");
+  await createCustomer({ entityType: text(input.entityType) || undefined, voen, name: text(input.name) || "", legalAddress: text(input.legalAddress) || undefined, manager: text(input.manager) || undefined });
+  const created = await findCustomerByVoen(voen);
+  if (!created) throw new Error("Müştəri yaradılmadı.");
+  return created.id;
 }
 
 export async function hrEmployeeLabel(id: number) {
@@ -180,6 +282,7 @@ export async function deleteHrEmployee(id: number) {
   await db().batch([
     db().prepare("DELETE FROM hr_leaves WHERE hr_employee_id = ?").bind(id),
     db().prepare("DELETE FROM hr_salaries WHERE hr_employee_id = ?").bind(id),
+    db().prepare("DELETE FROM hr_prior_jobs WHERE hr_employee_id = ?").bind(id),
     db().prepare("DELETE FROM hr_employees WHERE id = ?").bind(id),
   ]);
 }

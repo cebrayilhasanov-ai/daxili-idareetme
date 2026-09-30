@@ -645,3 +645,26 @@ nav button>em+.navcaret{margin-left:6px}
 .evalpieempty{margin:10px 0 0;font-size:11px;color:#94a3b8}
 @media(max-width:1100px){.evaloverview{grid-template-columns:minmax(170px,220px) minmax(0,1fr)}.evalpie{grid-column:1/-1}}
 @media(max-width:700px){.evaloverview{grid-template-columns:1fr}}
+.hravatar{display:inline-grid;place-items:center;flex:none;border-radius:50%;object-fit:cover;background:#dbeef2;color:#0b6b7b;font-weight:800;font-style:normal}
+.hrperson{display:flex;align-items:center;gap:8px}.hrdialogtitle{display:flex;align-items:center;gap:10px}
+.hrpersonal{display:flex;gap:16px;align-items:flex-start}.hrpersonal>.hrgrid{flex:1;min-width:0}
+.hrphoto{display:grid;justify-items:center;gap:5px;flex:none;width:104px}.hrphoto img,.hrphoto>span{width:96px;height:96px;border-radius:14px;object-fit:cover;border:1px solid #dbe5f0;background:#f1f7fa;display:grid;place-items:center;font-size:28px;font-weight:800;color:#0b6b7b}
+.hrphotobtn{position:relative;overflow:hidden;font-size:10px;font-weight:700;color:#0C8599;cursor:pointer;text-align:center}.hrphotobtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.hrtriple{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.hrtriple input[readonly]{background:#f1f5f9;color:#0f172a;font-weight:700}
+.hrjobs{display:grid;gap:10px;margin-bottom:10px}
+.hrjob{position:relative;display:grid;grid-template-columns:24px 1fr 20px;gap:8px;align-items:start;border:1px solid #e4eaf2;border-radius:10px;padding:10px;background:#fbfdff}
+.hrjobno{width:22px;height:22px;border-radius:50%;background:#e0f2f5;color:#0b6b7b;font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:16px}
+.hrjobfields{display:grid;grid-template-columns:minmax(200px,2fr) minmax(130px,1.2fr) 140px 140px 110px;gap:10px;align-items:start;min-width:0}
+.hrjobfields .field{font-size:10px;font-weight:700;color:#334155;gap:5px;min-width:0}.hrjobfields input{width:100%;height:36px;border:1px solid #b9c8da;border-radius:8px;background:#fff;padding:0 9px;color:#172237;font-size:12px}
+.hrjobpick{position:relative;display:grid;gap:4px}.hrjobpick small{font-size:10px;font-weight:600}
+.hrjobmatches{position:absolute;top:38px;left:0;right:0;z-index:20;display:grid;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 24px rgba(15,23,42,.14);overflow:hidden}
+.hrjobmatches button{display:grid;text-align:left;gap:1px;border:0;background:none;padding:7px 10px;cursor:pointer;font-size:12px}.hrjobmatches button:hover{background:#f0f9fb}.hrjobmatches small{color:#64748b;font-size:10px}
+.hrjobchosen{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:36px;padding:4px 10px;border:1px solid #bfe3e8;border-radius:8px;background:#f0fafb}.hrjobchosen b{font-size:12px;color:#0f172a}.hrjobchosen small{font-size:10px;color:#64748b;font-weight:600}.hrjobchosen .hrlink{margin-left:auto}
+.hrjobservice b{display:flex;align-items:center;height:36px;font-size:12px;color:#0f172a}
+.hrjobremove{font-size:14px;margin-top:18px}
+.hrjobcreate{grid-column:2/-1;display:grid;gap:8px;border-top:1px dashed #cbd5e1;padding-top:10px}.hrjobcreate>b{font-size:11px;color:#92400e}
+.hrlink.hrlinkok{color:#0C8599;font-size:inherit}
+.hraddrow{display:inline-flex;align-items:center;gap:5px;border:1px dashed #9cc9d1;background:#f5fbfc;color:#0C8599;font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer}.hraddrow svg{width:14px;height:14px}
+.hrjobtotal{font-size:12px;color:#334155}.hrjobtotal b{color:#0b6b7b}
+@media(max-width:900px){.hrjobfields{grid-template-columns:1fr 1fr}.hrjobplace{grid-column:1/-1}}
+@media(max-width:600px){.hrpersonal{flex-direction:column;align-items:center}.hrpersonal>.hrgrid{width:100%}.hrjobfields{grid-template-columns:1fr}}

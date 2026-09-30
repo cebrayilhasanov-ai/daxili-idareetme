@@ -1,9 +1,9 @@
-import { deleteHrCalendarDay, deleteHrEmployee, deleteHrLeave, fillHrSalaries, getHrData, hrEmployeeLabel, saveHrCalendarDay, saveHrEmployee, saveHrLeave, saveHrParams, saveHrSalary, seedHrCalendar } from "@/db/hr";
+import { createHrCustomer, deleteHrCalendarDay, deleteHrEmployee, deleteHrLeave, fillHrSalaries, getHrData, hrEmployeeLabel, saveHrCalendarDay, saveHrEmployee, saveHrLeave, saveHrParams, saveHrSalary, seedHrCalendar } from "@/db/hr";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
-// HR register: the admin, and employees the admin has explicitly given "İşçilər və məzuniyyət" (closed by default).
+// HR register: the admin, and employees the admin has explicitly given "Personallar" (closed by default).
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -31,6 +31,11 @@ export async function POST(request: Request) {
       const id = await saveHrEmployee(body);
       await logAudit(user, body.id ? "HR: işçi kartı yeniləndi" : "HR: işçi əlavə edildi", "hr_employee", `${body.lastName || ""} ${body.firstName || ""}`.trim() || `#${id}`);
       return Response.json({ ...(await getHrData()), savedId: id });
+    }
+    if (body.action === "customer") {
+      const customerId = await createHrCustomer(body.customer || {});
+      await logAudit(user, "Müştəri yaradıldı (HR, əvvəlki iş yeri)", "customer", String(body.customer?.name || ""));
+      return Response.json({ ...(await getHrData()), customerId });
     }
     if (body.action === "leave") await saveHrLeave(body);
     else if (body.action === "salary") await saveHrSalary(body);

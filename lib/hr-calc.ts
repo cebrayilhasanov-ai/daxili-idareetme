@@ -117,6 +117,24 @@ export function serviceParts(from: string, to: string, extraMonths = 0) {
   const total = months + extraMonths;
   return { years: Math.floor(total / 12), months: total % 12, days };
 }
+// Length of service at earlier employers. Periods that overlap (two jobs at once) or run back to back are merged first, so no
+// day is counted twice; each merged period is measured in calendar months plus days, and the leftover days are carried at 30 days = 1 month.
+export type PriorJobPeriod = { start_date: string; end_date: string };
+export function priorService(jobs: PriorJobPeriod[]) {
+  const periods = jobs.filter((j) => isIsoDate(j.start_date) && isIsoDate(j.end_date) && j.end_date >= j.start_date)
+    .map((j) => ({ start: j.start_date, end: j.end_date })).sort((a, b) => a.start.localeCompare(b.start));
+  const merged: { start: string; end: string }[] = [];
+  for (const p of periods) {
+    const last = merged[merged.length - 1];
+    if (last && p.start <= addDays(last.end, 1)) { if (p.end > last.end) last.end = p.end; }
+    else merged.push({ ...p });
+  }
+  let months = 0, days = 0;
+  for (const p of merged) { const parts = serviceParts(p.start, p.end); months += parts.years * 12 + parts.months; days += parts.days; }
+  months += Math.floor(days / 30);
+  days %= 30;
+  return { years: Math.floor(months / 12), months: months % 12, days, totalMonths: months };
+}
 export const serviceText = (parts: { years: number; months: number; days: number }) =>
   [parts.years ? `${parts.years} il` : "", parts.months ? `${parts.months} ay` : "", parts.days ? `${parts.days} gün` : ""].filter(Boolean).join(" ") || "0 gün";
 

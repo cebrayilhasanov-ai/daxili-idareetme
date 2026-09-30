@@ -696,7 +696,7 @@ export async function createEmployee(input: { name: string; position?: string; e
 export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null; hiddenSections?: unknown }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
-  if (!current) throw new Error("Personal tapılmadı.");
+  if (!current) throw new Error("İstifadəçi tapılmadı.");
   await db().prepare("UPDATE employees SET name = ?, position = ?, email = ?, main_company_id = ?, active = ?, avatar_key = ? WHERE id = ?")
     .bind(input.name ?? current.name, input.position ?? current.position, input.email ?? current.email, input.mainCompanyId === undefined ? current.main_company_id : (Number(input.mainCompanyId) || null), input.active === undefined ? current.active : Number(input.active), input.avatarKey === undefined ? current.avatar_key : input.avatarKey, input.id).run();
   if (input.companyIds !== undefined) await setEmployeeCompanies(input.id, input.companyIds, input.companyPositions);
@@ -708,8 +708,8 @@ export async function updateEmployee(input: { id: number; name?: string; positio
 
 export async function deleteEmployee(id: number) {
   const employee = await db().prepare("SELECT active FROM employees WHERE id = ?").bind(id).first<{ active: number }>();
-  if (!employee) throw new Error("Personal tapılmadı.");
-  if (employee.active) throw new Error("Personalı silməzdən əvvəl deaktiv edin.");
+  if (!employee) throw new Error("İstifadəçi tapılmadı.");
+  if (employee.active) throw new Error("İstifadəçini silməzdən əvvəl deaktiv edin.");
   const taskCount = await db().prepare("SELECT COUNT(*) AS count FROM tasks WHERE employee_id = ?").bind(id).first<{ count: number }>();
   const recurringCount = await db().prepare("SELECT COUNT(*) AS count FROM recurring_tasks WHERE employee_id = ?").bind(id).first<{ count: number }>();
   if ((taskCount?.count || 0) > 0 || (recurringCount?.count || 0) > 0)
@@ -1892,9 +1892,21 @@ export async function readIncomingFile(user: SessionUser, id: number, sectionAll
 
 const FOREIGN_SUPPLIER = "Xarici təchizatçı";
 
+// Where a customer card is in use: outgoing and incoming documents point at it by VÖEN, HR prior jobs by id. A card in use
+// cannot be deleted (the list hides its delete button). The HR table only exists once the HR section has been opened.
+async function customerUsageSql() {
+  const hasHr = await db().prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'hr_prior_jobs'").first();
+  return {
+    outgoing: "(SELECT COUNT(*) FROM outgoing_documents WHERE outgoing_documents.voen = customers.voen)",
+    incoming: "(SELECT COUNT(*) FROM incoming_documents WHERE incoming_documents.sender_voen = customers.voen)",
+    hr: hasHr ? "(SELECT COUNT(DISTINCT hr_employee_id) FROM hr_prior_jobs WHERE hr_prior_jobs.customer_id = customers.id)" : "0",
+  };
+}
+
 export async function getCustomers() {
   await ensureSchema();
-  return (await db().prepare("SELECT * FROM customers ORDER BY name").all()).results;
+  const usage = await customerUsageSql();
+  return (await db().prepare(`SELECT customers.*, ${usage.outgoing} + ${usage.incoming} + ${usage.hr} AS usage_count FROM customers ORDER BY name`).all()).results;
 }
 
 export async function createCustomer(input: { entityType?: string; country?: string; voen?: string; name: string; legalAddress?: string; legalAddress2?: string; manager?: string }) {
@@ -1954,6 +1966,12 @@ export async function updateCustomer(input: { id: number; entityType?: string; c
 
 export async function deleteCustomer(id: number) {
   await ensureSchema();
+  const usage = await customerUsageSql();
+  const used = await db().prepare(`SELECT ${usage.outgoing} AS outgoing, ${usage.incoming} AS incoming, ${usage.hr} AS hr FROM customers WHERE id = ?`).bind(id).first<{ outgoing: number; incoming: number; hr: number }>();
+  if (used && used.outgoing + used.incoming + used.hr > 0) {
+    const parts = [used.outgoing ? `${used.outgoing} çıxan sənəd` : "", used.incoming ? `${used.incoming} daxil olan sənəd` : "", used.hr ? `${used.hr} işçinin əvvəlki iş yeri` : ""].filter(Boolean).join(", ");
+    throw new Error(`Bu müştəri istifadə olunur (${parts}) — silinə bilməz.`);
+  }
   await db().prepare("DELETE FROM customers WHERE id = ?").bind(id).run();
 }
 
