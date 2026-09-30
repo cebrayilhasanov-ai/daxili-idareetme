@@ -195,3 +195,17 @@ export function terminationOrderText(emp: OrderEmployee, input: TerminationInput
   ];
   return { title: "Əmək müqaviləsinə xitam verilməsi haqqında", items };
 }
+
+// ---------- other orders (text read from a "Digər əmr" template) ----------
+// Placeholders a template may use; they are filled from the worker's card when the template is picked.
+export const ORDER_TEMPLATE_TOKENS = ["TamAd", "Soyad", "Ad", "AtaAdı", "Vəzifə", "Şöbə", "Firma", "İşəQəbulTarixi", "ƏmrTarixi", "Rəhbər"];
+export function fillOrderTemplate(text: string, values: Record<string, string>) {
+  const known = new Map(Object.entries(values).map(([k, v]) => [k.toLocaleLowerCase("az"), v]));
+  const missing = new Set<string>();
+  const filled = text.replace(/\{([^{}\n]{1,40})\}/g, (whole, name: string) => {
+    const value = known.get(name.trim().toLocaleLowerCase("az"));
+    if (value === undefined) { missing.add(name.trim()); return whole; }
+    return value;
+  });
+  return { text: filled, missing: [...missing] };
+}

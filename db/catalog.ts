@@ -82,6 +82,8 @@ async function ensureSchema() {
   if (!documentColumns.results.some((column) => column.name === "template3_type")) await db().prepare("ALTER TABLE document_templates ADD COLUMN template3_type TEXT").run();
   if (!documentColumns.results.some((column) => column.name === "draft_folder_path")) await db().prepare("ALTER TABLE document_templates ADD COLUMN draft_folder_path TEXT").run();
   if (!documentColumns.results.some((column) => column.name === "final_folder_path")) await db().prepare("ALTER TABLE document_templates ADD COLUMN final_folder_path TEXT").run();
+  // Which register a template serves: outgoing documents (NULL, the original kind) or HR "Digər əmrlər", whose text is read from its Word file.
+  if (!documentColumns.results.some((column: { name: string }) => column.name === "template_group")) await db().prepare("ALTER TABLE document_templates ADD COLUMN template_group TEXT").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS outgoing_documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     outgoing_no TEXT NOT NULL,
@@ -1329,22 +1331,25 @@ async function signedCopyOverride(documentType: unknown, requested: unknown, cur
   return wanted === (await templateReturnsSignedCopy(documentType)) ? null : wanted;
 }
 
+const templateGroup = (value: unknown) => (value === "other_order" ? "other_order" : null);
+
 export async function getDocumentTemplates() {
   await ensureSchema();
   return (await db().prepare("SELECT * FROM document_templates ORDER BY name").all()).results;
 }
 
-export async function createDocumentTemplate(input: { name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
+export async function createDocumentTemplate(input: { templateGroup?: string; name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Sənədin adını yazın.");
-  await db().prepare(`INSERT INTO document_templates
+  const inserted = await db().prepare(`INSERT INTO document_templates
     (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, signed_copy_returns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, input.incomingFolderPath?.trim() || null, input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
+  await db().prepare("UPDATE document_templates SET template_group = ? WHERE id = ?").bind(templateGroup(input.templateGroup), Number(inserted.meta.last_row_id)).run();
 }
 
-export async function updateDocumentTemplate(input: { id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
+export async function updateDocumentTemplate(input: { templateGroup?: string; id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
@@ -1371,6 +1376,7 @@ export async function updateDocumentTemplate(input: { id: number; name?: string;
       yesNo(input.signedCopyReturns) ?? current.signed_copy_returns ?? 1,
       input.id,
     ).run();
+  if (input.templateGroup !== undefined) await db().prepare("UPDATE document_templates SET template_group = ? WHERE id = ?").bind(templateGroup(input.templateGroup), input.id).run();
 }
 
 export async function deleteDocumentTemplate(id: number) {

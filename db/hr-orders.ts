@@ -1,6 +1,7 @@
 import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { ensureHrSchema, getHrParams } from "@/db/hr";
+import { getDocumentTemplates } from "@/db/catalog";
 import { TERMINATION_REASONS, indexCalendar, isIsoDate, settlement, todayIso, type CalendarDay, type SalaryRow } from "@/lib/hr-calc";
 import {
   ORDER_GROUPS, ORDER_LEAVE_KINDS, leaveOrderText, normalizeLeaveLegal, normalizeTerminationLegal, orderNumber, planLeaveOrder, settlementSnapshot, terminationOrderText,
@@ -94,7 +95,10 @@ export async function getOrdersData() {
     getLegal(),
     getTerminationLegal(),
   ]);
-  return { terminationLegal, orders: orders.results, employees: employees.results, leaves: leaves.results, calendar: calendar.results, children: children.results, companies: companies.results, numbering: numbering.results, params, legal };
+  // "Digər əmrlər" templates (Şablonlar, group "Digər əmr"); getDocumentTemplates also makes sure that table exists.
+  const templates = ((await getDocumentTemplates()) as { id: number; name: string; template_group: string | null; template1_key: string | null; template1_name: string | null }[])
+    .filter((t) => t.template_group === "other_order").map((t) => ({ id: t.id, name: t.name, template1_key: t.template1_key, template1_name: t.template1_name }));
+  return { templates, terminationLegal, orders: orders.results, employees: employees.results, leaves: leaves.results, calendar: calendar.results, children: children.results, companies: companies.results, numbering: numbering.results, params, legal };
 }
 
 function childrenUnder14(rows: { birth_date: string | null }[], on: string) {
@@ -319,6 +323,55 @@ export async function updateTerminationOrder(input: Record<string, unknown>) {
   if (built.orderDate.slice(0, 4) !== String(current.year)) throw new Error("Əmrin tarixi başqa ilə keçirilə bilməz (nömrə il üzrə verilib).");
   await db().prepare("UPDATE hr_orders SET order_date = ?, kind = ?, start_date = ?, basis = ?, title = ?, legal_text = ?, items = ?, extra = ?, updated_at = ? WHERE id = ?")
     .bind(built.orderDate, built.reasonKey, built.date, built.basis, built.body.title, built.legal, JSON.stringify(built.body.items), JSON.stringify(built.extra), new Date().toISOString(), id).run();
+}
+
+// ---------------------------------------------------------------- other orders
+// The text comes from a "Digər əmr" template (read and filled in the browser) and may be edited before it is registered.
+async function buildOtherOrder(input: Record<string, unknown>) {
+  const employeeId = Number(input.hrEmployeeId);
+  if (!employeeId) throw new Error("İşçini seçin.");
+  const emp = await db().prepare(`SELECT ${EMPLOYEE_COLUMNS} FROM hr_employees WHERE id = ?`).bind(employeeId).first<OrderEmployee>();
+  if (!emp) throw new Error("İşçi tapılmadı.");
+  if (!emp.company_id) throw new Error("İşçinin kartında firma seçilməyib — əmr firmanın adından verilir.");
+  const templateId = Number(input.templateId) || null;
+  if (templateId) {
+    const template = await db().prepare("SELECT template_group FROM document_templates WHERE id = ?").bind(templateId).first<{ template_group: string | null }>();
+    if (!template || template.template_group !== "other_order") throw new Error("Seçilmiş şablon “Digər əmr” qrupunda deyil.");
+  }
+  const title = text(input.title);
+  if (!title) throw new Error("Əmrin adını yazın (məs. “Mükafatlandırma haqqında”).");
+  const items = String(input.body || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!items.length) throw new Error("Əmrin mətnini yazın və ya şablondan oxuyun.");
+  const orderDate = String(input.orderDate || todayIso());
+  if (!isIsoDate(orderDate)) throw new Error("Əmrin tarixi düzgün deyil.");
+  return { emp, templateId, title, items, orderDate, basis: text(input.basis) };
+}
+
+export async function createOtherOrder(user: SessionUser, input: Record<string, unknown>) {
+  await ensureOrdersSchema();
+  const built = await buildOtherOrder(input);
+  const companyId = built.emp.company_id as number;
+  const year = Number(built.orderDate.slice(0, 4));
+  const pattern = await patternFor(companyId, "other");
+  const next = await db().prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM hr_orders WHERE company_id = ? AND grp = 'other' AND year = ?").bind(companyId, year).first<{ seq: number }>();
+  const seq = next?.seq || 1;
+  const result = await db().prepare(`INSERT INTO hr_orders (company_id, grp, year, seq, order_no, order_date, hr_employee_id, status, kind, basis, title, legal_text, items, created_by, created_at)
+    VALUES (?, 'other', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NULL, ?, ?, ?)`)
+    .bind(companyId, year, seq, orderNumber(pattern, seq, built.orderDate), built.orderDate, built.emp.id, built.templateId ? String(built.templateId) : null, built.basis,
+      built.title, JSON.stringify(built.items), user.name, new Date().toISOString()).run();
+  return Number(result.meta.last_row_id);
+}
+
+export async function updateOtherOrder(input: Record<string, unknown>) {
+  await ensureOrdersSchema();
+  const id = Number(input.id);
+  const current = await orderById(id);
+  if (current.status !== "pending") throw new Error("İmzalanmış və ya ləğv edilmiş əmr dəyişdirilə bilməz.");
+  const built = await buildOtherOrder(input);
+  if (built.emp.id !== Number(current.hr_employee_id)) throw new Error("Əmrin işçisi dəyişdirilə bilməz — bu əmri ləğv edib yenisini verin.");
+  if (built.orderDate.slice(0, 4) !== String(current.year)) throw new Error("Əmrin tarixi başqa ilə keçirilə bilməz (nömrə il üzrə verilib).");
+  await db().prepare("UPDATE hr_orders SET order_date = ?, kind = ?, basis = ?, title = ?, items = ?, updated_at = ? WHERE id = ?")
+    .bind(built.orderDate, built.templateId ? String(built.templateId) : null, built.basis, built.title, JSON.stringify(built.items), new Date().toISOString(), id).run();
 }
 
 export async function orderLabel(id: number) {

@@ -1,4 +1,4 @@
-import { cancelOrder, createLeaveOrder, createTerminationOrder, getEmployeeSalaries, getOrdersData, orderLabel, saveOrderSettings, signOrder, updateLeaveOrder, updateTerminationOrder } from "@/db/hr-orders";
+import { cancelOrder, createLeaveOrder, createOtherOrder, createTerminationOrder, updateOtherOrder, getEmployeeSalaries, getOrdersData, orderLabel, saveOrderSettings, signOrder, updateLeaveOrder, updateTerminationOrder } from "@/db/hr-orders";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -37,6 +37,9 @@ export async function POST(request: Request) {
     } else if (body.action === "termination") {
       if (body.id) { await updateTerminationOrder(body); await logAudit(user, "HR: işdən çıxma əmri dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
       else { savedId = await createTerminationOrder(user, body); await logAudit(user, "HR: işdən çıxma əmri qeydə alındı", "hr_order", await orderLabel(savedId)); }
+    } else if (body.action === "other") {
+      if (body.id) { await updateOtherOrder(body); await logAudit(user, "HR: əmr dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
+      else { savedId = await createOtherOrder(user, body); await logAudit(user, "HR: əmr qeydə alındı", "hr_order", await orderLabel(savedId)); }
     } else if (body.action === "sign") {
       await signOrder(body);
       await logAudit(user, "HR: əmrin imzalı nüsxəsi yükləndi", "hr_order", await orderLabel(Number(body.id)));

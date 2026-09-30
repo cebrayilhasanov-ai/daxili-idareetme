@@ -10,13 +10,15 @@ import {
   type CalendarDay, type HrLeaveCalc, type HrParams, type SalaryRow,
 } from "@/lib/hr-calc";
 import {
-  ORDER_GROUPS, ORDER_LEAVE_KINDS, ORDER_STATUS_LABELS, leaveOrderText, money, normalizeLeaveLegal, normalizeTerminationLegal, orderNumber, planLeaveOrder,
+  ORDER_GROUPS, ORDER_LEAVE_KINDS, ORDER_STATUS_LABELS, ORDER_TEMPLATE_TOKENS, fillOrderTemplate, leaveOrderText, money, normalizeLeaveLegal, normalizeTerminationLegal, orderNumber, planLeaveOrder,
   settlementSnapshot, terminationOrderText,
   type LeaveLegal, type OrderEmployee, type OrderGroup, type SettlementSnapshot, type TerminationExtra, type TerminationLegal,
 } from "@/lib/hr-orders";
+import { docxParagraphs } from "@/lib/docx-text";
 
-// HR → Əmrlər: leave and termination orders are written here (never on the card), printed from the system and take effect
-// once their signed copy is uploaded — a leave then goes on the card, a termination fills the card's "İşdən çıxma".
+// HR → Əmrlər: leave, termination and other orders are written here (never on the card), printed from the system and take
+// effect once their signed copy is uploaded — a leave then goes on the card, a termination fills the card's "İşdən çıxma".
+// Other orders take their text from a "Digər əmr" template's Word file.
 
 type Order = {
   id: number; company_id: number; company_name: string | null; grp: OrderGroup; year: number; seq: number; order_no: string; order_date: string; hr_employee_id: number;
@@ -29,6 +31,7 @@ type OrdersData = {
   orders: Order[]; employees: Employee[]; leaves: (HrLeaveCalc & { hr_employee_id: number; order_id: number | null })[]; calendar: CalendarDay[];
   children: { hr_employee_id: number; relation: string; birth_date: string | null }[]; companies: { id: number; name: string; manager: string | null }[];
   numbering: { company_id: number; grp: string; pattern: string }[]; params: HrParams; legal: LeaveLegal; terminationLegal: TerminationLegal;
+  templates: { id: number; name: string; template1_key: string | null; template1_name: string | null }[];
 };
 type Send = (payload: Record<string, unknown>) => Promise<OrdersData & { savedId?: number }>;
 type Pay = { monthlySalary: number | null; salaries: SalaryRow[] };
@@ -59,7 +62,7 @@ function computeSettlement(emp: Employee, data: OrdersData, pay: Pay, date: stri
 export function OrdersPage() {
   const [data, setData] = useState<OrdersData | null>(null);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"leave" | "termination" | "settings">("leave");
+  const [tab, setTab] = useState<"leave" | "termination" | "other" | "settings">("leave");
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/hr/orders").then(async (r) => { const body = await r.json(); if (!r.ok) throw new Error(body.error); if (!cancelled) setData(body); })
@@ -83,10 +86,10 @@ export function OrdersPage() {
     <div className="fixedsubtabs hrtabs ordertabs">
       <button className={tab === "leave" ? "on" : ""} onClick={() => setTab("leave")}>Məzuniyyət əmrləri{count("leave") > 0 && <em>{count("leave")}</em>}</button>
       <button className={tab === "termination" ? "on" : ""} onClick={() => setTab("termination")}>İşdən çıxma əmrləri{count("termination") > 0 && <em>{count("termination")}</em>}</button>
-      <button disabled title="Növbəti versiyada">Digər əmrlər <small>tezliklə</small></button>
+      <button className={tab === "other" ? "on" : ""} onClick={() => setTab("other")}>Digər əmrlər{count("other") > 0 && <em>{count("other")}</em>}</button>
       <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>Parametrlər</button>
     </div>
-    {tab === "leave" ? <LeaveOrders data={data} send={send} /> : tab === "termination" ? <TerminationOrders data={data} send={send} /> : <OrderSettings data={data} send={send} />}
+    {tab === "leave" ? <LeaveOrders data={data} send={send} /> : tab === "termination" ? <TerminationOrders data={data} send={send} /> : tab === "other" ? <OtherOrders data={data} send={send} /> : <OrderSettings data={data} send={send} />}
   </section>;
 }
 
@@ -101,8 +104,9 @@ function orderHtml(order: Order, data: OrdersData) {
   <div class="meta"><span></span><span>${formatDay(order.order_date)}</span></div>
   <h2>${h(order.title)}</h2>
   ${order.legal_text ? `<p>${h(order.legal_text)},</p>` : ""}
-  <p class="center">ƏMR EDİRƏM:</p>
-  <ol>${items.map((i) => `<li>${h(i)}</li>`).join("")}</ol>
+  ${order.grp === "other"
+    ? items.map((i) => (/^ƏMR\s+EDİRƏM/i.test(i) ? `<p class="center">${h(i)}</p>` : `<p class="para">${h(i)}</p>`)).join("")
+    : `<p class="center">ƏMR EDİRƏM:</p><ol>${items.map((i) => `<li>${h(i)}</li>`).join("")}</ol>`}
   ${order.basis ? `<p class="basis"><b>Əsas:</b> ${h(order.basis)}.</p>` : ""}
   <div class="sign"><span><b>Rəhbər</b></span><span>____________________ ${h(company?.manager || "")}</span></div>
   <div class="ack">Əmrlə tanış oldum: ____________________ ${h(personName(order))}&nbsp;&nbsp;&nbsp; «____» ______________ 20____</div>`;
@@ -126,7 +130,7 @@ function openPrint(title: string, body: string) {
     body{font:14px/1.6 "Times New Roman",serif;color:#000;margin:40px 56px}.firm{text-align:center;font-weight:bold;text-transform:uppercase;font-size:15px}
     h1{text-align:center;font-size:18px;margin:26px 0 4px;letter-spacing:.05em}h1.small{font-size:16px;margin-top:0}.meta{display:flex;justify-content:space-between;margin:10px 0 18px}
     h2{text-align:center;font-size:15px;margin:0 0 18px}h2.left{text-align:left;font-size:13px;margin:18px 0 6px}.center{text-align:center;font-weight:bold;margin:16px 0}ol{padding-left:22px}li{margin-bottom:8px;text-align:justify}
-    .basis{margin-top:18px}.sign{margin-top:48px;display:flex;justify-content:space-between}.ack{margin-top:40px}.cancel{border:2px solid #b00;color:#b00;padding:6px 10px;text-align:center;font-weight:bold;margin-bottom:12px}
+    .basis{margin-top:18px}.para{text-align:justify;margin:0 0 8px;white-space:pre-wrap}.sign{margin-top:48px;display:flex;justify-content:space-between}.ack{margin-top:40px}.cancel{border:2px solid #b00;color:#b00;padding:6px 10px;text-align:center;font-weight:bold;margin-bottom:12px}
     .pagebreak{page-break-before:always;height:1px}table.calc{width:100%;border-collapse:collapse;font:12px/1.45 Arial,sans-serif}table.calc td{border:1px solid #bbb;padding:6px 8px;vertical-align:top}.n{text-align:right;white-space:nowrap}
     table.calc small{color:#555}.total td{font-weight:bold}.note,.draft{font:11px Arial,sans-serif;color:#555}.draft{color:#b45309}
     @media print{body{margin:18mm 20mm}}
@@ -162,6 +166,9 @@ const LEAVE_COLUMNS: OrderColumn[] = [...commonColumns(),
   { key: "period", label: "Dövr", width: 170, search: (o) => (o.start_date ? `${formatDay(o.start_date)} – ${formatDay(o.end_date)}` : ""), sort: (o) => o.start_date || "", render: (o) => <>{o.start_date ? `${formatDay(o.start_date)} – ${formatDay(o.end_date)}` : "—"}</> },
   { key: "days", label: "Gün", width: 60, search: (o) => String(o.days ?? ""), sort: (o) => Number(o.days || 0), render: (o) => <>{o.days ?? "—"}</> },
   ...statusColumns()];
+const OTHER_COLUMNS: OrderColumn[] = [...commonColumns(),
+  { key: "title", label: "Əmrin adı", width: 240, search: (o) => o.title, render: (o) => <>{o.title}</> },
+  ...statusColumns()];
 const TERMINATION_COLUMNS: OrderColumn[] = [...commonColumns(),
   { key: "reason", label: "Əsas", width: 220, search: (o) => reasonLabel(o.kind), render: (o) => <>{reasonLabel(o.kind)}</> },
   { key: "tdate", label: "İşdən çıxma tarixi", width: 130, search: (o) => formatDay(o.start_date), sort: (o) => o.start_date || "", render: (o) => <>{formatDay(o.start_date)}</> },
@@ -176,7 +183,7 @@ function OrderRegister({ grp, columns, data, send, onEdit, busy, run, setNotice 
   const { dragProps } = useColumnDrag(moveColumn);
   const columnsByKey = Object.fromEntries(columns.map((c) => [c.key, c]));
   const excel = useExcelFilters(`hrorders-${grp}`, columns, data.orders.filter((o) => o.grp === grp));
-  const effect = grp === "leave" ? "məzuniyyət işçinin kartına yazıldı" : "işdən çıxma işçinin kartına yazıldı, son hesablaşma yadda saxlandı";
+  const effect = grp === "leave" ? "məzuniyyət işçinin kartına yazıldı" : grp === "termination" ? "işdən çıxma işçinin kartına yazıldı, son hesablaşma yadda saxlandı" : "əmr qüvvəyə mindi";
   const cancel = (o: Order) => {
     const warn = o.status === "signed" ? (grp === "leave" ? "\nƏmr imzalanıb — onun əsasında qeydə alınmış məzuniyyət də kartdan silinəcək." : "\nƏmr imzalanıb — işçi yenidən “İşləyir” statusuna qaytarılacaq.") : "";
     const reason = window.prompt(`Əmr № ${o.order_no} ləğv edilsin?${warn}\n\nLəğv etmənin səbəbini yazın:`);
@@ -207,7 +214,7 @@ function OrderRegister({ grp, columns, data, send, onEdit, busy, run, setNotice 
         {o.status === "cancelled" && o.cancel_reason && <small className="hrsub" title={o.cancel_reason}>Səbəb: {o.cancel_reason}</small>}
       </div></td>
     </tr>)}</tbody></table>
-    {!excel.rows.length && <div className="empty"><p>{data.orders.some((o) => o.grp === grp) ? "Filtrə uyğun əmr tapılmadı." : grp === "leave" ? "Hələ məzuniyyət əmri yoxdur. “Yeni məzuniyyət əmri” düyməsi ilə başlayın." : "Hələ işdən çıxma əmri yoxdur. “Yeni işdən çıxma əmri” düyməsi ilə başlayın."}</p></div>}
+    {!excel.rows.length && <div className="empty"><p>{data.orders.some((o) => o.grp === grp) ? "Filtrə uyğun əmr tapılmadı." : grp === "leave" ? "Hələ məzuniyyət əmri yoxdur. “Yeni məzuniyyət əmri” düyməsi ilə başlayın." : grp === "termination" ? "Hələ işdən çıxma əmri yoxdur. “Yeni işdən çıxma əmri” düyməsi ilə başlayın." : "Hələ digər əmr yoxdur. “Yeni əmr” düyməsi ilə başlayın."}</p></div>}
   </div>;
 }
 
@@ -371,6 +378,80 @@ function TerminationOrders({ data, send }: { data: OrdersData; send: Send }) {
       <div className="hractions"><button className="inlinecancel" disabled={Boolean(busy)} onClick={() => { setOpen(false); setForm(emptyTerminationForm()); }}>Ləğv et</button><Button disabled={Boolean(busy) || !form.hrEmployeeId || !form.terminationDate || !calc} onClick={() => void save()}>{busy === "save" ? "Saxlanılır..." : form.id ? "Dəyişiklikləri saxla" : "Əmri qeydə al"}</Button></div>
     </div>}
     <OrderRegister grp="termination" columns={TERMINATION_COLUMNS} data={data} send={send} onEdit={edit} busy={busy} run={run} setNotice={setNotice} />
+  </div>;
+}
+
+// ---------------------------------------------------------------- other orders
+const emptyOtherForm = (): Record<string, string> => ({ id: "", companyId: "", hrEmployeeId: "", templateId: "", title: "", body: "", orderDate: todayIso(), basis: "" });
+function OtherOrders({ data, send }: { data: OrdersData; send: Send }) {
+  const [form, setForm] = useState(emptyOtherForm);
+  const [open, setOpen] = useState(false);
+  const [missing, setMissing] = useState<string[]>([]);
+  const { busy, error, notice, setError, setNotice, run } = useRunner();
+  const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId));
+  const emp = data.employees.find((e) => String(e.id) === form.hrEmployeeId) || null;
+  const nextNo = !form.id && emp ? nextNumber(data, "other", emp.company_id, form.orderDate) : "";
+  // Reads the template's Word file and fills its placeholders from the chosen worker's card.
+  const readTemplate = (templateId: string) => {
+    const template = data.templates.find((t) => String(t.id) === templateId);
+    if (!template) return;
+    if (form.body.trim() && !window.confirm("Mətn şablondan yenidən oxunsun? Yazdığınız dəyişikliklər itəcək.")) return;
+    void run("template", async () => {
+      if (!template.template1_key) throw new Error(`“${template.name}” şablonuna fayl yüklənməyib (Şablonlar → Sənədin şablonu 1).`);
+      const response = await fetch(`/api/file?key=${encodeURIComponent(template.template1_key)}`);
+      if (!response.ok) throw new Error("Şablon faylı açılmadı.");
+      const paragraphs = await docxParagraphs(await response.arrayBuffer());
+      // The order name is printed as its own heading, so a template that starts with it does not repeat it in the body.
+      const first = paragraphs.findIndex((line) => line.trim());
+      if (first >= 0 && paragraphs[first].trim().toLocaleLowerCase("az") === template.name.trim().toLocaleLowerCase("az")) paragraphs.splice(0, first + 1);
+      const company = data.companies.find((c) => c.id === emp?.company_id);
+      const values: Record<string, string> = emp ? {
+        TamAd: personName(emp), Soyad: emp.last_name, Ad: emp.first_name, AtaAdı: emp.patronymic || "", Vəzifə: emp.position || "", Şöbə: emp.department || "",
+        Firma: company?.name || emp.company_name || "", İşəQəbulTarixi: formatDay(emp.hire_date), ƏmrTarixi: formatDay(form.orderDate), Rəhbər: company?.manager || "",
+      } : {};
+      const filled = fillOrderTemplate(paragraphs.join("\n").replace(/\n{3,}/g, "\n\n").trim(), values);
+      setMissing(filled.missing);
+      setForm((f) => ({ ...f, templateId, title: f.title && f.templateId === templateId ? f.title : template.name, body: filled.text }));
+    });
+  };
+  const save = async () => {
+    let result: (OrdersData & { savedId?: number }) | null = null;
+    const isNew = !form.id;
+    if (!(await run("save", async () => { result = await send({ action: "other", ...form }); }))) return;
+    const done = result as unknown as OrdersData & { savedId?: number };
+    const saved = done.orders.find((o) => o.id === done.savedId);
+    setForm(emptyOtherForm()); setOpen(false); setMissing([]);
+    setNotice(saved ? `Əmr № ${saved.order_no} ${isNew ? "qeydə alındı" : "düzəldildi"}. Çap edib imzaladıqdan sonra imzalı nüsxəni yükləyin.` : "Əmr yadda saxlandı.");
+    if (saved && window.confirm(`Əmr № ${saved.order_no} ${isNew ? "qeydə alındı" : "düzəldildi"}. İndi çap edilsin?`)) void printOrder(saved, done);
+  };
+  const edit = (o: Order) => {
+    const e = data.employees.find((x) => x.id === o.hr_employee_id);
+    const items: string[] = (() => { try { return JSON.parse(o.items); } catch { return []; } })();
+    setForm({ id: String(o.id), companyId: String(e?.company_id || ""), hrEmployeeId: String(o.hr_employee_id), templateId: o.kind || "", title: o.title, body: items.join("\n"), orderDate: o.order_date, basis: o.basis || "" });
+    setMissing([]); setOpen(true); setError(""); setNotice("");
+  };
+  return <div className="ordersbody">
+    {!open && <div className="hractions left"><Button onClick={() => { setForm(emptyOtherForm()); setMissing([]); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni əmr</Button></div>}
+    {notice && <div className="hrok">{notice}</div>}
+    {error && <div className="errorbox">{error}</div>}
+    {open && <div className="orderform">
+      <h4>{form.id ? "Əmri düzəlt" : "Yeni əmr"}{nextNo && <small> · nömrəsi: № {nextNo}</small>}</h4>
+      {!data.templates.length && <small className="hrhint hrwarn">⚠ “Digər əmr” qrupunda şablon yoxdur. Sənədlər → Şablonlar bölməsində şablon əlavə edib qrupunu “Digər əmr” seçin və Word (.docx) faylını “Sənədin şablonu 1” kimi yükləyin. Şablonsuz da mətni əl ilə yaza bilərsiniz.</small>}
+      <div className="hrgrid">
+        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={set("hrEmployeeId")}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
+        <label className="field hrwide">Şablon<span className="ordertemplatepick"><select value={form.templateId} disabled={!emp || Boolean(busy)} onChange={(e) => { const v = e.target.value; if (v) readTemplate(v); else setForm((f) => ({ ...f, templateId: "" })); }}><option value="">{emp ? "— şablon seçin —" : "əvvəlcə işçini seçin"}</option>{data.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>{form.templateId && <button type="button" className="hrlink hrlinkok" disabled={Boolean(busy)} onClick={() => readTemplate(form.templateId)}>yenidən oxu</button>}</span></label>
+        <label className="field hrwide">Əmrin adı *<Input value={form.title} placeholder="məs. Mükafatlandırma haqqında" onChange={set("title")} /></label>
+        <label className="field">Əmrin tarixi *<Input type="date" value={form.orderDate} onChange={set("orderDate")} /></label>
+        <label className="field hrwide">Əsas<Input value={form.basis} placeholder="məs. Şöbə müdirinin təqdimatı" onChange={set("basis")} /></label>
+      </div>
+      {busy === "template" && <small className="hrhint">Şablon oxunur...</small>}
+      {missing.length > 0 && <small className="hrhint hrwarn">⚠ Şablonda tanınmayan yer tutucular qaldı: {missing.map((m) => `{${m}}`).join(", ")} — mətndə əl ilə düzəldin. Tanınanlar: {ORDER_TEMPLATE_TOKENS.map((t) => `{${t}}`).join(" ")}</small>}
+      <label className="field orderbody">Əmrin mətni * <small>hər sətir çapda ayrıca paraqraf olur; firmanın adı, “ƏMR №”, tarix, imza və tanışlıq sətri avtomatik əlavə olunur</small><textarea value={form.body} rows={12} onChange={set("body")} /></label>
+      <div className="hractions"><button className="inlinecancel" disabled={Boolean(busy)} onClick={() => { setOpen(false); setForm(emptyOtherForm()); setMissing([]); }}>Ləğv et</button><Button disabled={Boolean(busy) || !form.hrEmployeeId || !form.title.trim() || !form.body.trim()} onClick={() => void save()}>{busy === "save" ? "Saxlanılır..." : form.id ? "Dəyişiklikləri saxla" : "Əmri qeydə al"}</Button></div>
+    </div>}
+    <OrderRegister grp="other" columns={OTHER_COLUMNS} data={data} send={send} onEdit={edit} busy={busy} run={run} setNotice={setNotice} />
   </div>;
 }
 
