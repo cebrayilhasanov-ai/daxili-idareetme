@@ -1,4 +1,4 @@
-import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, updateOutgoingDocument } from "@/db/catalog";
+import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, recordApproval, updateOutgoingDocument } from "@/db/catalog";
 
 // Çıxan Sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
 // (db/catalog.ts, outgoingRights) — department members and the director see their documents without the permission.
@@ -39,6 +39,12 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request);
     const body = await request.json();
+    if (body.action === "approve" || body.action === "return") {
+      const level = body.level === "department" ? "department" : "director";
+      await recordApproval(user, { kind: "outgoing", id: Number(body.id), action: body.action, level, department: body.department, note: body.note });
+      await logAudit(user, body.action === "return" ? "Çıxan sənəd rəhbər tərəfindən geri qaytarıldı" : level === "department" ? "Çıxan sənədi şöbə təsdiqlədi" : "Çıxan sənədi rəhbər təsdiqlədi", "outgoing-document", `#${body.id}${body.department ? ` (${body.department})` : ""}`);
+      return Response.json(await listBody(user));
+    }
     await updateOutgoingDocument(user, { ...body, id: Number(body.id), companyId: body.companyId ? Number(body.companyId) : undefined });
     await logAudit(user, "Çıxan sənəd yeniləndi", "outgoing-document", `#${body.id}`);
     return Response.json(await listBody(user));

@@ -1,6 +1,6 @@
 import {
   countIncomingForDirector, createCustomer, createIncomingDocument, createIncomingRequest, deleteIncomingDocument, directIncomingDocument, findCustomerByVoen,
-  getIncomingDocuments, reviewIncomingDocument, updateIncomingDocument,
+  getIncomingDocuments, recordApproval, reviewIncomingDocument, updateIncomingDocument,
 } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
@@ -68,6 +68,10 @@ export async function PATCH(request: Request) {
     if (body.action === "review") {
       await reviewIncomingDocument(user, { id, note: body.note });
       await logAudit(user, "Rəhbər daxil olan sənədlə tanış oldu", "incoming-document", `#${id}`);
+    } else if (body.action === "approve" || body.action === "return") {
+      const level = body.level === "department" ? "department" : "director";
+      await recordApproval(user, { kind: "incoming", id, action: body.action, level, department: body.department, note: body.note });
+      await logAudit(user, body.action === "return" ? "Daxil olan sənəd rəhbər tərəfindən geri qaytarıldı" : level === "department" ? "Daxil olan sənədi şöbə təsdiqlədi" : "Daxil olan sənədi rəhbər təsdiqlədi", "incoming-document", `#${id}${body.department ? ` (${body.department})` : ""}`);
     } else if (body.action === "direct") {
       const targets = await directIncomingDocument(user, { id, departments: Array.isArray(body.departments) ? body.departments.map(String) : [], employees: Array.isArray(body.employees) ? body.employees.map(Number) : [], dueDate: body.dueDate || undefined, resolution: body.resolution });
       await logAudit(user, "Rəhbər daxil olan sənəd üzrə tapşırıq verdi", "incoming-document", `#${id} → ${targets.map((t) => `${t.head.name} (${t.department})`).join(", ")}`);

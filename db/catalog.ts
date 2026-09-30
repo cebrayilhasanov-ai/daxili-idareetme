@@ -132,7 +132,8 @@ async function ensureSchema() {
   if (!documentColumns.results.some((column) => column.name === "signed_copy_returns")) await db().prepare("ALTER TABLE document_templates ADD COLUMN signed_copy_returns INTEGER NOT NULL DEFAULT 1").run();
   // On a document, signed_copy_returns overrides its template for that one document (NULL = follow the template).
   // related_departments: JSON list of the departments the document concerns; the first is its main one (sending_department, {Şöbə}).
-  for (const column of ["related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER"]) {
+  // approval_flow 1: registered from Versiya 2.61 on, so it goes through the two-level approval (older documents do not).
+  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER"]) {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
   await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
@@ -174,6 +175,19 @@ async function ensureSchema() {
   for (const column of ["director_pending INTEGER NOT NULL DEFAULT 0", "sent_to_director_by TEXT", "sent_to_director_at TEXT", "related_departments TEXT", "flow INTEGER", "director_seen_at TEXT", "director_seen_by TEXT"]) {
     if (!incomingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE incoming_documents ADD COLUMN ${column}`).run();
   }
+  // Approvals of incoming and outgoing documents (Versiya 2.61): one row per step, kept as history.
+  await db().prepare(`CREATE TABLE IF NOT EXISTS document_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    doc_kind TEXT NOT NULL,
+    doc_id INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    department TEXT,
+    action TEXT NOT NULL,
+    note TEXT,
+    user_id INTEGER,
+    user_name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`).run();
   // One row per department a document was sent to: the department head who got it and the task it became.
   await db().prepare(`CREATE TABLE IF NOT EXISTS incoming_assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -1437,18 +1451,23 @@ export async function getOutgoingDocuments(user: SessionUser) {
     (SELECT signed_copy_returns FROM document_templates t WHERE lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
     FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
   const flag = (value: unknown) => (value === null || value === undefined ? null : Number(value) ? 1 : 0);
+  const approvals = await approvalRows("outgoing");
+  const approvalsOf = new Map<number, ApprovalRow[]>();
+  for (const r of approvals) approvalsOf.set(r.doc_id, [...(approvalsOf.get(r.doc_id) ?? []), r]);
   // A file someone moved or renamed by hand inside the folder is flagged instead of silently giving a broken link.
   return rows.flatMap((row: Record<string, unknown>) => {
     const rights = outgoingRights(access, user, row);
     if (!rights.visible) return [];
+    const approval = approvalState("outgoing", row, approvalsOf.get(Number(row.id)) ?? [], access, user, { departments: outgoingDepartments(row) });
+    const editable = access.admin || !approval.locked;
     return [{
-      ...row,
+      ...row, approval,
       related_departments: outgoingDepartments(row),
       draft_missing: Boolean(row.draft_path && folderStore && !folderStore.exists(String(row.draft_path))),
       final_missing: Boolean(row.final_path && folderStore && !folderStore.exists(String(row.final_path))),
       // What "Hazır sənəd" waits for: the other side's signed copy (1) or just a copy of what we sent (0).
       returns_signed_copy: flag(row.signed_copy_returns) ?? flag(row.template_signed_copy_returns) ?? 1,
-      can: { edit: rights.registrarHere, upload: rights.registrarHere, remove: access.admin || (rights.registrarHere && !row.final_name && !row.final_path && !row.final_key) },
+      can: { edit: rights.registrarHere && editable, upload: rights.registrarHere && (access.admin || !approval.final), remove: access.admin || (rights.registrarHere && editable && !row.final_name && !row.final_path && !row.final_key) },
     }];
   });
 }
@@ -1481,8 +1500,8 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
   // Daxil olma No / tarixi are filled when the signed document comes back (saveOutgoingFile), not typed at creation.
   const result = await db().prepare(`INSERT INTO outgoing_documents
-    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
     .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
   return { id: Number(result.meta.last_row_id), outgoingNo };
 }
@@ -1493,6 +1512,7 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
   if (!current) throw new Error("Sənəd tapılmadı.");
   const access = await outgoingAccess(user);
   if (!outgoingRights(access, user, current).registrarHere) throw new Error("FORBIDDEN");
+  if (!access.admin && (await approvalStateFor("outgoing", current, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin dəyişə bilər.");
   // Only the admin moves a document to another firm or types the Daxil olma No / tarixi by hand (they come with the signed copy).
   const companyId = access.admin && input.companyId ? Number(input.companyId) : Number(current.company_id) || null;
   if (!access.admin) { input.incomingNo = undefined; input.incomingDate = undefined; }
@@ -1532,6 +1552,7 @@ export async function deleteOutgoingDocument(user: SessionUser, id: number) {
   if (!row) throw new Error("Sənəd tapılmadı.");
   const access = await outgoingAccess(user);
   const rights = outgoingRights(access, user, row);
+  if (!access.admin && (await approvalStateFor("outgoing", row, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin silə bilər.");
   if (!access.admin && !(rights.registrarHere && !row.final_name && !row.final_path && !row.final_key)) throw new Error("Hazır (imzalı) sənədi yüklənmiş sənədi yalnız admin silə bilər.");
   const current = { draft_key: row.draft_key as string | null, final_key: row.final_key as string | null };
   await db().prepare("DELETE FROM outgoing_documents WHERE id = ?").bind(id).run();
@@ -1783,12 +1804,97 @@ async function incomingRequests(incomingId?: number): Promise<IncomingRequestLin
     .bind(...(incomingId ? [incomingId] : [])).all<{ id: number; incoming_id: number; from_department: string | null; to_department: string; status: string; title: string }>()).results;
 }
 
+// ---------- Təsdiq (Versiya 2.61) ----------
+// Two-level approval of incoming and outgoing documents: each related department's head approves, then the firm's director
+// gives the final approval (and may do so without waiting). The director may send the document back with a note: the
+// departments then approve again. Every step is a row of document_approvals, so the history stays. The first department
+// approval locks the registrar's editing; a return does not unlock it. Documents registered before 2.61 need no approval.
+export type ApprovalKind = "incoming" | "outgoing";
+type ApprovalRow = { id: number; doc_kind: string; doc_id: number; level: string; department: string | null; action: string; note: string | null; user_name: string; created_at: string };
+
+async function approvalRows(kind: ApprovalKind, docId?: number): Promise<ApprovalRow[]> {
+  return (await db().prepare(`SELECT * FROM document_approvals WHERE doc_kind = ?${docId ? " AND doc_id = ?" : ""} ORDER BY id`)
+    .bind(...(docId ? [kind, docId] : [kind])).all<ApprovalRow>()).results;
+}
+
+function approvalState(kind: ApprovalKind, row: Record<string, unknown>, rows: ApprovalRow[], access: IncomingAccess, user: SessionUser, extra: { departments: string[]; openTaskDepartments?: Set<string> }) {
+  const required = kind === "incoming" ? Number(row.flow) === 2 : Number(row.approval_flow) === 1;
+  const companyId = Number(row.company_id);
+  const lastReturn = [...rows].reverse().find((r) => r.level === "director" && r.action === "return") || null;
+  const cycle = lastReturn ? rows.filter((r) => r.id > lastReturn.id) : rows;
+  const final = rows.find((r) => r.level === "director" && r.action === "approve") || null;
+  const locked = rows.some((r) => r.action === "approve");
+  // When the departments may approve: an incoming document after the director has looked at it (or given tasks), an outgoing
+  // one once its ready document (the signed copy, or the copy of a document that is not returned) is in.
+  const ready = kind === "incoming" ? Boolean(row.director_seen_at || row.assigned_at) : Boolean(row.final_name || row.final_path || row.final_key);
+  const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
+  const heads = new Set(access.structure.headedBy(companyId, user.employeeId));
+  const departments = extra.departments.map((name) => {
+    const done = cycle.find((r) => r.level === "department" && r.department === name && r.action === "approve") || null;
+    const openTasks = Boolean(extra.openTaskDepartments?.has(name));
+    return {
+      name, approved: done ? { by: done.user_name, at: done.created_at } : null, openTasks,
+      canApprove: required && ready && !final && !done && !openTasks && (access.admin || heads.has(name)),
+    };
+  });
+  const allApproved = departments.length > 0 && departments.every((d) => d.approved);
+  const label = !required ? "Tələb olunmur" : final ? "Təsdiqləndi" : !ready ? (kind === "incoming" ? "Rəhbərin baxışı gözlənilir" : "Hazır sənəd gözlənilir")
+    : allApproved ? "Rəhbərin təsdiqini gözləyir" : `Şöbələr: ${departments.filter((d) => d.approved).length}/${departments.length}`;
+  return {
+    required, ready, label, locked, departments,
+    final: final ? { by: final.user_name, at: final.created_at, note: final.note } : null,
+    returned: lastReturn && !final ? { by: lastReturn.user_name, at: lastReturn.created_at, note: lastReturn.note } : null,
+    canFinal: required && ready && !final && director,
+    canReturn: required && ready && !final && director && cycle.some((r) => r.level === "department"),
+    history: rows.map((r) => ({ level: r.level, department: r.department, action: r.action, note: r.note, by: r.user_name, at: r.created_at })),
+  };
+}
+
+export async function recordApproval(user: SessionUser, input: { kind: ApprovalKind; id: number; action: "approve" | "return"; level: "department" | "director"; department?: string; note?: string }) {
+  await ensureSchema();
+  const kind = input.kind === "outgoing" ? "outgoing" : "incoming";
+  const row = await db().prepare(`SELECT * FROM ${kind === "incoming" ? "incoming_documents" : "outgoing_documents"} WHERE id = ?`).bind(input.id).first<Record<string, unknown>>();
+  if (!row) throw new Error("Sənəd tapılmadı.");
+  const access = kind === "incoming" ? await incomingAccess(user) : await outgoingAccess(user);
+  const state = await approvalStateFor(kind, row, access, user);
+  const note = input.note?.trim() || null;
+  if (input.level === "department") {
+    const dept = state.departments.find((d) => d.name === input.department);
+    if (!dept) throw new Error("Bu şöbə sənədin aidiyyatı şöbələri arasında yoxdur.");
+    if (dept.openTasks) throw new Error(`“${dept.name}” şöbəsində bu sənəd üzrə tapşırıq hələ bağlanmayıb.`);
+    if (!dept.canApprove) throw new Error(dept.approved ? "Bu şöbə artıq təsdiqləyib." : !state.ready ? `Təsdiq hələ mümkün deyil: ${state.label.toLocaleLowerCase("az")}.` : "Bu şöbə üzrə təsdiqi yalnız şöbənin rəisi verə bilər.");
+  } else if (input.action === "approve" ? !state.canFinal : !state.canReturn) {
+    throw new Error(input.action === "return" && state.canFinal ? "Geri qaytarmaq üçün ən azı bir şöbə təsdiqləmiş olmalıdır." : "Son təsdiqi yalnız firmanın rəhbəri verə bilər.");
+  }
+  if (input.action === "return" && !note) throw new Error("Geri qaytarmanın səbəbini yazın.");
+  await db().prepare("INSERT INTO document_approvals (doc_kind, doc_id, level, department, action, note, user_id, user_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(kind, input.id, input.level, input.level === "department" ? input.department : null, input.action, note, user.id, user.name, new Date().toISOString()).run();
+}
+
+async function approvalStateFor(kind: ApprovalKind, row: Record<string, unknown>, access: IncomingAccess, user: SessionUser) {
+  const rows = await approvalRows(kind, Number(row.id));
+  if (kind === "outgoing") return approvalState(kind, row, rows, access, user, { departments: outgoingDepartments(row) });
+  const assignments = await incomingAssignments(Number(row.id));
+  return approvalState(kind, row, rows, access, user, incomingApprovalScope(row, assignments));
+}
+
+// An incoming document is approved by its related departments and by any department that got a task on it; a department
+// with an unfinished task on it cannot approve yet.
+function incomingApprovalScope(row: Record<string, unknown>, assignments: IncomingAssignment[]) {
+  const departments = [...new Set([...parseDepartments(row.related_departments), ...assignments.map((a) => a.department)])].filter((d) => d && d !== "—");
+  const openTaskDepartments = new Set(assignments.filter((a) => a.task_status && a.task_status !== "Təsdiqlənib").map((a) => a.department));
+  return { departments, openTaskDepartments };
+}
+
 export async function getIncomingDocuments(user: SessionUser) {
   await ensureSchema();
   const access = await incomingAccess(user);
   const assignments = await incomingAssignments();
   const byDocument = new Map<number, IncomingAssignment[]>();
   for (const a of assignments) byDocument.set(a.incoming_id, [...(byDocument.get(a.incoming_id) ?? []), a]);
+  const approvals = await approvalRows("incoming");
+  const approvalsOf = new Map<number, ApprovalRow[]>();
+  for (const r of approvals) approvalsOf.set(r.doc_id, [...(approvalsOf.get(r.doc_id) ?? []), r]);
   const requests = await incomingRequests();
   const requestsOf = new Map<number, typeof requests>();
   for (const r of requests) requestsOf.set(r.incoming_id, [...(requestsOf.get(r.incoming_id) ?? []), r]);
@@ -1799,17 +1905,19 @@ export async function getIncomingDocuments(user: SessionUser) {
     const rights = incomingRights(access, user, row, own, linked.map((r) => r.to_department));
     if (!rights.visible) return [];
     const locked = own.some((a) => a.task_status && a.task_status !== "Yeni");
+    const approval = approvalState("incoming", row, approvalsOf.get(Number(row.id)) ?? [], access, user, incomingApprovalScope(row, own));
+    const editable = access.admin || !approval.locked;
     return [{
-      ...row, status: incomingStatus(row, own), related_departments: parseDepartments(row.related_departments),
+      ...row, status: approval.final ? "Bağlandı" : incomingStatus(row, own), related_departments: parseDepartments(row.related_departments), approval,
       assignments: own.map((a) => ({ department: a.department, head_name: a.head_name, task_status: a.task_status })),
       requests: linked.map((r) => ({ id: r.id, from_department: r.from_department, to_department: r.to_department, status: r.status })),
       locked,
       file_missing: Boolean(row.file_path && folderStore && !folderStore.exists(String(row.file_path))),
       can: {
-        edit: rights.registrarHere,
-        remove: access.admin || (rights.registrarHere && !own.length && !linked.length),
-        upload: rights.registrarHere,
-        direct: rights.director && !locked && incomingStatus(row, own) !== "İcra olundu",
+        edit: rights.registrarHere && editable,
+        remove: access.admin || (rights.registrarHere && editable && !own.length && !linked.length),
+        upload: rights.registrarHere && (access.admin || !approval.final),
+        direct: rights.director && !locked && !approval.final && incomingStatus(row, own) !== "İcra olundu",
         review: rights.director && !row.director_seen_at && !own.length,
         request: rights.member || rights.director,
       },
@@ -1898,6 +2006,7 @@ export async function updateIncomingDocument(user: SessionUser, input: IncomingI
   await ensureSchema();
   const { record: current, access, rights } = await incomingForAction(user, input.id);
   if (!rights.registrarHere) throw new Error("FORBIDDEN");
+  if (!access.admin && (await approvalStateFor("incoming", current, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin dəyişə bilər.");
   const pick = (value: string | undefined, fallback: unknown) => (value === undefined ? fallback : value.trim() || null);
   const sender = input.senderVoen !== undefined || input.senderName !== undefined
     ? await senderFromVoen(input.senderVoen ?? String(current.sender_voen || ""), input.senderName ?? String(current.sender_name || ""))
@@ -1914,6 +2023,7 @@ export async function updateIncomingDocument(user: SessionUser, input: IncomingI
 export async function deleteIncomingDocument(user: SessionUser, id: number) {
   await ensureSchema();
   const { record: current, access, assignments, requests, rights } = await incomingForAction(user, id);
+  if (!access.admin && (await approvalStateFor("incoming", current, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin silə bilər.");
   if (!access.admin && !(rights.registrarHere && !assignments.length && !requests.length)) throw new Error("Sənəd üzrə tapşırıq və ya sorğu var — onu yalnız admin silə bilər.");
   // Tasks not started yet go with the document, approved ones stay in the heads' history; one in progress blocks the delete.
   if (assignments.some((a) => a.task_status && !["Yeni", "Təsdiqlənib"].includes(a.task_status))) throw new Error("Sənəd icradadır — əvvəlcə şöbələrin tapşırıqları bağlanmalıdır.");

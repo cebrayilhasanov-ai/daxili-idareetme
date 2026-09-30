@@ -703,3 +703,5 @@ tr.ordercancelled td{color:#94a3b8;text-decoration:line-through}tr.ordercancelle
 .incomingrelated{grid-column:1/-1}.incomingrelatedtag{font-style:normal;font-size:9px;font-weight:800;color:#0b6b7b;background:#e0f2f5;border-radius:8px;padding:1px 6px;margin-left:4px}
 .incomingpeople>div{max-height:180px;overflow:auto}
 .outgoingrelated{grid-column:1/-1}.outgoingrelated span small{font-weight:500;color:#64748b;margin-left:4px}
+.approvalcell{display:grid;gap:2px}.approvaldept{font-size:10px;color:#64748b}.approvaldept.ok{color:#15803d;font-weight:700}.approvalreturn{font-size:10px;color:#b91c1c;font-weight:600}
+.evaluatebtn.approvalfinal{background:#15803d;border-color:#15803d;color:#fff}
