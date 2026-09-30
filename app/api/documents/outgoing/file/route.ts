@@ -36,7 +36,8 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireSection(await requireUser(request), "documents.outgoing");
+    // Whoever may see the document (registrar, director, related department) may open its files.
+    const user = await requireUser(request);
     const params = new URL(request.url).searchParams;
     const file = await readOutgoingFile(user, Number(params.get("id")), stageOf(params.get("kind")));
     if (!file) return new Response("Fayl papkada tapılmadı. Ola bilsin, adı dəyişdirilib və ya başqa yerə köçürülüb.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });

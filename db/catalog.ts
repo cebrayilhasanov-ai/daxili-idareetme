@@ -131,7 +131,8 @@ async function ensureSchema() {
   // Existing templates start as "Bəli", so nothing that is awaited today silently stops being awaited.
   if (!documentColumns.results.some((column) => column.name === "signed_copy_returns")) await db().prepare("ALTER TABLE document_templates ADD COLUMN signed_copy_returns INTEGER NOT NULL DEFAULT 1").run();
   // On a document, signed_copy_returns overrides its template for that one document (NULL = follow the template).
-  for (const column of ["company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER"]) {
+  // related_departments: JSON list of the departments the document concerns; the first is its main one (sending_department, {Şöbə}).
+  for (const column of ["related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER"]) {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
   await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
@@ -1409,32 +1410,54 @@ async function nextOutgoingNumber(column: "outgoing_no" | "incoming_no", company
   return String((row?.maxNo || 0) + 1).padStart(6, "0");
 }
 
+// Çıxan Sənədlər visibility (Versiya 2.60), as for incoming documents: registrars (section permission) see and handle their
+// firms' documents, the firm's director sees all of the firm's, members of a related department see those read-only.
+function outgoingDepartments(row: Record<string, unknown>) {
+  const related = parseDepartments(row.related_departments);
+  return related.length ? related : row.sending_department ? [String(row.sending_department)] : [];
+}
+function outgoingRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>) {
+  const companyId = Number(row.company_id);
+  const registrarHere = access.admin || (access.registrar && (!access.registrarFirms || access.registrarFirms.includes(companyId)));
+  const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
+  const mine = new Set(access.structure.memberOf(companyId, user.employeeId));
+  const member = outgoingDepartments(row).some((d) => mine.has(d));
+  return { registrarHere, director, member, visible: registrarHere || director || member };
+}
+async function outgoingAccess(user: SessionUser): Promise<IncomingAccess> {
+  const admin = user.role === "admin";
+  const registrar = admin || !(await hiddenSections(user)).has("documents.outgoing");
+  return { admin, registrar, registrarFirms: admin ? null : registrar ? await outgoingCompanyScope(user) : [], structure: await companyDepartments() };
+}
+
 export async function getOutgoingDocuments(user: SessionUser) {
   await ensureSchema();
-  const scope = await outgoingCompanyScope(user);
+  const access = await outgoingAccess(user);
   const rows = (await db().prepare(`SELECT d.*, c.name AS company_name,
     (SELECT signed_copy_returns FROM document_templates t WHERE lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
     FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
   const flag = (value: unknown) => (value === null || value === undefined ? null : Number(value) ? 1 : 0);
   // A file someone moved or renamed by hand inside the folder is flagged instead of silently giving a broken link.
-  return rows.filter((row) => !scope || scope.includes(Number(row.company_id))).map((row) => ({
-    ...row,
-    draft_missing: Boolean(row.draft_path && folderStore && !folderStore.exists(String(row.draft_path))),
-    final_missing: Boolean(row.final_path && folderStore && !folderStore.exists(String(row.final_path))),
-    // What "Hazır sənəd" waits for: the other side's signed copy (1) or just a copy of what we sent (0).
-    returns_signed_copy: flag(row.signed_copy_returns) ?? flag(row.template_signed_copy_returns) ?? 1,
-  }));
+  return rows.flatMap((row: Record<string, unknown>) => {
+    const rights = outgoingRights(access, user, row);
+    if (!rights.visible) return [];
+    return [{
+      ...row,
+      related_departments: outgoingDepartments(row),
+      draft_missing: Boolean(row.draft_path && folderStore && !folderStore.exists(String(row.draft_path))),
+      final_missing: Boolean(row.final_path && folderStore && !folderStore.exists(String(row.final_path))),
+      // What "Hazır sənəd" waits for: the other side's signed copy (1) or just a copy of what we sent (0).
+      returns_signed_copy: flag(row.signed_copy_returns) ?? flag(row.template_signed_copy_returns) ?? 1,
+      can: { edit: rights.registrarHere, upload: rights.registrarHere, remove: access.admin || (rights.registrarHere && !row.final_name && !row.final_path && !row.final_key) },
+    }];
+  });
 }
 
-type OutgoingInput = { companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
-
-async function checkDepartment(companyId: number, department: string | undefined) {
-  const value = department?.trim();
-  if (!value) return null;
-  const found = await db().prepare("SELECT 1 FROM company_structure_positions WHERE company_id = ? AND department = ?").bind(companyId, value).first();
-  if (!found) throw new Error("Göndərən şöbə bu firmanın strukturunda yoxdur.");
-  return value;
+export async function canRegisterOutgoing(user: SessionUser) {
+  return (await outgoingAccess(user)).registrar;
 }
+
+type OutgoingInput = { relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
 
 export async function createOutgoingDocument(user: SessionUser, input: OutgoingInput) {
   await ensureSchema();
@@ -1442,7 +1465,8 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   if (!companyId) throw new Error("Firma seçilməyib.");
   const scope = await outgoingCompanyScope(user);
   if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
-  const department = await checkDepartment(companyId, input.sendingDepartment);
+  const related = JSON.parse(await relatedDepartments(companyId, input.relatedDepartments)) as string[];
+  const department = related[0];
   // Çıxış No: one continuous sequence per firm, regardless of type — never resets.
   const outgoingNo = await nextOutgoingNumber("outgoing_no", companyId);
   // Sənədin Nömrəsi: its own sequence per firm and document type, starting over at 1 each calendar year, shown as "N/YYYY".
@@ -1457,23 +1481,32 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
   // Daxil olma No / tarixi are filled when the signed document comes back (saveOutgoingFile), not typed at creation.
   const result = await db().prepare(`INSERT INTO outgoing_documents
-    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString()).run();
+    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
   return { id: Number(result.meta.last_row_id), outgoingNo };
 }
 
-export async function updateOutgoingDocument(input: OutgoingInput & { id: number }) {
+export async function updateOutgoingDocument(user: SessionUser, input: OutgoingInput & { id: number }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM outgoing_documents WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
-  const companyId = input.companyId ? Number(input.companyId) : Number(current.company_id) || null;
-  // A department typed by hand before the structure list existed may stay as it is; a changed one must come from the firm's structure.
-  const department = input.sendingDepartment === undefined || input.sendingDepartment === current.sending_department ? current.sending_department
-    : companyId ? await checkDepartment(companyId, input.sendingDepartment) : input.sendingDepartment?.trim() || null;
+  const access = await outgoingAccess(user);
+  if (!outgoingRights(access, user, current).registrarHere) throw new Error("FORBIDDEN");
+  // Only the admin moves a document to another firm or types the Daxil olma No / tarixi by hand (they come with the signed copy).
+  const companyId = access.admin && input.companyId ? Number(input.companyId) : Number(current.company_id) || null;
+  if (!access.admin) { input.incomingNo = undefined; input.incomingDate = undefined; }
+  // Related departments must come from the firm's structure; a document from before 2.60 may keep its hand-typed department.
+  let related = current.related_departments as string | null;
+  let department = current.sending_department as string | null;
+  if (input.relatedDepartments !== undefined && companyId) {
+    related = await relatedDepartments(companyId, input.relatedDepartments);
+    department = (JSON.parse(related) as string[])[0];
+  }
   // Çıxış No and Sənədin Nömrəsi are system-assigned at creation and stay fixed afterwards, so the sequence they guarantee is never broken by an edit.
-  await db().prepare(`UPDATE outgoing_documents SET company_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, signed_copy_returns = ? WHERE id = ?`)
+  await db().prepare(`UPDATE outgoing_documents SET related_departments = ?, company_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, signed_copy_returns = ? WHERE id = ?`)
     .bind(
+      related,
       companyId,
       input.outgoingDate ?? current.outgoing_date,
       input.incomingNo ?? current.incoming_no,
@@ -1493,9 +1526,14 @@ export async function updateOutgoingDocument(input: OutgoingInput & { id: number
     ).run();
 }
 
-export async function deleteOutgoingDocument(id: number) {
+export async function deleteOutgoingDocument(user: SessionUser, id: number) {
   await ensureSchema();
-  const current = await db().prepare("SELECT draft_key, final_key FROM outgoing_documents WHERE id = ?").bind(id).first<{ draft_key: string | null; final_key: string | null }>();
+  const row = await db().prepare("SELECT * FROM outgoing_documents WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!row) throw new Error("Sənəd tapılmadı.");
+  const access = await outgoingAccess(user);
+  const rights = outgoingRights(access, user, row);
+  if (!access.admin && !(rights.registrarHere && !row.final_name && !row.final_path && !row.final_key)) throw new Error("Hazır (imzalı) sənədi yüklənmiş sənədi yalnız admin silə bilər.");
+  const current = { draft_key: row.draft_key as string | null, final_key: row.final_key as string | null };
   await db().prepare("DELETE FROM outgoing_documents WHERE id = ?").bind(id).run();
   // Files in the server folders are the archive and stay; only copies kept inside the system go with the record.
   for (const key of [current?.draft_key, current?.final_key]) if (key && env.FILES) await env.FILES.delete(key);
@@ -1637,7 +1675,9 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
 
 export async function readOutgoingFile(user: SessionUser, id: number, kind: "draft" | "final") {
   await ensureSchema();
-  const record = await outgoingRecord(user, id);
+  const record = await db().prepare("SELECT * FROM outgoing_documents WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!record) throw new Error("Sənəd tapılmadı.");
+  if (!outgoingRights(await outgoingAccess(user), user, record).visible) throw new Error("FORBIDDEN");
   return loadDocumentFile(record[`${kind}_path`], record[`${kind}_key`], record[`${kind}_name`], record[`${kind}_type`]);
 }
 

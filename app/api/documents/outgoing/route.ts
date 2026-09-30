@@ -1,4 +1,7 @@
-import { createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, updateOutgoingDocument } from "@/db/catalog";
+import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, updateOutgoingDocument } from "@/db/catalog";
+
+// Çıxan Sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
+// (db/catalog.ts, outgoingRights) — department members and the director see their documents without the permission.
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -10,40 +13,44 @@ function authError(error: unknown) {
   return null;
 }
 
+async function listBody(user: Awaited<ReturnType<typeof requireUser>>) {
+  return { items: await getOutgoingDocuments(user), canRegister: await canRegisterOutgoing(user) };
+}
+
 export async function GET(request: Request) {
   try {
-    const user = await requireSection(await requireUser(request), "documents.outgoing");
-    return Response.json({ items: await getOutgoingDocuments(user) });
+    const user = await requireUser(request);
+    return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
   try {
-    // Anyone who may open Çıxan Sənədlər registers documents for their own firms; editing and deleting stay with the admin.
+    // Anyone who holds the Çıxan Sənədlər permission registers documents for their own firms.
     const user = await requireSection(await requireUser(request), "documents.outgoing");
     const body = await request.json();
     const created = await createOutgoingDocument(user, { ...body, companyId: Number(body.companyId) });
     await logAudit(user, "Çıxan sənəd yaradıldı", "outgoing-document", `#${created.outgoingNo} ${body.documentType || body.organizationName || ""}`.trim());
-    return Response.json({ items: await getOutgoingDocuments(user), id: created.id });
+    return Response.json({ ...(await listBody(user)), id: created.id });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd əlavə olunmadı." }, { status: 500 }); }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser(request, "admin");
+    const user = await requireUser(request);
     const body = await request.json();
-    await updateOutgoingDocument({ ...body, id: Number(body.id), companyId: body.companyId ? Number(body.companyId) : undefined });
+    await updateOutgoingDocument(user, { ...body, id: Number(body.id), companyId: body.companyId ? Number(body.companyId) : undefined });
     await logAudit(user, "Çıxan sənəd yeniləndi", "outgoing-document", `#${body.id}`);
-    return Response.json({ items: await getOutgoingDocuments(user) });
+    return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd yenilənmədi." }, { status: 500 }); }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireUser(request, "admin");
+    const user = await requireUser(request);
     const id = Number(new URL(request.url).searchParams.get("id"));
-    await deleteOutgoingDocument(id);
+    await deleteOutgoingDocument(user, id);
     await logAudit(user, "Çıxan sənəd silindi", "outgoing-document", `#${id}`);
-    return Response.json({ items: await getOutgoingDocuments(user) });
+    return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd silinmədi." }, { status: 500 }); }
 }
