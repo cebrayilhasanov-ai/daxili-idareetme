@@ -595,3 +595,13 @@ nav button>em+.navcaret{margin-left:6px}
 /* Şablonlar / Çıxan Sənədlər: "İmzalı nüsxə geri qaytarılır" */
 .signedreturn{display:inline-block;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:800}.signedreturn.yes{background:#fff4d8;color:#b76a00}.signedreturn.no{background:#f1f5f9;color:#64748b}
 .signedreturnfield{display:grid;gap:3px;align-content:end;font-size:11px;color:#334155}.signedreturnfield label{display:flex;align-items:center;gap:7px;font-weight:800;min-height:40px}.signedreturnfield small{color:#64748b;font-size:10px}.signedreturnfield .signedreturnwarn{color:#b45309;font-weight:700}
+.donutwrap{padding:0 21px 18px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.donut{position:relative;width:150px;height:150px;flex:none}.donut svg{width:100%;height:100%;display:block}
+.donutseg{cursor:pointer;transition:opacity .15s,stroke-width .15s}.donutseg.dim{opacity:.35}
+.donutcenter{position:absolute;inset:0;display:grid;place-content:center;text-align:center;pointer-events:none;padding:0 34px}.donutcenter b{font-size:24px;color:#0f172a;line-height:1.1}.donutcenter small{font-size:10px;color:#64748b;line-height:1.2}
+.donutlegend{flex:1;min-width:160px;display:grid;gap:3px}
+.donutlegend button{display:grid;grid-template-columns:10px 1fr auto 34px;align-items:center;gap:8px;padding:4px 6px;border:0;border-radius:6px;background:none;cursor:pointer;text-align:left;font-size:11px;color:#334155}.donutlegend button:hover,.donutlegend button.on{background:#f1f5f9}
+.donutlegend i{width:10px;height:10px;border-radius:3px}.donutlegend span{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.donutlegend b{color:#0f172a}.donutlegend small{color:#64748b;text-align:right}
+.doccounts{padding:0 21px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.doccount{border:1px solid #e2e8f0;border-top:4px solid;border-radius:10px;padding:14px 16px;display:grid;gap:4px}.doccount small{font-size:11px;font-weight:700;color:#64748b}.doccount b{font-size:30px;line-height:1.1}
+.statusfilterchip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #bae6fd;border-radius:999px;background:#f0f9ff;color:#0c4a6e;font-size:12px;font-weight:700;cursor:pointer}.statusfilterchip svg{width:14px;height:14px}
