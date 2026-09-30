@@ -700,3 +700,5 @@ tr.ordercancelled td{color:#94a3b8;text-decoration:line-through}tr.ordercancelle
 .templategroup{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;background:#eef2ff;color:#4338ca}.templategroup.order{background:#e0f2f5;color:#0b6b7b}
 .ordertemplatepick{display:flex;align-items:center;gap:8px}.ordertemplatepick select{flex:1}
 .orderbody{display:grid;gap:4px;font-size:10px;font-weight:700;color:#334155}.orderbody small{font-weight:500;color:#64748b}.orderbody textarea{width:100%;min-height:220px;border:1px solid #b9c8da;border-radius:8px;padding:9px;font:13px/1.5 "Times New Roman",serif;color:#0f172a;resize:vertical}
+.incomingrelated{grid-column:1/-1}.incomingrelatedtag{font-style:normal;font-size:9px;font-weight:800;color:#0b6b7b;background:#e0f2f5;border-radius:8px;padding:1px 6px;margin-left:4px}
+.incomingpeople>div{max-height:180px;overflow:auto}

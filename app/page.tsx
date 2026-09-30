@@ -46,7 +46,7 @@ type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:st
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
 type DocumentTemplate = { id:number; name:string; template_group?:string|null; signed_copy_returns?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
 type OutgoingDocument = { id:number; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
-type WorkRequest = { id:number; origin_work_title?:string|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
+type WorkRequest = { id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
 type ChatData = { threads:ChatThread[]; users:ChatUser[]; messages:ChatMessage[]; selectedThreadId:number; totalUnread:number; readUpTo:number };
 
@@ -136,7 +136,11 @@ export default function Home(){
   // Şablonlar is the admin's own workspace (naming rules, folders); employees only reach the template files from Çıxan Sənədlər.
   const canTemplates=isAdmin&&!viewAs;
   const firstHrTab=can("hr.violations")?"violations":can("hr.personnel")?"personnel":can("hr.orders")?"orders":null;
-  const firstDocumentTab=(["templates","outgoing","incoming"] as const).find(tab=>tab==="templates"?canTemplates:can(`documents.${tab}`));
+  // Daxil Olan Sənədlər is also open (read-only) to anyone holding a position in a firm's structure: they see the documents of their
+  // departments and the director sees the whole firm's; registering stays with the section permission.
+  const inStructure=!effectiveView||parseCompanyPositions(effectiveView.company_positions).some(p=>p.position_id);
+  const canDocument=(tab:string)=>tab==="incoming"?can("documents.incoming")||inStructure:can(`documents.${tab}`);
+  const firstDocumentTab=(["templates","outgoing","incoming"] as const).find(tab=>tab==="templates"?canTemplates:canDocument(tab));
   // Lets the admin (Cəbrayıl Həsənov), who is also his own Personal entry, jump straight into his own employee view from the sidebar — same "İstifadəçi görünüşü" mechanism, one click.
   const myOwnEmployee=isAdmin?data.employees.find(e=>e.name===user?.name||(user?.email&&e.email&&e.email.toLowerCase()===user.email.toLowerCase()))||null:null;
   const ownAvatarKey=employeeSelf?.avatar_key||user?.avatarKey||null;
@@ -165,7 +169,7 @@ export default function Home(){
   const nav:[Page,string,React.ComponentType][]=[["dashboard","İdarə paneli",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","HR",Briefcase],["chat","Çat",MessageCircle]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
   const pageAllowed=page==="customers"?can("dashboard.customers"):page==="requests"?can("tasks.requests"):page==="chat"?can("chat"):page==="hr"?can(hrSubTab==="violations"?"hr.violations":hrSubTab==="orders"?"hr.orders":"hr.personnel")
-    :page==="documents"?can(`documents.${documentSubTab}`):page==="tasks"?(taskSubTab==="tasks"?tasksSection==="manager"||can("tasks.mine"):can(`tasks.${taskSubTab}`)):true;
+    :page==="documents"?(documentSubTab==="templates"?can(`documents.${documentSubTab}`):canDocument(documentSubTab)):page==="tasks"?(taskSubTab==="tasks"?tasksSection==="manager"||can("tasks.mine"):can(`tasks.${taskSubTab}`)):true;
 
   if(authLoading&&!user)return <div className="authpage"><div className="authcard"><div className="authlogo">Dİ</div><h1>Daxili İdarəetmə</h1><p>Giriş yoxlanılır...</p></div></div>;
   if(!user)return <LoginScreen form={authForm} setForm={setAuthForm} error={error} loading={authLoading} onLogin={()=>void signIn()}/>;
@@ -174,7 +178,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.58</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.59</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>İstifadəçilər</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -184,7 +188,7 @@ export default function Home(){
           const childrenOpen=tasksMenuOpen||page==="requests"||(page==="tasks"&&(taskSubTab!=="tasks"||tasksSection!=="manager"));
           return <Fragment key={id}><button className={page===id||page==="requests"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}} onDoubleClick={toggleTasksMenu}><Icon/>{label}{pendingTotal>0&&<em>{pendingTotal}</em>}<span role="button" tabIndex={0} className={`navcaret${childrenOpen?" open":""}`} title={childrenOpen?"Bağla":"Aç"} aria-label="Alt bölmələri aç/bağla" aria-expanded={childrenOpen} onClick={e=>{e.stopPropagation();toggleTasksMenu()}} onDoubleClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();toggleTasksMenu()}}}><ChevronDown/></span></button>{childrenOpen&&<div className="navchildren"><button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="manager"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks");setMenu(false)}}>Rəhbər tərəfindən göndərilən</button>{!viewAs&&can("tasks.requests")&&<button className={page==="requests"?"on":""} onClick={()=>{setPage("requests");setMenu(false)}}>Sorğular{requestsPending>0&&<em>{requestsPending}</em>}</button>}{can("tasks.mine")&&<button className={page==="tasks"&&taskSubTab==="tasks"&&tasksSection==="mine"?"on":""} onClick={()=>{setTaskSubTab("tasks");setTasksSection("mine");setPage("tasks");setMenu(false)}}>İşlərim</button>}{can("tasks.monthly")&&<button className={page==="tasks"&&taskSubTab==="monthly"?"on":""} onClick={()=>{setTaskSubTab("monthly");setPage("tasks");setMenu(false)}}>Aylıq Sabit işlər</button>}{can("tasks.weekly")&&<button className={page==="tasks"&&taskSubTab==="weekly"?"on":""} onClick={()=>{setTaskSubTab("weekly");setPage("tasks");setMenu(false)}}>Həftəlik Sabit işlər</button>}</div>}</Fragment>;
         }
-        if(id==="documents")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setDocumentSubTab(firstDocumentTab||"templates");setPage("documents");setMenu(false)}} onDoubleClick={()=>setDocumentsMenuOpen(v=>!v)}><Icon/>{label}</button>{documentsMenuOpen&&<div className="navchildren">{canTemplates&&<button className={page==="documents"&&documentSubTab==="templates"?"on":""} onClick={()=>{setDocumentSubTab("templates");setPage("documents");setMenu(false)}}>Şablonlar</button>}{can("documents.outgoing")&&<button className={page==="documents"&&documentSubTab==="outgoing"?"on":""} onClick={()=>{setDocumentSubTab("outgoing");setPage("documents");setMenu(false)}}>Çıxan Sənədlər</button>}{can("documents.incoming")&&<button className={page==="documents"&&documentSubTab==="incoming"?"on":""} onClick={()=>{setDocumentSubTab("incoming");setPage("documents");setMenu(false)}}>Daxil Olan Sənədlər{!viewAs&&incomingPending>0&&<em>{incomingPending}</em>}</button>}</div>}</Fragment>;
+        if(id==="documents")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setDocumentSubTab(firstDocumentTab||"templates");setPage("documents");setMenu(false)}} onDoubleClick={()=>setDocumentsMenuOpen(v=>!v)}><Icon/>{label}</button>{documentsMenuOpen&&<div className="navchildren">{canTemplates&&<button className={page==="documents"&&documentSubTab==="templates"?"on":""} onClick={()=>{setDocumentSubTab("templates");setPage("documents");setMenu(false)}}>Şablonlar</button>}{can("documents.outgoing")&&<button className={page==="documents"&&documentSubTab==="outgoing"?"on":""} onClick={()=>{setDocumentSubTab("outgoing");setPage("documents");setMenu(false)}}>Çıxan Sənədlər</button>}{canDocument("incoming")&&<button className={page==="documents"&&documentSubTab==="incoming"?"on":""} onClick={()=>{setDocumentSubTab("incoming");setPage("documents");setMenu(false)}}>Daxil Olan Sənədlər{!viewAs&&incomingPending>0&&<em>{incomingPending}</em>}</button>}</div>}</Fragment>;
         if(id==="hr"){
           const goHr=(tab:"violations"|"orders"|HrSection)=>{setHrSubTab(tab);setPage("hr");setMenu(false)};
           return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>goHr(firstHrTab||"violations")} onDoubleClick={()=>setHrMenuOpen(v=>!v)}><Icon/>{label}</button>{hrMenuOpen&&<div className="navchildren">{can("hr.violations")&&<button className={page==="hr"&&hrSubTab==="violations"?"on":""} onClick={()=>goHr("violations")}>Noqsanlar</button>}{can("hr.personnel")&&<><button className={page==="hr"&&hrSubTab==="personnel"?"on":""} onClick={()=>goHr("personnel")}>Personallar</button><button className={page==="hr"&&hrSubTab==="customers"?"on":""} onClick={()=>goHr("customers")}>Müştərilər üzrə hesabat</button><button className={page==="hr"&&hrSubTab==="calendar"?"on":""} onClick={()=>goHr("calendar")}>İstehsalat təqvimi</button><button className={page==="hr"&&hrSubTab==="settings"?"on":""} onClick={()=>goHr("settings")}>Hesablama parametrləri</button></>}{can("hr.orders")&&<button className={page==="hr"&&hrSubTab==="orders"?"on":""} onClick={()=>goHr("orders")}>Əmrlər</button>}</div>}</Fragment>;
@@ -1474,16 +1478,21 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
     </tr>)}</tbody></table>{!filteredOutgoing.length&&<Empty text={scopedItems.length?"Axtarışa uyğun sənəd tapılmadı.":"Hələ çıxan sənəd qeydə alınmayıb."}/>}</div>}
   </section>;
 }
-type IncomingDocument = { id:number; company_id:number; company_name:string|null; incoming_no:string; incoming_date:string|null; sender_voen:string|null; sender_name:string|null; sender_doc_no:string|null; sender_doc_date:string|null; document_type:string|null; receive_method:string|null; summary:string|null; pages?:string|null; copies?:string|null; note?:string|null; file_name:string|null; file_size:number|null; file_path:string|null; file_missing:boolean; status:string; info_only?:number; director_pending?:number; sent_to_director_by?:string|null; resolution?:string|null; due_date?:string|null; assigned_by_name?:string|null; created_by_name?:string|null; locked:boolean; assignments:Array<{department:string;head_name:string|null;task_status:string|null}> };
-type IncomingDepartment = { company_id:number; name:string; heads:Array<{id:number;name:string}> };
+type IncomingDocument = { id:number; company_id:number; company_name:string|null; incoming_no:string; incoming_date:string|null; sender_voen:string|null; sender_name:string|null; sender_doc_no:string|null; sender_doc_date:string|null; document_type:string|null; receive_method:string|null; summary:string|null; pages?:string|null; copies?:string|null; note?:string|null; file_name:string|null; file_size:number|null; file_path:string|null; file_missing:boolean; status:string; info_only?:number; director_pending?:number; sent_to_director_by?:string|null; resolution?:string|null; due_date?:string|null; assigned_by_name?:string|null; created_by_name?:string|null; director_seen_at?:string|null; director_seen_by?:string|null; flow?:number|null; locked:boolean; related_departments:string[]; assignments:Array<{department:string;head_name:string|null;task_status:string|null}>; requests:Array<{id:number;from_department:string|null;to_department:string;status:string}>; can:{edit:boolean;remove:boolean;upload:boolean;direct:boolean;review:boolean;request:boolean} };
+type IncomingDepartment = { company_id:number; name:string; heads:Array<{id:number;name:string}>; members:Array<{id:number;name:string;position_title:string}> };
 const INCOMING_TYPES=["Məktub","Müqavilə","Akt","Hesab-faktura","Qaimə","Məhkəmə sənədi","Sorğu","Bildiriş","Digər"];
 const RECEIVE_METHODS=["Kağız-Əldən","Poçt","E-poçt","Adoc-Vergidən"];
 const CUSTOMER_TYPES=["Hüquqi şəxs","Fərdi sahibkar","Fiziki şəxs"];
-const incomingStatusTone=(s:string)=>s==="İcra olundu"?"done":s.startsWith("İcradadır")?"inprogress":s==="Məlumat üçün"?"returned":s==="Rəhbərdə"?"awaiting":"";
+const incomingStatusTone=(s:string)=>s==="İcra olundu"?"done":s.startsWith("İcradadır")?"inprogress":s==="Məlumat üçün"||s==="Rəhbər tanış olub"?"returned":s==="Rəhbərdə"||s==="Rəhbərin baxışında"?"awaiting":"";
+const waitsForDirector=(i:IncomingDocument)=>i.status==="Rəhbərin baxışında"||i.status==="Rəhbərdə";
+const parseList=(raw:string|undefined)=>{try{const v=JSON.parse(raw||"[]");return Array.isArray(v)?v.map(String):[]}catch{return []}};
+// Daxil Olan Sənədlər (Versiya 2.59): Ümumi şöbə registers and tags the related departments; the firm's director looks at every
+// document and gives tasks by dərkənar; related departments see their documents and may raise requests from them.
 function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{isAdmin:boolean;companies:Company[];activeCompanyId:number|null;onPending:(n:number)=>void}){
   const [items,setItems]=useState<IncomingDocument[]>([]);
   const [departments,setDepartments]=useState<IncomingDepartment[]>([]);
   const [directorOf,setDirectorOf]=useState<number[]>([]);
+  const [canRegister,setCanRegister]=useState(false);
   const [types,setTypes]=useState<Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -1495,15 +1504,16 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const [busy,setBusy]=useState(false);
   const [editingId,setEditingId]=useState<number|null>(null);
   const [editForm,setEditForm]=useState<Record<string,string>>({});
-  const [routing,setRouting]=useState<{id:number;mode:"departments"|"info"}|null>(null);
-  const [routeForm,setRouteForm]=useState<{departments:string[];dueDate:string;resolution:string}>({departments:[],dueDate:"",resolution:""});
+  const [acting,setActing]=useState<{id:number;mode:"direct"|"request"}|null>(null);
+  const [directForm,setDirectForm]=useState<{departments:string[];employees:number[];dueDate:string;resolution:string}>({departments:[],employees:[],dueDate:"",resolution:""});
+  const [requestForm,setRequestForm]=useState<{toDepartment:string;title:string;description:string;dueDate:string}>({toDepartment:"",title:"",description:"",dueDate:""});
   const [uploading,setUploading]=useState<number|null>(null);
   // Sender lookup by VÖEN: "found" fills the name from the customer list, "missing" opens the new-customer card.
   const [voenState,setVoenState]=useState<Record<string,"found"|"missing"|"">>({});
   const [customerForm,setCustomerForm]=useState<Record<string,string>>({});
-  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];types?:Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
-    const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);
-    onPending(list.filter(i=>i.director_pending&&!i.info_only&&(body.directorOf||[]).includes(i.company_id)).length);
+  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;types?:Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
+    const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);setCanRegister(Boolean(body.canRegister));
+    onPending(list.filter(i=>waitsForDirector(i)&&(body.directorOf||[]).includes(i.company_id)).length);
     if(body.types)setTypes(body.types);
   };
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents/incoming");const body=await response.json();if(!response.ok)throw new Error(body.error);apply(body)}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
@@ -1516,8 +1526,11 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     if(body.items)apply(body);
     return body;
   };
-  const companyOf=(values:Record<string,string>)=>Number(values.companyId||activeCompanyId||(companies.length===1?companies[0].id:0))||0;
-  const companyName=(id:number)=>companies.find(c=>c.id===id)?.name||"—";
+  // The firms passed in are the ones this user works for (all firms for the admin).
+  const registerFirms=companies;
+  const companyOf=(values:Record<string,string>)=>Number(values.companyId||activeCompanyId||(registerFirms.length===1?registerFirms[0].id:0))||0;
+  const companyName=(id:number)=>companies.find(c=>c.id===id)?.name||items.find(i=>i.company_id===id)?.company_name||"—";
+  const firmDepartments=(companyId:number)=>departments.filter(d=>d.company_id===companyId);
   const lookupVoen=async(key:string,values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
     const voen=(values.senderVoen||"").trim();
     if(!voen){setVoenState(s=>({...s,[key]:""}));return}
@@ -1558,30 +1571,52 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     if(!companyId){setError("Firmanı seçin.");return}
     if(voenState.new==="missing"){setError("Bu VÖEN müştəri siyahısında yoxdur — əvvəlcə müştəri kartını yaradın.");return}
     if(!(form.senderName||"").trim()){setError("Göndərən təşkilatı yazın.");return}
+    if(!parseList(form.relatedDepartments).length){setError("Aidiyyatı şöbəni (və ya şöbələri) seçin.");return}
     setBusy(true);setError("");setNotice("");
     try{
-      const body=await send("POST",{...form,companyId});
+      const body=await send("POST",{...form,companyId,relatedDepartments:parseList(form.relatedDepartments)});
       setForm({});setCreating(false);setVoenState(s=>({...s,new:""}));
       if(newFile&&body.id)await uploadScan({id:Number(body.id)},newFile);
       setNewFile(null);
+      setNotice("Sənəd qeydə alındı və rəhbərin baxışına düşdü; aidiyyatı şöbələr onu öz siyahılarında görür.");
     }catch(e){setError(e instanceof Error?e.message:"Sənəd qeydə alınmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:IncomingDocument)=>{setRouting(null);setEditingId(item.id);setVoenState(s=>({...s,edit:item.sender_voen?"found":""}));setEditForm({incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",senderVoen:item.sender_voen||"",senderName:item.sender_name||"",senderDocNo:item.sender_doc_no||"",senderDocDate:item.sender_doc_date||"",documentType:item.document_type||"",receiveMethod:item.receive_method||"",summary:item.summary||"",pages:item.pages||"",copies:item.copies||"",note:item.note||""})};
-  const saveEdit=async(id:number)=>{if(voenState.edit==="missing"){setError("Bu VÖEN müştəri siyahısında yoxdur — əvvəlcə müştəri kartını yaradın.");return}setBusy(true);setError("");try{await send("PATCH",{...editForm,id});setEditingId(null)}catch(e){setError(e instanceof Error?e.message:"Sənəd yenilənmədi.")}finally{setBusy(false)}};
-  const remove=async(item:IncomingDocument)=>{if(!window.confirm(`"${item.incoming_no}" nömrəli daxil olan sənədi silmək istəyirsiniz?${item.assignments.length?" Şöbələrə göndərilmiş “Yeni” tapşırıqlar da silinəcək.":""} Serverdəki papkada olan fayl silinmir.`))return;setError("");try{await send("DELETE",undefined,`?id=${item.id}`)}catch(e){setError(e instanceof Error?e.message:"Sənəd silinmədi.")}};
-  const toDirector=async(item:IncomingDocument)=>{setBusy(true);setError("");setNotice("");try{await send("PATCH",{action:"route",route:"director",id:item.id});setNotice(`Sənəd №${item.incoming_no} rəhbərə göndərildi — şöbəni o təyin edəcək.`)}catch(e){setError(e instanceof Error?e.message:"Sənəd rəhbərə göndərilmədi.")}finally{setBusy(false)}};
-  const startRoute=(item:IncomingDocument,mode:"departments"|"info")=>{setEditingId(null);setRouting({id:item.id,mode});setRouteForm({departments:item.assignments.map(a=>a.department).filter(d=>d!=="—"),dueDate:item.due_date||"",resolution:item.resolution||""})};
-  const saveRoute=async(item:IncomingDocument)=>{
-    if(!routing)return;
-    if(routing.mode==="departments"&&(!routeForm.departments.length||!routeForm.dueDate)){setError("Ən azı bir şöbə və icra müddəti seçin.");return}
-    setBusy(true);setError("");setNotice("");
+  const startEdit=(item:IncomingDocument)=>{setActing(null);setEditingId(item.id);setVoenState(s=>({...s,edit:item.sender_voen?"found":""}));setEditForm({incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",senderVoen:item.sender_voen||"",senderName:item.sender_name||"",senderDocNo:item.sender_doc_no||"",senderDocDate:item.sender_doc_date||"",documentType:item.document_type||"",receiveMethod:item.receive_method||"",summary:item.summary||"",pages:item.pages||"",copies:item.copies||"",note:item.note||"",relatedDepartments:JSON.stringify(item.related_departments||[]),companyId:String(item.company_id)})};
+  const saveEdit=async(item:IncomingDocument)=>{
+    if(voenState.edit==="missing"){setError("Bu VÖEN müştəri siyahısında yoxdur — əvvəlcə müştəri kartını yaradın.");return}
+    const related=parseList(editForm.relatedDepartments);
+    if(item.flow===2&&!related.length){setError("Aidiyyatı şöbəni (və ya şöbələri) seçin.");return}
+    setBusy(true);setError("");
     try{
-      await send("PATCH",{action:"route",route:routing.mode,id:item.id,departments:routeForm.departments,dueDate:routeForm.dueDate,resolution:routeForm.resolution});
-      setRouting(null);
-      setNotice(routing.mode==="info"?`Sənəd №${item.incoming_no} “Məlumat üçün” qeyd edildi.`:`Sənəd №${item.incoming_no} icraya göndərildi: ${routeForm.departments.join(", ")} — şöbə rəislərinin Tapşırıqlarına düşdü.`);
-    }catch(e){setError(e instanceof Error?e.message:"Sənəd göndərilmədi.")}
-    finally{setBusy(false)}
+      const payload:Record<string,unknown>={...editForm,id:item.id,relatedDepartments:related};
+      delete payload.companyId;
+      // Documents registered before 2.59 may have no related departments; they are left as they are unless some are picked.
+      if(!related.length&&item.flow!==2)delete payload.relatedDepartments;
+      await send("PATCH",payload);setEditingId(null)
+    }
+    catch(e){setError(e instanceof Error?e.message:"Sənəd yenilənmədi.")}finally{setBusy(false)}
+  };
+  const remove=async(item:IncomingDocument)=>{if(!window.confirm(`"${item.incoming_no}" nömrəli daxil olan sənədi silmək istəyirsiniz?${item.assignments.length?" Başlanmamış tapşırıqlar da silinəcək.":""} Serverdəki papkada olan fayl silinmir.`))return;setError("");try{await send("DELETE",undefined,`?id=${item.id}`)}catch(e){setError(e instanceof Error?e.message:"Sənəd silinmədi.")}};
+  const review=async(item:IncomingDocument)=>{
+    const note=window.prompt(`Sənəd №${item.incoming_no} ilə tanış oldunuz. Tapşırıq vermədən bağlanır.\n\nQeyd (istəyə bağlı):`,"");
+    if(note===null)return;
+    setBusy(true);setError("");setNotice("");
+    try{await send("PATCH",{action:"review",id:item.id,note});setNotice(`Sənəd №${item.incoming_no}: rəhbər tanış oldu.`)}catch(e){setError(e instanceof Error?e.message:"Qeyd olunmadı.")}finally{setBusy(false)}
+  };
+  const startDirect=(item:IncomingDocument)=>{setEditingId(null);setActing({id:item.id,mode:"direct"});setDirectForm({departments:item.assignments.length?[...new Set(item.assignments.map(a=>a.department))]:[],employees:[],dueDate:item.due_date||"",resolution:item.resolution||""})};
+  const startRequest=(item:IncomingDocument)=>{setEditingId(null);setActing({id:item.id,mode:"request"});setRequestForm({toDepartment:"",title:`Daxil olan sənəd №${item.incoming_no}: ${item.sender_name||""}`.slice(0,150),description:"",dueDate:""})};
+  const saveDirect=async(item:IncomingDocument)=>{
+    if((!directForm.departments.length&&!directForm.employees.length)||!directForm.dueDate){setError("Ən azı bir şöbə və ya işçi, həmçinin icra müddətini seçin.");return}
+    setBusy(true);setError("");setNotice("");
+    try{await send("PATCH",{action:"direct",id:item.id,...directForm});setActing(null);setNotice(`Sənəd №${item.incoming_no} üzrə tapşırıq verildi — seçilənlərin Tapşırıqlarına düşdü.`)}
+    catch(e){setError(e instanceof Error?e.message:"Tapşırıq verilmədi.")}finally{setBusy(false)}
+  };
+  const saveRequest=async(item:IncomingDocument)=>{
+    if(!requestForm.toDepartment||!requestForm.title.trim()){setError("Şöbəni və sorğunun mövzusunu yazın.");return}
+    setBusy(true);setError("");setNotice("");
+    try{await send("POST",{action:"request",id:item.id,...requestForm});setActing(null);setNotice(`“${requestForm.toDepartment}” şöbəsinə sorğu göndərildi — Tapşırıqlar → Sorğular bölməsində izləyə bilərsiniz.`)}
+    catch(e){setError(e instanceof Error?e.message:"Sorğu göndərilmədi.")}finally{setBusy(false)}
   };
   const customerCard=(key:string,values:Record<string,string>,set:(next:Record<string,string>)=>void)=>voenState[key]==="missing"&&<div className="templateusepanel incomingcustomer">
     <b>VÖEN {values.senderVoen} müştəri siyahısında yoxdur — müştəri kartını yaradın</b>
@@ -1594,11 +1629,17 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     </div>
     <div className="inlineactions"><Button disabled={busy||!(customerForm.name||"").trim()||!(customerForm.phone||"").trim()} onClick={()=>void createCustomer(key,values,set)}>{busy?"Yaradılır...":"Müştəri siyahısına əlavə et"}</Button></div>
   </div>;
-  const formFields=(key:string,values:Record<string,string>,set:(next:Record<string,string>)=>void,isNew:boolean)=>{const chosen=companyOf(values);const fromList=voenState[key]==="found"&&Boolean((values.senderVoen||"").trim());return <>
-    {isNew&&(isAdmin&&companies.length>1&&!activeCompanyId
-      ?<label className="field">Firma<select value={chosen||""} onChange={e=>set({...values,companyId:e.target.value})}><option value="">Seçin</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+  const relatedPicker=(values:Record<string,string>,set:(next:Record<string,string>)=>void,companyId:number)=>{
+    const chosen=parseList(values.relatedDepartments);
+    const toggle=(name:string,on:boolean)=>set({...values,relatedDepartments:JSON.stringify(on?[...chosen,name]:chosen.filter(d=>d!==name))});
+    const list=firmDepartments(companyId);
+    return <div className="field incomingdepartments incomingrelated"><span>Aidiyyatı şöbə(lər) *</span><div>{!companyId?<small>Əvvəlcə firmanı seçin.</small>:list.length?list.map(d=><label key={d.name}><input type="checkbox" checked={chosen.includes(d.name)} onChange={e=>toggle(d.name,e.target.checked)}/><b>{d.name}</b></label>):<small>Firmanın strukturunda şöbə yoxdur (Firmalar → Struktur).</small>}</div></div>;
+  };
+  const formFields=(key:string,values:Record<string,string>,set:(next:Record<string,string>)=>void,isNew:boolean)=>{const chosen=isNew?companyOf(values):Number(values.companyId);const fromList=voenState[key]==="found"&&Boolean((values.senderVoen||"").trim());return <>
+    {isNew&&(registerFirms.length>1&&!activeCompanyId
+      ?<label className="field">Firma<select value={chosen||""} onChange={e=>set({...values,companyId:e.target.value,relatedDepartments:"[]"})}><option value="">Seçin</option>{registerFirms.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       :<label className="field">Firma<Input value={chosen?companyName(chosen):""} readOnly/></label>)}
-    {!isNew&&<Field label="Daxil olma No" value={values.incomingNo||""} set={v=>set({...values,incomingNo:v})}/>}
+    {!isNew&&<label className="field">Daxil olma No<Input value={values.incomingNo||""} readOnly={!isAdmin} title={isAdmin?undefined:"Nömrəni yalnız admin dəyişə bilər"} onChange={e=>set({...values,incomingNo:e.target.value})}/></label>}
     <Field label="Daxil olma tarixi" type="date" value={values.incomingDate||(isNew?todayInput():"")} set={v=>set({...values,incomingDate:v})}/>
     <label className="field">Göndərənin VÖEN-i<Input value={values.senderVoen||""} placeholder="Dövlət qurumu üçün boş qala bilər" onChange={e=>{set({...values,senderVoen:e.target.value});setVoenState(s=>({...s,[key]:""}))}} onBlur={()=>void lookupVoen(key,values,set)}/></label>
     <label className="field">Göndərən təşkilat<Input value={values.senderName||""} readOnly={fromList||voenState[key]==="missing"} placeholder={voenState[key]==="missing"?"Müştəri kartını yaradın":(values.senderVoen||"").trim()?"VÖEN yoxlanılır...":"VÖEN yoxdursa, adı yazın"} onChange={e=>set({...values,senderName:e.target.value})}/></label>
@@ -1610,24 +1651,35 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     <Field label="Vərəq sayı" value={values.pages||""} set={v=>set({...values,pages:v})}/>
     <label className="field">Nüsxə<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{["1","2","3","4","5"].map(o=><option key={o} value={o}>{o}</option>)}</select></label>
     <Field label="Əlavə qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>
+    {relatedPicker(values,set,chosen)}
     {customerCard(key,values,set)}
   </>};
-  const routeRow=(item:IncomingDocument)=>{
-    const info=routing?.mode==="info";
-    const firmDepartments=departments.filter(d=>d.company_id===item.company_id);
-    const toggle=(name:string,on:boolean)=>setRouteForm(f=>({...f,departments:on?[...f.departments,name]:f.departments.filter(d=>d!==name)}));
+  const directRow=(item:IncomingDocument)=>{
+    const list=firmDepartments(item.company_id);
+    const toggleDept=(name:string,on:boolean)=>setDirectForm(f=>({...f,departments:on?[...f.departments,name]:f.departments.filter(d=>d!==name)}));
+    const toggleEmp=(id:number,on:boolean)=>setDirectForm(f=>({...f,employees:on?[...f.employees,id]:f.employees.filter(x=>x!==id)}));
+    const people=[...new Map(list.flatMap(d=>d.members.map(m=>[m.id,{...m,department:d.name}] as const))).values()];
     return <div className="inlinetaskrow documentrow incomingassignrow">
-      {!info&&<div className="field incomingdepartments"><span>Hansı şöbə(lər) icra etsin</span><div>{firmDepartments.length?firmDepartments.map(d=>{const noHead=!d.heads.length;return <label key={d.name} className={noHead?"disabled":""} title={noHead?"Şöbənin rəisi təyin edilməyib":undefined}><input type="checkbox" disabled={noHead} checked={routeForm.departments.includes(d.name)} onChange={e=>toggle(d.name,e.target.checked)}/><b>{d.name}</b><small>{noHead?"rəisi yoxdur":d.heads.map(h=>h.name).join(", ")}</small></label>}):<small>Firmanın strukturunda şöbə yoxdur.</small>}</div></div>}
-      {!info&&<Field label="İcra müddəti" type="date" value={routeForm.dueDate} set={v=>setRouteForm({...routeForm,dueDate:v})}/>}
-      <label className="field incomingresolution">{info?"Qeyd (istəyə bağlı)":"Dərkənar (göstəriş)"}<Textarea value={routeForm.resolution} onChange={e=>setRouteForm({...routeForm,resolution:e.target.value})}/></label>
-      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setRouting(null)}>Ləğv et</button><Button disabled={busy} onClick={()=>void saveRoute(item)}>{busy?"Göndərilir...":info?"Məlumat üçün qeyd et":`İcraya göndər${routeForm.departments.length>1?` (${routeForm.departments.length} şöbə)`:""}`}</Button></div>
+      <div className="field incomingdepartments"><span>Şöbə(lər) — tapşırıq şöbə rəisinə gedir</span><div>{list.length?list.map(d=>{const noHead=!d.heads.length;return <label key={d.name} className={noHead?"disabled":""} title={noHead?"Şöbənin rəisi təyin edilməyib":undefined}><input type="checkbox" disabled={noHead} checked={directForm.departments.includes(d.name)} onChange={e=>toggleDept(d.name,e.target.checked)}/><b>{d.name}</b><small>{noHead?"rəisi yoxdur":d.heads.map(h=>h.name).join(", ")}</small>{item.related_departments.includes(d.name)&&<em className="incomingrelatedtag">aidiyyatı</em>}</label>}):<small>Firmanın strukturunda şöbə yoxdur.</small>}</div></div>
+      <div className="field incomingdepartments incomingpeople"><span>və ya birbaşa işçi(lər)</span><div>{people.length?people.map(p=><label key={p.id}><input type="checkbox" checked={directForm.employees.includes(p.id)} onChange={e=>toggleEmp(p.id,e.target.checked)}/><b>{p.name}</b><small>{p.position_title} · {p.department}</small></label>):<small>Strukturda işçi yoxdur.</small>}</div></div>
+      <Field label="İcra müddəti" type="date" value={directForm.dueDate} set={v=>setDirectForm({...directForm,dueDate:v})}/>
+      <label className="field incomingresolution">Dərkənar (göstəriş)<Textarea value={directForm.resolution} onChange={e=>setDirectForm({...directForm,resolution:e.target.value})}/></label>
+      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setActing(null)}>Ləğv et</button><Button disabled={busy} onClick={()=>void saveDirect(item)}>{busy?"Göndərilir...":`Tapşırıq ver${directForm.departments.length+directForm.employees.length>1?` (${directForm.departments.length+directForm.employees.length})`:""}`}</Button></div>
     </div>;
   };
-  const fileCell=(item:IncomingDocument)=><div className="docstage">
-    {item.file_name?<><a className="filelink" href={`/api/documents/incoming/file?id=${item.id}`} target="_blank" rel="noreferrer" title={item.file_path||"Sistemdə saxlanılıb"}>{item.file_name}<small>{formatFileSize(item.file_size||0)}</small></a>{item.file_path&&<span className="folderpath docfolder" title={item.file_path}>{item.file_path}</span>}{item.file_missing&&<span className="docmissing">Fayl papkada tapılmadı</span>}</>:<span className="nodocument">Yüklənməyib</span>}
-    <label className={`docuploadbtn${uploading?" disabled":""}`}>{uploading===item.id?"Yüklənir...":item.file_name?"Yenisini yüklə":"Skanı sistemə yüklə"}<input type="file" hidden disabled={uploading!==null} onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void uploadScan(item,f)}}/></label>
+  const requestRow=(item:IncomingDocument)=><div className="inlinetaskrow documentrow incomingassignrow">
+    <label className="field">Hansı şöbəyə<select value={requestForm.toDepartment} onChange={e=>setRequestForm({...requestForm,toDepartment:e.target.value})}><option value="">Seçin</option>{firmDepartments(item.company_id).map(d=><option key={d.name} value={d.name}>{d.name}</option>)}</select></label>
+    <Field label="Mövzu" value={requestForm.title} set={v=>setRequestForm({...requestForm,title:v})}/>
+    <Field label="Arzu olunan müddət" type="date" value={requestForm.dueDate} set={v=>setRequestForm({...requestForm,dueDate:v})}/>
+    <label className="field incomingresolution">Nə lazımdır<Textarea value={requestForm.description} onChange={e=>setRequestForm({...requestForm,description:e.target.value})}/></label>
+    <small className="hrhint">Sorğu sizin şöbənizin adından gedir, sənədə bağlanır; qarşı şöbə sənədin skanını sorğudan aça bilir.</small>
+    <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setActing(null)}>Ləğv et</button><Button disabled={busy} onClick={()=>void saveRequest(item)}>{busy?"Göndərilir...":"Sorğunu göndər"}</Button></div>
   </div>;
-  const incomingColumns:Array<{key:string;label:string;width:number;search:(item:IncomingDocument)=>string;render:(item:IncomingDocument)=>React.ReactNode}>=[
+  const fileCell=(item:IncomingDocument)=><div className="docstage">
+    {item.file_name?<><a className="filelink" href={`/api/documents/incoming/file?id=${item.id}`} target="_blank" rel="noreferrer" title={item.file_path||"Sistemdə saxlanılıb"}>{item.file_name}<small>{formatFileSize(item.file_size||0)}</small></a>{item.file_path&&item.can.upload&&<span className="folderpath docfolder" title={item.file_path}>{item.file_path}</span>}{item.file_missing&&<span className="docmissing">Fayl papkada tapılmadı</span>}</>:<span className="nodocument">Yüklənməyib</span>}
+    {item.can.upload&&<label className={`docuploadbtn${uploading?" disabled":""}`}>{uploading===item.id?"Yüklənir...":item.file_name?"Yenisini yüklə":"Skanı sistemə yüklə"}<input type="file" hidden disabled={uploading!==null} onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void uploadScan(item,f)}}/></label>}
+  </div>;
+  const incomingColumns:Array<{key:string;label:string;width:number;search:(item:IncomingDocument)=>string;values?:(item:IncomingDocument)=>string[];render:(item:IncomingDocument)=>React.ReactNode}>=[
     {key:"incomingNo",label:"Daxil olma No",width:110,search:i=>i.incoming_no,render:i=><b>{i.incoming_no}</b>},
     {key:"company",label:"Firma",width:150,search:i=>i.company_name||"",render:i=><>{i.company_name||"—"}</>},
     {key:"incomingDate",label:"Daxil olma tarixi",width:110,search:i=>formatDateOnly(i.incoming_date),render:i=><>{formatDateOnly(i.incoming_date)}</>},
@@ -1636,37 +1688,39 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     {key:"documentType",label:"Sənədin tipi",width:130,search:i=>i.document_type||"",render:i=><>{i.document_type||"—"}</>},
     {key:"receiveMethod",label:"Daxil olma yolu",width:120,search:i=>i.receive_method||"",render:i=><>{i.receive_method||"—"}</>},
     {key:"summary",label:"Qısa məzmun",width:200,search:i=>i.summary||"",render:i=><>{i.summary||"—"}</>},
-    {key:"status",label:"Status",width:130,search:i=>i.status,render:i=><><span className={`tablestatus ${incomingStatusTone(i.status)}`}>{i.status}</span>{i.status==="Rəhbərdə"&&i.sent_to_director_by&&<small className="requestsub">Göndərən: {i.sent_to_director_by}</small>}</>},
-    {key:"departments",label:"İcraçı şöbələr",width:210,search:i=>i.assignments.map(a=>`${a.department} ${a.head_name||""}`).join(" "),render:i=>i.assignments.length?<>{i.assignments.map((a,n)=><div key={n} className="incomingdept"><b>{a.department}</b><small className="requestsub">{a.head_name||"—"}{a.task_status?` • ${a.task_status==="Təsdiqlənib"?"icra olundu":a.task_status}`:" • tapşırıq silinib"}</small></div>)}{i.due_date&&<small className="requestsub">Müddət: {formatDateOnly(i.due_date)}</small>}{i.status.startsWith("İcradadır")&&<LateDays due={i.due_date?`${i.due_date}T23:59:59`:null}/>}</>:<span className="nodocument">—</span>},
+    {key:"related",label:"Aidiyyatı şöbələr",width:170,search:i=>i.related_departments.join(", "),values:i=>i.related_departments,render:i=>i.related_departments.length?<>{i.related_departments.map(d=><div key={d} className="incomingdept"><b>{d}</b></div>)}</>:<span className="nodocument">—</span>},
+    {key:"status",label:"Status",width:140,search:i=>i.status,render:i=><><span className={`tablestatus ${incomingStatusTone(i.status)}`}>{i.status}</span>{i.status==="Rəhbər tanış olub"&&i.director_seen_by&&<small className="requestsub">{i.director_seen_by}</small>}{i.status==="Rəhbərdə"&&i.sent_to_director_by&&<small className="requestsub">Göndərən: {i.sent_to_director_by}</small>}</>},
+    {key:"departments",label:"Tapşırıqlar",width:210,search:i=>i.assignments.map(a=>`${a.department} ${a.head_name||""}`).join(" "),render:i=>i.assignments.length?<>{i.assignments.map((a,n)=><div key={n} className="incomingdept"><b>{a.head_name||"—"}</b><small className="requestsub">{a.department}{a.task_status?` • ${a.task_status==="Təsdiqlənib"?"icra olundu":a.task_status}`:" • tapşırıq silinib"}</small></div>)}{i.due_date&&<small className="requestsub">Müddət: {formatDateOnly(i.due_date)}</small>}{i.status.startsWith("İcradadır")&&<LateDays due={i.due_date?`${i.due_date}T23:59:59`:null}/>}</>:<span className="nodocument">—</span>},
+    {key:"requests",label:"Sorğular",width:180,search:i=>i.requests.map(r=>`${r.from_department||""} ${r.to_department} ${r.status}`).join(" "),render:i=>i.requests.length?<>{i.requests.map(r=><div key={r.id} className="incomingdept"><b>{r.from_department||"—"} → {r.to_department}</b><small className="requestsub">№{r.id} • {r.status}</small></div>)}</>:<span className="nodocument">—</span>},
     {key:"resolution",label:"Dərkənar",width:180,search:i=>i.resolution||"",render:i=>i.resolution||i.assigned_by_name?<>{i.resolution||"—"}{i.assigned_by_name&&<small className="requestsub">{i.assigned_by_name}</small>}</>:<span className="nodocument">—</span>},
     {key:"file",label:"Sənədin skanı",width:200,search:i=>i.file_name||"Yüklənməyib",render:fileCell},
   ];
-  const {order,widths,setWidth,moveColumn}=useTableColumns("incoming2",incomingColumns.map(c=>c.key));
+  const {order,widths,setWidth,moveColumn}=useTableColumns("incoming3",incomingColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(incomingColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(incomingColumns.map(c=>[c.key,c.width]));
   const scopedItems=items.filter(item=>!activeCompanyId||item.company_id===activeCompanyId);
-  const waitingDirector=scopedItems.filter(i=>i.director_pending&&!i.info_only);
+  const waitingDirector=scopedItems.filter(i=>waitsForDirector(i)&&directorOf.includes(i.company_id));
   const excel=useExcelFilters("incoming",incomingColumns,view==="director"?waitingDirector:scopedItems);
-  const canRoute=(item:IncomingDocument)=>!item.locked&&item.status!=="İcra olundu";
   const colSpan=order.length+1;
   return <section className="panel pagepanel directorypanel">
     <datalist id="incomingTypeOptions">{[...new Set([...types.map(t=>t.name),...INCOMING_TYPES])].map(t=><option key={t} value={t}/>)}</datalist>
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Daxil Olan Sənədlər</h2><p>{activeCompanyId?`${companyName(activeCompanyId)} — daxil olan sənədlərin qeydiyyatı`:"Daxil olan sənədlərin qeydiyyatı və icrası"}</p></div>{(isAdmin||companies.length>0)&&<Button onClick={()=>{setCreating(v=>!v);setVoenState(s=>({...s,new:""}))}}><Plus/>Yeni sənəd</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Daxil Olan Sənədlər</h2><p>{canRegister?(activeCompanyId?`${companyName(activeCompanyId)} — daxil olan sənədlərin qeydiyyatı`:"Qeydiyyat: Ümumi şöbə · baxış və tapşırıq: rəhbər · icra: aidiyyatı şöbələr"):"Şöbənizə aid və sizə tapşırılan daxil olan sənədlər"}</p></div>{canRegister&&<Button onClick={()=>{setCreating(v=>!v);setVoenState(s=>({...s,new:""}));setForm({relatedDepartments:"[]"})}}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{formFields("new",form,setForm,true)}<label className="field filefield">Sənədin skanı (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Qeydə alınır...":"Qeydə al"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {notice&&<div className="docnotice">{notice}</div>}
-    <div className="fixedsubtabs"><button className={view==="all"?"on":""} onClick={()=>setView("all")}>Bütün sənədlər ({scopedItems.length})</button><button className={view==="director"?"on":""} onClick={()=>setView("director")}>Rəhbərdə — dərkənar gözləyir ({waitingDirector.length}){waitingDirector.some(i=>directorOf.includes(i.company_id))&&<em className="requestbadge">{waitingDirector.filter(i=>directorOf.includes(i.company_id)).length}</em>}</button></div>
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable compacttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{excel.rows.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={colSpan}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{formFields("edit",editForm,setEditForm,false)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setEditingId(null)}>Ləğv et</button><Button disabled={busy} onClick={()=>void saveEdit(item.id)}>{busy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr className={item.director_pending&&!item.info_only&&directorOf.includes(item.company_id)?"incomingwaiting":undefined}>
+    <div className="fixedsubtabs"><button className={view==="all"?"on":""} onClick={()=>setView("all")}>Bütün sənədlər ({scopedItems.length})</button>{directorOf.length>0&&<button className={view==="director"?"on":""} onClick={()=>setView("director")}>Rəhbərin baxışında ({waitingDirector.length}){waitingDirector.length>0&&<em className="requestbadge">{waitingDirector.length}</em>}</button>}</div>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable compacttable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{excel.rows.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={colSpan}><div className="inlinetaskrow documentrow outgoingrow documenteditrow">{formFields("edit",editForm,setEditForm,false)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setEditingId(null)}>Ləğv et</button><Button disabled={busy} onClick={()=>void saveEdit(item)}>{busy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr className={waitsForDirector(item)&&directorOf.includes(item.company_id)?"incomingwaiting":undefined}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       <td data-label="Əməliyyat"><div className="tableactions">
-        {canRoute(item)&&<button className="evaluatebtn" onClick={()=>startRoute(item,"departments")}>{item.assignments.length?"Şöbələri dəyiş":"Şöbəyə icraya göndər"}</button>}
-        {canRoute(item)&&!item.director_pending&&!item.assignments.length&&<button className="editcompanybtn" disabled={busy} onClick={()=>void toDirector(item)}>Rəhbərə göndər</button>}
-        {canRoute(item)&&!item.info_only&&<button className="editcompanybtn" onClick={()=>startRoute(item,"info")}>Məlumat üçün</button>}
-        {isAdmin&&<><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></>}
+        {item.can.direct&&<button className="evaluatebtn" onClick={()=>startDirect(item)}>{item.assignments.length?"Tapşırıqları dəyiş":"Tapşırıq ver"}</button>}
+        {item.can.review&&<button className="editcompanybtn" disabled={busy} onClick={()=>void review(item)}>Tanış oldum</button>}
+        {item.can.request&&<button className="editcompanybtn" onClick={()=>startRequest(item)}>Sorğu yarat</button>}
+        {item.can.edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}
+        {item.can.remove&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}
       </div></td>
-    </tr>{routing?.id===item.id&&<tr><td colSpan={colSpan}>{routeRow(item)}</td></tr>}</Fragment>)}</tbody></table>{!excel.rows.length&&<Empty text={view==="director"?"Rəhbərin dərkənarını gözləyən sənəd yoxdur.":scopedItems.length?"Axtarışa uyğun sənəd tapılmadı.":"Hələ daxil olan sənəd qeydə alınmayıb."}/>}</div>}
+    </tr>{acting?.id===item.id&&<tr><td colSpan={colSpan}>{acting.mode==="direct"?directRow(item):requestRow(item)}</td></tr>}</Fragment>)}</tbody></table>{!excel.rows.length&&<Empty text={view==="director"?"Rəhbərin baxışını gözləyən sənəd yoxdur.":scopedItems.length?"Axtarışa uyğun sənəd tapılmadı.":canRegister?"Hələ daxil olan sənəd qeydə alınmayıb.":"Şöbənizə aid daxil olan sənəd yoxdur."}/>}</div>}
   </section>;
 }
 function todayInput(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Baku"}).format(new Date())}
@@ -1674,7 +1728,7 @@ const requestStatusTone=(s:string)=>s==="Bağlandı"?"done":s==="Qiymətləndirm
 const requestDue=(i:WorkRequest)=>i.agreed_due_at||i.desired_due_at;
 const requestColumns:Array<{key:string;label:string;width:number;search:(item:WorkRequest)=>string;sort?:(item:WorkRequest)=>string|number|null;render:(item:WorkRequest)=>React.ReactNode}>=[
   {key:"id",label:"№",width:60,search:i=>String(i.id),sort:i=>i.id,render:i=><>{i.actionable?<b className="requestdot" title="Sizdən əməliyyat gözlənilir"/>:null}{i.id}</>},
-  {key:"title",label:"Mövzu",width:240,search:i=>`${i.title} ${i.origin_work_title||""}`,render:i=><><b>{i.title}</b>{i.origin_work_title&&<small className="requestorigin">İşlərim: {i.origin_work_title}</small>}</>},
+  {key:"title",label:"Mövzu",width:240,search:i=>`${i.title} ${i.origin_work_title||""} ${i.origin_incoming_no||""}`,render:i=><><b>{i.title}</b>{i.origin_work_title&&<small className="requestorigin">İşlərim: {i.origin_work_title}</small>}{i.incoming_id&&i.origin_incoming_no&&<a className="requestorigin" href={`/api/documents/incoming/file?id=${i.incoming_id}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Daxil olan sənəd №{i.origin_incoming_no}</a>}</>},
   {key:"from",label:"Kimdən",width:190,search:i=>`${i.from_name||""} ${i.from_department||""}`,render:i=><>{i.from_name||"—"}{i.from_department&&<small className="requestsub">{i.from_department}</small>}</>},
   {key:"to",label:"Kimə",width:190,search:i=>`${i.to_department} ${i.assignee_name||""}`,render:i=><>{i.to_department}{i.assignee_name&&<small className="requestsub">İcraçı: {i.assignee_name}</small>}</>},
   {key:"company",label:"Firma",width:150,search:i=>i.company_name,render:i=>i.company_name},

@@ -30,8 +30,8 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const user = await requireUser(request);
-    const sectionAllowed = await requireSection(user, "documents.incoming").then(() => true, () => false);
-    const file = await readIncomingFile(user, Number(new URL(request.url).searchParams.get("id")), sectionAllowed);
+    // Whoever may see the document (registrar, director, related department, request recipients) may open its scan.
+    const file = await readIncomingFile(user, Number(new URL(request.url).searchParams.get("id")));
     if (!file) return new Response("Fayl papkada tapılmadı. Ola bilsin, adı dəyişdirilib və ya başqa yerə köçürülüb.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
     const isPreviewable = /^(image\/|application\/pdf)/.test(file.type);
     return new Response(Uint8Array.from(file.data), { headers: {

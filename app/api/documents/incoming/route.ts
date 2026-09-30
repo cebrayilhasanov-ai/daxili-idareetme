@@ -1,7 +1,14 @@
-import { countIncomingForDirector, createCustomer, createIncomingDocument, deleteIncomingDocument, findCustomerByVoen, getIncomingDocuments, routeIncomingDocument, updateIncomingDocument } from "@/db/catalog";
+import {
+  countIncomingForDirector, createCustomer, createIncomingDocument, createIncomingRequest, deleteIncomingDocument, directIncomingDocument, findCustomerByVoen,
+  getIncomingDocuments, reviewIncomingDocument, updateIncomingDocument,
+} from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+
+// Daxil Olan Sənədlər (Versiya 2.59): registering needs the section permission; seeing a document, the director's look and
+// tasks, and raising a request from it are decided per document (db/catalog.ts, incomingRights) — so department members and
+// the director reach it without the permission.
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -17,19 +24,28 @@ async function listResponse(user: Awaited<ReturnType<typeof requireUser>>) {
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
-    const user = await requireSection(await requireUser(request), "documents.incoming");
-    // The menu badge: documents waiting for this director's decision.
+    const user = await requireUser(request);
+    // The menu badge: documents waiting for this director's look.
     if (params.get("summary")) return Response.json({ pending: await countIncomingForDirector(user) });
-    if (params.has("voen")) return Response.json({ customer: await findCustomerByVoen(String(params.get("voen"))) });
+    if (params.has("voen")) {
+      await requireSection(user, "documents.incoming");
+      return Response.json({ customer: await findCustomerByVoen(String(params.get("voen"))) });
+    }
     return await listResponse(user);
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
-// Anyone who may open Daxil Olan Sənədlər (Ümumi şöbə) registers and routes documents for their own firms; editing and deleting stay with the admin.
 export async function POST(request: Request) {
   try {
-    const user = await requireSection(await requireUser(request), "documents.incoming");
+    const user = await requireUser(request);
     const body = await request.json();
+    // A related department raises a request on the document (checked per document).
+    if (body.action === "request") {
+      const requestId = await createIncomingRequest(user, { id: Number(body.id), toDepartment: String(body.toDepartment || ""), title: String(body.title || ""), description: body.description, dueDate: body.dueDate || undefined });
+      await logAudit(user, "Daxil olan sənəd üzrə sorğu yaradıldı", "incoming-document", `#${body.id} → ${body.toDepartment}`);
+      return Response.json({ ...(await (await listResponse(user)).json()), requestId });
+    }
+    await requireSection(user, "documents.incoming");
     // A sender whose VÖEN is not in the customer list gets its card created right from the registration form.
     if (body.action === "customer") {
       const customer = body.customer || {};
@@ -44,30 +60,30 @@ export async function POST(request: Request) {
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd qeydə alınmadı." }, { status: 400 }); }
 }
 
-const ROUTE_LOG: Record<string, string> = { director: "Daxil olan sənəd rəhbərə göndərildi", info: "Daxil olan sənəd məlumat üçün qeyd edildi", departments: "Daxil olan sənəd şöbələrə icraya göndərildi" };
-
 export async function PATCH(request: Request) {
   try {
-    const user = await requireSection(await requireUser(request), "documents.incoming");
+    const user = await requireUser(request);
     const body = await request.json();
-    if (body.action === "route") {
-      const route = body.route === "director" || body.route === "info" ? body.route : "departments";
-      await routeIncomingDocument(user, { id: Number(body.id), action: route, departments: Array.isArray(body.departments) ? body.departments.map(String) : [], dueDate: body.dueDate || undefined, resolution: body.resolution });
-      await logAudit(user, ROUTE_LOG[route], "incoming-document", `#${body.id}${route === "departments" ? ` → ${(body.departments || []).join(", ")}` : ""}`);
-      return await listResponse(user);
+    const id = Number(body.id);
+    if (body.action === "review") {
+      await reviewIncomingDocument(user, { id, note: body.note });
+      await logAudit(user, "Rəhbər daxil olan sənədlə tanış oldu", "incoming-document", `#${id}`);
+    } else if (body.action === "direct") {
+      const targets = await directIncomingDocument(user, { id, departments: Array.isArray(body.departments) ? body.departments.map(String) : [], employees: Array.isArray(body.employees) ? body.employees.map(Number) : [], dueDate: body.dueDate || undefined, resolution: body.resolution });
+      await logAudit(user, "Rəhbər daxil olan sənəd üzrə tapşırıq verdi", "incoming-document", `#${id} → ${targets.map((t) => `${t.head.name} (${t.department})`).join(", ")}`);
+    } else {
+      await updateIncomingDocument(user, { ...body, id });
+      await logAudit(user, "Daxil olan sənəd yeniləndi", "incoming-document", `#${id}`);
     }
-    if (user.role !== "admin") throw new Error("FORBIDDEN");
-    await updateIncomingDocument({ ...body, id: Number(body.id) });
-    await logAudit(user, "Daxil olan sənəd yeniləndi", "incoming-document", `#${body.id}`);
     return await listResponse(user);
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd yenilənmədi." }, { status: 400 }); }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireUser(request, "admin");
+    const user = await requireUser(request);
     const id = Number(new URL(request.url).searchParams.get("id"));
-    await deleteIncomingDocument(id, user.name);
+    await deleteIncomingDocument(user, id);
     await logAudit(user, "Daxil olan sənəd silindi", "incoming-document", `#${id}`);
     return await listResponse(user);
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sənəd silinmədi." }, { status: 400 }); }

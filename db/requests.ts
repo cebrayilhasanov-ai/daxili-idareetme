@@ -54,6 +54,8 @@ export async function ensureRequestSchema() {
   if (!columns.results.some((column) => column.name === "task_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN task_id INTEGER REFERENCES tasks(id)").run();
   // A request sent from a step of "İşlərim" (Mənim iş axınım) remembers that step, so the step can show its status and answer.
   if (!columns.results.some((column) => column.name === "personal_work_item_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN personal_work_item_id INTEGER").run();
+  // A request a department raised on an incoming document (Daxil Olan Sənədlər → "Sorğu yarat").
+  if (!columns.results.some((column: { name: string }) => column.name === "incoming_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN incoming_id INTEGER").run();
   // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
   await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
   schemaReady = true;
@@ -125,7 +127,16 @@ export async function companyDepartments() {
     for (const name of topDepartments) structure.departments.get(structure.key(companyId, name))?.heads.forEach((id) => ids.add(id));
     return ids;
   };
-  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf };
+  // Every department of the firm the employee works in (a person may hold positions in more than one).
+  const memberOf = (companyId: number, employeeId: number | null) => {
+    if (!employeeId) return [] as string[];
+    const names: string[] = [];
+    for (const [groupKey, dept] of structure.departments) if (groupKey.startsWith(`${companyId}|`) && dept.members.some((m) => m.id === employeeId)) names.push(groupKey.slice(groupKey.indexOf("|") + 1));
+    return names;
+  };
+  // Members of a department with their positions (the director picks task recipients from them).
+  const membersOf = (companyId: number, department: string) => structure.departments.get(structure.key(companyId, department))?.members ?? [];
+  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf, memberOf, membersOf };
 }
 
 // Employees heading at least one department of any company (used to warn the admin before hiding Sorğular from them).
@@ -183,7 +194,7 @@ function roles(row: RequestRow, user: SessionUser, structure: Structure) {
 }
 
 async function allRows() {
-  return (await db().prepare(`SELECT r.*, c.name AS company_name, u.name AS from_name, a.name AS assignee_name, pw.title AS origin_work_title,
+  return (await db().prepare(`SELECT r.*, c.name AS company_name, u.name AS from_name, a.name AS assignee_name, pw.title AS origin_work_title, inc.incoming_no AS origin_incoming_no,
       t.status AS task_status, t.evaluation AS task_evaluation, t.evaluation_note AS task_evaluation_note,
       t.submission_attachment_key, t.submission_attachment_name, t.submission_attachment_size
     FROM work_requests r
@@ -193,6 +204,7 @@ async function allRows() {
     LEFT JOIN tasks t ON t.id = r.task_id
     LEFT JOIN personal_work_checklist_items pwi ON pwi.id = r.personal_work_item_id
     LEFT JOIN personal_works pw ON pw.id = pwi.personal_work_id
+    LEFT JOIN incoming_documents inc ON inc.id = r.incoming_id
     ORDER BY r.created_at DESC, r.id DESC`).all<RequestRow>()).results;
 }
 
@@ -341,7 +353,7 @@ const dateOnly = (value: unknown) => {
   return text;
 };
 
-export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string; personalWorkItemId?: number }) {
+export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string; personalWorkItemId?: number; incomingId?: number }) {
   await ensureRequestSchema();
   const title = input.title?.trim();
   const toDepartment = input.toDepartment?.trim();
@@ -355,10 +367,10 @@ export async function createRequest(user: SessionUser, input: { companyId: numbe
   if (input.personalWorkItemId && fromDepartment === toDepartment) throw new Error("Öz şöbənizə sorğu göndərmək olmaz — addımı “İşçiyə həvalə et” ilə verin.");
   const now = new Date().toISOString();
   const result = await db().prepare(`INSERT INTO work_requests
-    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, attachment_key, attachment_name, attachment_size, attachment_type, created_at, updated_at, personal_work_item_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?, ?, ?)`)
+    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, attachment_key, attachment_name, attachment_size, attachment_type, created_at, updated_at, personal_work_item_id, incoming_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(input.companyId, user.id, user.employeeId, fromDepartment, toDepartment, title, input.description?.trim() || null, dateOnly(input.desiredDueAt),
-      input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, now, now, input.personalWorkItemId || null).run();
+      input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, now, now, input.personalWorkItemId || null, input.incomingId || null).run();
   const id = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə`);
   return id;

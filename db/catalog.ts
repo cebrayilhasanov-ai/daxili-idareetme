@@ -2,7 +2,7 @@ import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { periodWindow } from "@/lib/fixed-periods";
 import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
-import { parseHiddenSections } from "@/lib/permissions";
+import { hiddenSections, parseHiddenSections } from "@/lib/permissions";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -169,7 +169,8 @@ async function ensureSchema() {
     created_at TEXT NOT NULL
   )`).run();
   const incomingColumns = await db().prepare("PRAGMA table_info(incoming_documents)").all<{ name: string }>();
-  for (const column of ["director_pending INTEGER NOT NULL DEFAULT 0", "sent_to_director_by TEXT", "sent_to_director_at TEXT"]) {
+  // related_departments: JSON list of the departments the document concerns; flow 2: registered under the 2.59 rules (director first).
+  for (const column of ["director_pending INTEGER NOT NULL DEFAULT 0", "sent_to_director_by TEXT", "sent_to_director_at TEXT", "related_departments TEXT", "flow INTEGER", "director_seen_at TEXT", "director_seen_by TEXT"]) {
     if (!incomingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE incoming_documents ADD COLUMN ${column}`).run();
   }
   // One row per department a document was sent to: the department head who got it and the task it became.
@@ -1657,11 +1658,6 @@ async function incomingScope(user: SessionUser) {
   return outgoingCompanyScope(user);
 }
 
-async function isDirector(user: SessionUser, companyId: number) {
-  if (user.role === "admin") return true;
-  return Boolean(user.employeeId && (await companyDepartments()).directorsOf(companyId).has(user.employeeId));
-}
-
 async function incomingRecord(user: SessionUser, id: number) {
   const record = await db().prepare("SELECT i.*, c.name AS company_name FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id WHERE i.id = ?").bind(id).first<Record<string, unknown>>();
   if (!record) throw new Error("Sənəd tapılmadı.");
@@ -1681,6 +1677,8 @@ async function incomingAssignments(incomingId?: number) {
 
 function incomingStatus(row: Record<string, unknown>, assignments: IncomingAssignment[]) {
   if (row.info_only) return "Məlumat üçün";
+  const started = assignments.filter((a) => a.task_status);
+  if (Number(row.flow) === 2 && !started.length) return row.director_seen_at ? "Rəhbər tanış olub" : "Rəhbərin baxışında";
   const live = assignments.filter((a) => a.task_status);
   if (live.length) {
     const done = live.filter((a) => a.task_status === "Təsdiqlənib").length;
@@ -1716,43 +1714,89 @@ function incomingValues(record: Record<string, unknown>) {
   };
 }
 
+// Who may do what with incoming documents (agreed flow, Versiya 2.59):
+// - registrars (Ümumi şöbə: whoever holds the "Daxil Olan Sənədlər" permission) register documents of their firms, tag the related
+//   departments and may correct or delete them while nothing has happened on them yet;
+// - the firm's director sees every document of the firm, acknowledges it ("Tanış oldum") and gives tasks by dərkənar;
+// - members of a related department (and of a department a request on the document went to) see it read-only and may raise a
+//   request from it. The admin sees and may do everything.
+type IncomingAccess = { admin: boolean; registrar: boolean; registrarFirms: number[] | null; structure: Awaited<ReturnType<typeof companyDepartments>> };
+async function incomingAccess(user: SessionUser): Promise<IncomingAccess> {
+  const admin = user.role === "admin";
+  const registrar = admin || !(await hiddenSections(user)).has("documents.incoming");
+  return { admin, registrar, registrarFirms: admin ? null : registrar ? await outgoingCompanyScope(user) : [], structure: await companyDepartments() };
+}
+const parseDepartments = (raw: unknown): string[] => { try { const list = JSON.parse(String(raw || "[]")); return Array.isArray(list) ? list.map(String) : []; } catch { return []; } };
+function incomingRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>, assignments: IncomingAssignment[], requestDepartments: string[]) {
+  const companyId = Number(row.company_id);
+  const registrarHere = access.admin || (access.registrar && (!access.registrarFirms || access.registrarFirms.includes(companyId)));
+  const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
+  const mine = new Set(access.structure.memberOf(companyId, user.employeeId));
+  const member = parseDepartments(row.related_departments).some((d) => mine.has(d)) || requestDepartments.some((d) => mine.has(d))
+    || assignments.some((a) => a.head_employee_id === user.employeeId);
+  return { registrarHere, director, member, visible: registrarHere || director || member };
+}
+type IncomingRequestLink = { id: number; incoming_id: number; from_department: string | null; to_department: string; status: string; title: string };
+async function incomingRequests(incomingId?: number): Promise<IncomingRequestLink[]> {
+  await ensureRequestSchema();
+  return (await db().prepare(`SELECT id, incoming_id, from_department, to_department, status, title FROM work_requests WHERE incoming_id IS NOT NULL${incomingId ? " AND incoming_id = ?" : ""} ORDER BY id`)
+    .bind(...(incomingId ? [incomingId] : [])).all<{ id: number; incoming_id: number; from_department: string | null; to_department: string; status: string; title: string }>()).results;
+}
+
 export async function getIncomingDocuments(user: SessionUser) {
   await ensureSchema();
-  const scope = await incomingScope(user);
-  const inScope = (row: Record<string, unknown>) => !scope || scope.includes(Number(row.company_id));
+  const access = await incomingAccess(user);
   const assignments = await incomingAssignments();
   const byDocument = new Map<number, IncomingAssignment[]>();
   for (const a of assignments) byDocument.set(a.incoming_id, [...(byDocument.get(a.incoming_id) ?? []), a]);
+  const requests = await incomingRequests();
+  const requestsOf = new Map<number, typeof requests>();
+  for (const r of requests) requestsOf.set(r.incoming_id, [...(requestsOf.get(r.incoming_id) ?? []), r]);
   const items = (await db().prepare(`SELECT i.*, c.name AS company_name FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id ORDER BY i.id DESC`)
-    .all<Record<string, unknown>>()).results.filter(inScope).map((row) => {
+    .all<Record<string, unknown>>()).results.flatMap((row) => {
     const own = byDocument.get(Number(row.id)) ?? [];
-    return {
-      ...row, status: incomingStatus(row, own),
+    const linked = requestsOf.get(Number(row.id)) ?? [];
+    const rights = incomingRights(access, user, row, own, linked.map((r) => r.to_department));
+    if (!rights.visible) return [];
+    const locked = own.some((a) => a.task_status && a.task_status !== "Yeni");
+    return [{
+      ...row, status: incomingStatus(row, own), related_departments: parseDepartments(row.related_departments),
       assignments: own.map((a) => ({ department: a.department, head_name: a.head_name, task_status: a.task_status })),
-      locked: own.some((a) => a.task_status && a.task_status !== "Yeni"),
+      requests: linked.map((r) => ({ id: r.id, from_department: r.from_department, to_department: r.to_department, status: r.status })),
+      locked,
       file_missing: Boolean(row.file_path && folderStore && !folderStore.exists(String(row.file_path))),
-    };
+      can: {
+        edit: rights.registrarHere,
+        remove: access.admin || (rights.registrarHere && !own.length && !linked.length),
+        upload: rights.registrarHere,
+        direct: rights.director && !locked && incomingStatus(row, own) !== "İcra olundu",
+        review: rights.director && !row.director_seen_at && !own.length,
+        request: rights.member || rights.director,
+      },
+    }];
   });
-  const structure = await companyDepartments();
-  const companyIds = scope ?? (await db().prepare("SELECT id FROM companies WHERE active = 1").all<{ id: number }>()).results.map((c) => c.id);
-  const departments = companyIds.flatMap((companyId) => structure.departmentsOf(companyId).map((d) => ({ company_id: companyId, ...d })));
-  const directorOf = companyIds.filter((companyId) => user.role === "admin" || Boolean(user.employeeId && structure.directorsOf(companyId).has(user.employeeId)));
+  // Firms whose departments the page needs: those of the visible documents, plus where this user registers or directs.
+  const activeFirms = (await db().prepare("SELECT id FROM companies WHERE active = 1").all<{ id: number }>()).results.map((c) => c.id);
+  const directorOf = activeFirms.filter((companyId) => access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId)));
+  const firms = new Set<number>([...items.map((i: Record<string, unknown>) => Number(i.company_id)), ...directorOf, ...(access.registrarFirms ?? (access.admin ? activeFirms : []))]);
+  const departments = [...firms].flatMap((companyId) => access.structure.departmentsOf(companyId).map((d) => ({ company_id: companyId, ...d, members: access.structure.membersOf(companyId, d.name).map((m) => ({ id: m.id, name: m.name, position_title: m.position_title })) })));
   // Document types from Şablonlar, with where a scan of that type is filed.
-  const types = (await db().prepare("SELECT name, incoming_folder_path, incoming_name_pattern FROM document_templates ORDER BY name").all<{ name: string; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
-  return { items, departments, directorOf, types };
+  const types = (await db().prepare("SELECT name, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group IS NULL OR template_group != 'other_order' ORDER BY name").all<{ name: string; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
+  return { items, departments, directorOf, types, canRegister: access.registrar };
 }
 
-// The director's badge: documents waiting for their decision (for the admin: in every firm).
+// The director's badge: documents waiting for their look (for the admin: in every firm).
 export async function countIncomingForDirector(user: SessionUser) {
   await ensureSchema();
-  const rows = (await db().prepare("SELECT company_id FROM incoming_documents WHERE director_pending = 1 AND info_only = 0").all<{ company_id: number }>()).results;
+  const rows = (await db().prepare(`SELECT company_id FROM incoming_documents i WHERE (i.director_pending = 1 AND i.info_only = 0)
+    OR (i.flow = 2 AND i.director_seen_at IS NULL AND NOT EXISTS (SELECT 1 FROM incoming_assignments a WHERE a.incoming_id = i.id))`).all<{ company_id: number }>()).results;
   if (user.role === "admin") return rows.length;
   if (!user.employeeId) return 0;
   const structure = await companyDepartments();
   return rows.filter((row) => structure.directorsOf(row.company_id).has(user.employeeId!)).length;
 }
 
-type IncomingInput = { companyId?: number; incomingDate?: string; incomingNo?: string; senderVoen?: string; senderName?: string; senderDocNo?: string; senderDocDate?: string; documentType?: string; receiveMethod?: string; summary?: string; pages?: string; copies?: string; note?: string };
+type IncomingInput = { relatedDepartments?: string[]; companyId?: number; incomingDate?: string; incomingNo?: string; senderVoen?: string; senderName?: string; senderDocNo?: string; senderDocDate?: string; documentType?: string; receiveMethod?: string; summary?: string; pages?: string; copies?: string; note?: string };
 
 // With a VÖEN the sender must be a card in the customer list, and its name comes from there.
 async function senderFromVoen(voen: string | undefined, name: string | undefined) {
@@ -1773,6 +1817,25 @@ export async function findCustomerByVoen(voen: string) {
   return db().prepare("SELECT id, voen, name, entity_type FROM customers WHERE voen = ?").bind(value).first<{ id: number; voen: string; name: string; entity_type: string | null }>();
 }
 
+// The related departments must be departments of the firm's structure; at least one is required.
+async function relatedDepartments(companyId: number, raw: unknown) {
+  const chosen = [...new Set((Array.isArray(raw) ? raw : []).map((d) => String(d).trim()).filter(Boolean))];
+  if (!chosen.length) throw new Error("Aidiyyatı şöbəni (və ya şöbələri) seçin.");
+  const known = new Set((await companyDepartments()).departmentsOf(companyId).map((d) => d.name));
+  const unknown = chosen.find((d) => !known.has(d));
+  if (unknown) throw new Error(`"${unknown}" bu firmanın strukturunda yoxdur.`);
+  return JSON.stringify(chosen);
+}
+
+async function incomingForAction(user: SessionUser, id: number) {
+  const record = await db().prepare("SELECT i.*, c.name AS company_name FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id WHERE i.id = ?").bind(id).first<Record<string, unknown>>();
+  if (!record) throw new Error("Sənəd tapılmadı.");
+  const access = await incomingAccess(user);
+  const assignments = await incomingAssignments(id);
+  const requests = await incomingRequests(id);
+  return { record, access, assignments, requests, rights: incomingRights(access, user, record, assignments, requests.map((r) => r.to_department)) };
+}
+
 export async function createIncomingDocument(user: SessionUser, input: IncomingInput) {
   await ensureSchema();
   const companyId = Number(input.companyId);
@@ -1780,81 +1843,95 @@ export async function createIncomingDocument(user: SessionUser, input: IncomingI
   const scope = await incomingScope(user);
   if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
   const sender = await senderFromVoen(input.senderVoen, input.senderName);
+  const related = await relatedDepartments(companyId, input.relatedDepartments);
   const incomingNo = await nextIncomingNumber(companyId);
   const result = await db().prepare(`INSERT INTO incoming_documents
-    (company_id, incoming_no, incoming_date, sender_voen, sender_name, sender_doc_no, sender_doc_date, document_type, receive_method, summary, pages, copies, note, created_by, created_by_name, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    (company_id, incoming_no, incoming_date, sender_voen, sender_name, sender_doc_no, sender_doc_date, document_type, receive_method, summary, pages, copies, note, created_by, created_by_name, created_at, related_departments, flow)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)`)
     .bind(companyId, incomingNo, input.incomingDate || bakuDateIso(), sender.voen, sender.name, input.senderDocNo?.trim() || null, input.senderDocDate || null,
-      input.documentType?.trim() || null, input.receiveMethod || null, input.summary?.trim() || null, input.pages?.trim() || null, input.copies || null, input.note?.trim() || null, user.id, user.name, new Date().toISOString()).run();
+      input.documentType?.trim() || null, input.receiveMethod || null, input.summary?.trim() || null, input.pages?.trim() || null, input.copies || null, input.note?.trim() || null, user.id, user.name, new Date().toISOString(), related).run();
   return { id: Number(result.meta.last_row_id), incomingNo };
 }
 
-export async function updateIncomingDocument(input: IncomingInput & { id: number }) {
+// The registrar corrects the registration (the Daxil olma No stays the admin's: it is a running number).
+export async function updateIncomingDocument(user: SessionUser, input: IncomingInput & { id: number }) {
   await ensureSchema();
-  const current = await db().prepare("SELECT * FROM incoming_documents WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
-  if (!current) throw new Error("Sənəd tapılmadı.");
+  const { record: current, access, rights } = await incomingForAction(user, input.id);
+  if (!rights.registrarHere) throw new Error("FORBIDDEN");
   const pick = (value: string | undefined, fallback: unknown) => (value === undefined ? fallback : value.trim() || null);
   const sender = input.senderVoen !== undefined || input.senderName !== undefined
     ? await senderFromVoen(input.senderVoen ?? String(current.sender_voen || ""), input.senderName ?? String(current.sender_name || ""))
     : { voen: current.sender_voen, name: current.sender_name };
-  await db().prepare(`UPDATE incoming_documents SET incoming_no = ?, incoming_date = ?, sender_voen = ?, sender_name = ?, sender_doc_no = ?, sender_doc_date = ?, document_type = ?, receive_method = ?, summary = ?, pages = ?, copies = ?, note = ? WHERE id = ?`)
-    .bind(pick(input.incomingNo, current.incoming_no) || current.incoming_no, pick(input.incomingDate, current.incoming_date), sender.voen, sender.name,
+  const related = input.relatedDepartments !== undefined ? await relatedDepartments(Number(current.company_id), input.relatedDepartments) : current.related_departments;
+  const incomingNo = access.admin ? pick(input.incomingNo, current.incoming_no) || current.incoming_no : current.incoming_no;
+  await db().prepare(`UPDATE incoming_documents SET incoming_no = ?, incoming_date = ?, sender_voen = ?, sender_name = ?, sender_doc_no = ?, sender_doc_date = ?, document_type = ?, receive_method = ?, summary = ?, pages = ?, copies = ?, note = ?, related_departments = ? WHERE id = ?`)
+    .bind(incomingNo, pick(input.incomingDate, current.incoming_date), sender.voen, sender.name,
       pick(input.senderDocNo, current.sender_doc_no), pick(input.senderDocDate, current.sender_doc_date), pick(input.documentType, current.document_type), pick(input.receiveMethod, current.receive_method),
-      pick(input.summary, current.summary), pick(input.pages, current.pages), pick(input.copies, current.copies), pick(input.note, current.note), input.id).run();
+      pick(input.summary, current.summary), pick(input.pages, current.pages), pick(input.copies, current.copies), pick(input.note, current.note), related, input.id).run();
 }
 
-export async function deleteIncomingDocument(id: number, actorName?: string) {
+// The registrar deletes only a document nothing has happened on; the admin also one whose tasks have not started.
+export async function deleteIncomingDocument(user: SessionUser, id: number) {
   await ensureSchema();
-  const current = await db().prepare("SELECT file_key FROM incoming_documents WHERE id = ?").bind(id).first<{ file_key: string | null }>();
-  if (!current) throw new Error("Sənəd tapılmadı.");
+  const { record: current, access, assignments, requests, rights } = await incomingForAction(user, id);
+  if (!access.admin && !(rights.registrarHere && !assignments.length && !requests.length)) throw new Error("Sənəd üzrə tapşırıq və ya sorğu var — onu yalnız admin silə bilər.");
   // Tasks not started yet go with the document, approved ones stay in the heads' history; one in progress blocks the delete.
-  const assignments = await incomingAssignments(id);
   if (assignments.some((a) => a.task_status && !["Yeni", "Təsdiqlənib"].includes(a.task_status))) throw new Error("Sənəd icradadır — əvvəlcə şöbələrin tapşırıqları bağlanmalıdır.");
-  for (const a of assignments) if (a.task_id && a.task_status === "Yeni") await deleteTask(a.task_id, actorName);
+  if (requests.some((r) => !["Bağlandı", "İmtina edildi"].includes(r.status))) throw new Error("Sənəd üzrə açıq sorğu var — əvvəlcə sorğular bağlanmalıdır.");
+  for (const a of assignments) if (a.task_id && a.task_status === "Yeni") await deleteTask(a.task_id, user.name);
   await db().prepare("DELETE FROM incoming_assignments WHERE incoming_id = ?").bind(id).run();
+  await db().prepare("UPDATE work_requests SET incoming_id = NULL WHERE incoming_id = ?").bind(id).run();
   await db().prepare("DELETE FROM incoming_documents WHERE id = ?").bind(id).run();
   // Scans in the server folders are the archive and stay; only a copy kept inside the system goes with the record.
-  if (current.file_key && env.FILES) await env.FILES.delete(current.file_key);
+  if (current.file_key && env.FILES) await env.FILES.delete(String(current.file_key));
 }
 
-export async function routeIncomingDocument(user: SessionUser, input: { id: number; action: "director" | "info" | "departments"; departments?: string[]; dueDate?: string; resolution?: string }) {
+// The director has looked at the document and gives no task ("Tanış oldum").
+export async function reviewIncomingDocument(user: SessionUser, input: { id: number; note?: string }) {
   await ensureSchema();
-  const record = await incomingRecord(user, input.id);
+  const { rights } = await incomingForAction(user, input.id);
+  if (!rights.director) throw new Error("Sənədlə yalnız firmanın rəhbəri tanış ola bilər.");
+  await db().prepare("UPDATE incoming_documents SET director_seen_at = ?, director_seen_by = ?, director_pending = 0, resolution = COALESCE(?, resolution) WHERE id = ?")
+    .bind(new Date().toISOString(), user.name, input.note?.trim() || null, input.id).run();
+}
+
+// The director's dərkənar: a task to the head of each chosen department and/or to chosen employees directly. Until any of
+// them has started, the director may change the recipients (the unstarted tasks are re-created).
+export async function directIncomingDocument(user: SessionUser, input: { id: number; departments?: string[]; employees?: number[]; dueDate?: string; resolution?: string }) {
+  await ensureSchema();
+  const { record, rights } = await incomingForAction(user, input.id);
+  if (!rights.director) throw new Error("Tapşırığı yalnız firmanın rəhbəri verə bilər.");
   const companyId = Number(record.company_id);
-  const now = new Date().toISOString();
-  if (input.action === "director") {
-    if (!(await companyDepartments()).directorsOf(companyId).size) throw new Error("Firmanın strukturunda direktor təyin edilməyib.");
-    await clearUnstartedAssignments(input.id, user.name);
-    await db().prepare("UPDATE incoming_documents SET director_pending = 1, info_only = 0, sent_to_director_by = ?, sent_to_director_at = ? WHERE id = ?").bind(user.name, now, input.id).run();
-    return;
-  }
-  if (input.action === "info") {
-    await clearUnstartedAssignments(input.id, user.name);
-    await db().prepare("UPDATE incoming_documents SET info_only = 1, director_pending = 0, due_date = NULL, resolution = ?, assigned_by_name = ?, assigned_at = ? WHERE id = ?")
-      .bind(input.resolution?.trim() || null, user.name, now, input.id).run();
-    return;
-  }
+  const structure = await companyDepartments();
+  const departments = structure.departmentsOf(companyId);
   const chosen = [...new Set((input.departments ?? []).map((d) => d.trim()).filter(Boolean))];
-  if (!chosen.length) throw new Error("Ən azı bir şöbə seçin.");
+  const people = [...new Set((input.employees ?? []).map(Number).filter(Boolean))];
+  if (!chosen.length && !people.length) throw new Error("Ən azı bir şöbə və ya işçi seçin.");
   if (!input.dueDate) throw new Error("İcra müddətini seçin.");
-  const departments = (await companyDepartments()).departmentsOf(companyId);
-  const targets = chosen.map((name) => {
+  const targets: { department: string; head: { id: number; name: string } }[] = chosen.map((name) => {
     const dept = departments.find((d) => d.name === name);
     if (!dept) throw new Error(`"${name}" bu firmanın strukturunda yoxdur.`);
-    if (!dept.heads.length) throw new Error(`"${name}" şöbəsinin rəisi təyin edilməyib — sənədi ora göndərmək olmaz.`);
+    if (!dept.heads.length) throw new Error(`"${name}" şöbəsinin rəisi təyin edilməyib — ya rəisi təyin edin, ya da tapşırığı birbaşa işçiyə verin.`);
     return { department: name, head: dept.heads[0] };
   });
+  for (const id of people) {
+    const home = structure.memberOf(companyId, id)[0];
+    const person = home ? structure.membersOf(companyId, home).find((m) => m.id === id) : null;
+    if (!home || !person) throw new Error("Seçilmiş işçi bu firmanın strukturunda yoxdur.");
+    if (!targets.some((t) => t.head.id === id)) targets.push({ department: home, head: { id, name: person.name } });
+  }
   await clearUnstartedAssignments(input.id, user.name);
+  const now = new Date().toISOString();
   const dueAt = new Date(`${input.dueDate}T18:00:00+04:00`).toISOString();
   const resolution = input.resolution?.trim() || "";
   const title = `Daxil olan sənəd №${record.incoming_no}: ${record.sender_name}${record.summary ? ` — ${record.summary}` : ""}`.slice(0, 200);
   for (const target of targets) {
-    const others = targets.filter((t) => t !== target).map((t) => t.department);
+    const others = targets.filter((t) => t !== target).map((t) => `${t.head.name} (${t.department})`);
     const description = [
-      resolution ? `Dərkənar: ${resolution}` : "",
+      resolution ? `Rəhbərin dərkənarı: ${resolution}` : "Rəhbərin dərkənarı ilə icraya verilib.",
       `Göndərən: ${record.sender_name}${record.sender_doc_no ? `, №${record.sender_doc_no}` : ""}${record.sender_doc_date ? ` (${record.sender_doc_date})` : ""}`,
       record.summary ? `Məzmun: ${record.summary}` : "",
-      others.length ? `Sənəd həm də bu şöbələrə göndərilib: ${others.join(", ")}.` : "",
+      others.length ? `Tapşırıq həm də bunlara verilib: ${others.join(", ")}.` : "",
       "Sənədin özü: Sənədlər → Daxil Olan Sənədlər.",
     ].filter(Boolean).join("\n");
     const task = await db().prepare(`INSERT INTO tasks (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
@@ -1862,8 +1939,18 @@ export async function routeIncomingDocument(user: SessionUser, input: { id: numb
     await db().prepare("INSERT INTO incoming_assignments (incoming_id, department, head_employee_id, task_id, created_at) VALUES (?, ?, ?, ?, ?)")
       .bind(input.id, target.department, target.head.id, Number(task.meta.last_row_id), now).run();
   }
-  await db().prepare("UPDATE incoming_documents SET info_only = 0, director_pending = 0, due_date = ?, resolution = ?, assigned_by_name = ?, assigned_at = ? WHERE id = ?")
-    .bind(input.dueDate, resolution || null, user.name, now, input.id).run();
+  await db().prepare("UPDATE incoming_documents SET info_only = 0, director_pending = 0, director_seen_at = COALESCE(director_seen_at, ?), director_seen_by = COALESCE(director_seen_by, ?), due_date = ?, resolution = ?, assigned_by_name = ?, assigned_at = ? WHERE id = ?")
+    .bind(now, user.name, input.dueDate, resolution || null, user.name, now, input.id).run();
+  return targets;
+}
+
+// A related department asks another department for something on this document; the request carries a link back to it.
+export async function createIncomingRequest(user: SessionUser, input: { id: number; toDepartment: string; title: string; description?: string; dueDate?: string }) {
+  await ensureSchema();
+  const { record, rights } = await incomingForAction(user, input.id);
+  if (!rights.member && !rights.director) throw new Error("Sorğunu yalnız aidiyyatı şöbənin əməkdaşı və ya rəhbər yarada bilər.");
+  const description = [input.description?.trim() || "", `Daxil olan sənəd №${record.incoming_no}: ${record.sender_name}${record.summary ? ` — ${record.summary}` : ""}. Sənədin skanı sorğunun “Daxil olan sənəd” linkindən açılır.`].filter(Boolean).join("\n\n");
+  return createRequest(user, { companyId: Number(record.company_id), toDepartment: input.toDepartment, title: input.title, description, desiredDueAt: input.dueDate, incomingId: input.id });
 }
 
 export async function saveIncomingFile(user: SessionUser, input: { id: number; fileName: string; contentType: string; data: Uint8Array }) {
@@ -1886,14 +1973,10 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
 }
 
 // A department head the document was sent to may open its scan even without access to Daxil Olan Sənədlər.
-export async function readIncomingFile(user: SessionUser, id: number, sectionAllowed: boolean) {
+export async function readIncomingFile(user: SessionUser, id: number) {
   await ensureSchema();
-  const record = await db().prepare("SELECT * FROM incoming_documents WHERE id = ?").bind(id).first<Record<string, unknown>>();
-  if (!record) throw new Error("Sənəd tapılmadı.");
-  const scope = await incomingScope(user);
-  const isHead = Boolean(user.employeeId && (await incomingAssignments(id)).some((a) => a.head_employee_id === user.employeeId));
-  const director = sectionAllowed || isHead ? false : await isDirector(user, Number(record.company_id));
-  if (!isHead && !director && (!sectionAllowed || (scope && !scope.includes(Number(record.company_id))))) throw new Error("FORBIDDEN");
+  const { record, rights } = await incomingForAction(user, id);
+  if (!rights.visible) throw new Error("FORBIDDEN");
   return loadDocumentFile(record.file_path, record.file_key, record.file_name, record.file_type);
 }
 
