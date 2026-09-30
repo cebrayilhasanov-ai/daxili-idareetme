@@ -117,6 +117,11 @@ export function serviceParts(from: string, to: string, extraMonths = 0) {
   const total = months + extraMonths;
   return { years: Math.floor(total / 12), months: total % 12, days };
 }
+// Choices for the family and education records (shared by the HR API and the card).
+export const MARITAL_STATUSES = ["Subay", "Evli", "Boşanmış", "Dul"];
+export const FAMILY_RELATIONS = ["Həyat yoldaşı", "Oğlu", "Qızı", "Atası", "Anası", "Qardaşı", "Bacısı"];
+export const EDUCATION_LEVELS = ["Ümumi orta", "Tam orta", "Peşə", "Orta ixtisas", "Bakalavr", "Magistr", "Doktorantura", "Kurs / sertifikat"];
+
 // Length of service at earlier employers. Periods that overlap (two jobs at once) or run back to back are merged first, so no
 // day is counted twice; each merged period is measured in calendar months plus days, and the leftover days are carried at 30 days = 1 month.
 export type PriorJobPeriod = { start_date: string; end_date: string };

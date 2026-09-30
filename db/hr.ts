@@ -1,6 +1,6 @@
 import { env } from "@/lib/runtime";
 import { createCustomer, findCustomerByVoen, getCustomers } from "@/db/catalog";
-import { CALENDAR_KINDS, LEAVE_KINDS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
+import { CALENDAR_KINDS, LEAVE_KINDS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
 
 // HR register (kadr uçotu): every worker of every firm, kept apart from the app's login users (`employees` / `app_users`).
 // Most workers never sign in; a card may optionally point at a Personal entry (user_employee_id) when that person also uses the app.
@@ -15,7 +15,7 @@ const EXTRA_COLUMNS: [string, string][] = [
   ["photo_key", "TEXT"], ["photo_name", "TEXT"], ["prior_experience_days", "INTEGER NOT NULL DEFAULT 0"],
   ["contract_no", "TEXT"], ["contract_date", "TEXT"], ["contract_type", "TEXT"], ["contract_end_date", "TEXT"], ["probation_months", "INTEGER"],
   ["hire_order_no", "TEXT"], ["hire_order_date", "TEXT"],
-  ["emergency_name", "TEXT"], ["emergency_relation", "TEXT"], ["emergency_phone", "TEXT"],
+  ["emergency_name", "TEXT"], ["emergency_relation", "TEXT"], ["emergency_phone", "TEXT"], ["marital_status", "TEXT"],
 ];
 
 let schemaReady = false;
@@ -96,6 +96,31 @@ async function ensureHrSchema() {
     sort_order INTEGER NOT NULL DEFAULT 0
   )`).run();
   await db().prepare("CREATE INDEX IF NOT EXISTS hr_prior_jobs_customer ON hr_prior_jobs(customer_id)").run();
+  await db().prepare(`CREATE TABLE IF NOT EXISTS hr_family (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    hr_employee_id INTEGER NOT NULL,
+    relation TEXT NOT NULL,
+    last_name TEXT,
+    first_name TEXT NOT NULL,
+    patronymic TEXT,
+    birth_date TEXT,
+    workplace TEXT,
+    phone TEXT,
+    created_at TEXT NOT NULL
+  )`).run();
+  await db().prepare(`CREATE TABLE IF NOT EXISTS hr_education (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    hr_employee_id INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    institution TEXT NOT NULL,
+    specialty TEXT,
+    start_year INTEGER,
+    end_year INTEGER,
+    diploma_no TEXT,
+    diploma_key TEXT,
+    diploma_name TEXT,
+    created_at TEXT NOT NULL
+  )`).run();
   const existing = new Set((await db().prepare("PRAGMA table_info(hr_employees)").all<{ name: string }>()).results.map((c: { name: string }) => c.name));
   const added = EXTRA_COLUMNS.filter(([name]) => !existing.has(name));
   if (added.length) await db().batch(added.map(([name, type]) => db().prepare(`ALTER TABLE hr_employees ADD COLUMN ${name} ${type}`)));
@@ -136,7 +161,7 @@ export async function getHrData() {
   await ensureHrSchema();
   // Loads the customer list first: that also creates its table, which the prior-jobs join below needs on a fresh database.
   const customers = (await getCustomers()) as { id: number; voen: string | null; name: string; country: string | null }[];
-  const [employees, leaves, salaries, calendar, params, companies, users, priorJobs] = await Promise.all([
+  const [employees, leaves, salaries, calendar, params, companies, users, priorJobs, family, education] = await Promise.all([
     db().prepare(`SELECT hr_employees.*, companies.name AS company_name, employees.name AS user_employee_name FROM hr_employees
       LEFT JOIN companies ON companies.id = hr_employees.company_id
       LEFT JOIN employees ON employees.id = hr_employees.user_employee_id
@@ -149,11 +174,13 @@ export async function getHrData() {
     db().prepare("SELECT id, name FROM employees WHERE active = 1 ORDER BY name").all(),
     db().prepare(`SELECT hr_prior_jobs.*, customers.name AS customer_name, customers.voen AS customer_voen FROM hr_prior_jobs
       LEFT JOIN customers ON customers.id = hr_prior_jobs.customer_id ORDER BY hr_prior_jobs.hr_employee_id, hr_prior_jobs.start_date`).all(),
+    db().prepare("SELECT * FROM hr_family ORDER BY hr_employee_id, birth_date IS NULL, birth_date, id").all(),
+    db().prepare("SELECT * FROM hr_education ORDER BY hr_employee_id, end_year IS NULL, end_year DESC, id").all(),
   ]);
   // Departments and positions come from each firm's structure (Firmalar → Struktur); the table may not exist on a fresh database.
   let structure: { company_id: number; department: string; title: string }[] = [];
   try { structure = (await db().prepare("SELECT company_id, department, title FROM company_structure_positions ORDER BY sort_order, id").all<{ company_id: number; department: string; title: string }>()).results; } catch { structure = []; }
-  return { employees: employees.results, leaves: leaves.results, salaries: salaries.results, calendar, params, companies: companies.results, users: users.results, structure, priorJobs: priorJobs.results, customers: customers.map((c) => ({ id: c.id, voen: c.voen, name: c.name, country: c.country })) };
+  return { employees: employees.results, leaves: leaves.results, salaries: salaries.results, calendar, params, companies: companies.results, users: users.results, structure, priorJobs: priorJobs.results, family: family.results, education: education.results, customers: customers.map((c) => ({ id: c.id, voen: c.voen, name: c.name, country: c.country })) };
 }
 
 // Phone numbers: digits with an optional leading +, spaces, dashes and brackets, 9–15 digits in all.
@@ -283,6 +310,8 @@ export async function deleteHrEmployee(id: number) {
     db().prepare("DELETE FROM hr_leaves WHERE hr_employee_id = ?").bind(id),
     db().prepare("DELETE FROM hr_salaries WHERE hr_employee_id = ?").bind(id),
     db().prepare("DELETE FROM hr_prior_jobs WHERE hr_employee_id = ?").bind(id),
+    db().prepare("DELETE FROM hr_family WHERE hr_employee_id = ?").bind(id),
+    db().prepare("DELETE FROM hr_education WHERE hr_employee_id = ?").bind(id),
     db().prepare("DELETE FROM hr_employees WHERE id = ?").bind(id),
   ]);
 }
@@ -303,6 +332,73 @@ export async function saveHrLeave(input: Record<string, unknown>) {
   const id = Number(input.id) || null;
   if (id) await db().prepare("UPDATE hr_leaves SET hr_employee_id = ?, kind = ?, start_date = ?, end_date = ?, days = ?, order_no = ?, order_date = ?, note = ? WHERE id = ?").bind(...values, id).run();
   else await db().prepare("INSERT INTO hr_leaves (hr_employee_id, kind, start_date, end_date, days, order_no, order_date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(...values, new Date().toISOString()).run();
+}
+
+export async function saveHrMaritalStatus(input: Record<string, unknown>) {
+  await ensureHrSchema();
+  const employeeId = Number(input.hrEmployeeId);
+  if (!employeeId) throw new Error("İşçi seçilməyib.");
+  const status = text(input.maritalStatus);
+  if (status && !MARITAL_STATUSES.includes(status)) throw new Error("Ailə vəziyyətini siyahıdan seçin.");
+  await db().prepare("UPDATE hr_employees SET marital_status = ?, updated_at = ? WHERE id = ?").bind(status, new Date().toISOString(), employeeId).run();
+}
+
+export async function saveHrFamilyMember(input: Record<string, unknown>) {
+  await ensureHrSchema();
+  const employeeId = Number(input.hrEmployeeId);
+  if (!employeeId) throw new Error("İşçi seçilməyib.");
+  const relation = text(input.relation);
+  if (!relation || !FAMILY_RELATIONS.includes(relation)) throw new Error("Qohumluq dərəcəsini seçin.");
+  const firstName = text(input.firstName);
+  if (!firstName) throw new Error("Ailə üzvünün adını yazın.");
+  const birthDate = date(input.birthDate, "Doğum tarixi");
+  if (birthDate && birthDate > todayIso()) throw new Error("Doğum tarixi gələcəkdə ola bilməz.");
+  const values = [employeeId, relation, text(input.lastName), firstName, text(input.patronymic), birthDate, text(input.workplace), phoneValue(input.phone, "Ailə üzvünün telefonunu", false)];
+  const id = Number(input.id) || null;
+  if (id) await db().prepare("UPDATE hr_family SET hr_employee_id = ?, relation = ?, last_name = ?, first_name = ?, patronymic = ?, birth_date = ?, workplace = ?, phone = ? WHERE id = ?").bind(...values, id).run();
+  else await db().prepare("INSERT INTO hr_family (hr_employee_id, relation, last_name, first_name, patronymic, birth_date, workplace, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(...values, new Date().toISOString()).run();
+}
+
+export async function saveHrEducation(input: Record<string, unknown>) {
+  await ensureHrSchema();
+  const employeeId = Number(input.hrEmployeeId);
+  if (!employeeId) throw new Error("İşçi seçilməyib.");
+  const level = text(input.level);
+  if (!level || !EDUCATION_LEVELS.includes(level)) throw new Error("Təhsil səviyyəsini seçin.");
+  const institution = text(input.institution);
+  if (!institution) throw new Error("Təhsil müəssisəsini yazın.");
+  const year = (value: unknown, label: string) => {
+    const v = number(value, label);
+    if (v === null) return null;
+    if (!Number.isInteger(v) || v < 1940 || v > new Date().getFullYear() + 6) throw new Error(`${label} düzgün il deyil.`);
+    return v;
+  };
+  const startYear = year(input.startYear, "Başlama ili"), endYear = year(input.endYear, "Bitmə ili");
+  if (startYear && endYear && endYear < startYear) throw new Error("Bitmə ili başlama ilindən əvvəl ola bilməz.");
+  const values = [employeeId, level, institution, text(input.specialty), startYear, endYear, text(input.diplomaNo), text(input.diplomaKey), text(input.diplomaName)];
+  const id = Number(input.id) || null;
+  if (id) await db().prepare("UPDATE hr_education SET hr_employee_id = ?, level = ?, institution = ?, specialty = ?, start_year = ?, end_year = ?, diploma_no = ?, diploma_key = ?, diploma_name = ? WHERE id = ?").bind(...values, id).run();
+  else await db().prepare("INSERT INTO hr_education (hr_employee_id, level, institution, specialty, start_year, end_year, diploma_no, diploma_key, diploma_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(...values, new Date().toISOString()).run();
+}
+
+export async function deleteHrFamilyMember(id: number) {
+  await ensureHrSchema();
+  await db().prepare("DELETE FROM hr_family WHERE id = ?").bind(id).run();
+}
+
+export async function deleteHrEducation(id: number) {
+  await ensureHrSchema();
+  await db().prepare("DELETE FROM hr_education WHERE id = ?").bind(id).run();
+}
+
+// Customer report, only for users who may see personnel data: which of our people worked at each customer and what they do now.
+export async function getHrCustomerReport() {
+  await ensureHrSchema();
+  return (await db().prepare(`SELECT hr_prior_jobs.customer_id, hr_prior_jobs.position AS prior_position, hr_prior_jobs.start_date, hr_prior_jobs.end_date,
+      hr_employees.id AS hr_employee_id, hr_employees.last_name, hr_employees.first_name, hr_employees.patronymic, hr_employees.position AS current_position,
+      hr_employees.termination_date, companies.name AS company_name
+    FROM hr_prior_jobs JOIN hr_employees ON hr_employees.id = hr_prior_jobs.hr_employee_id LEFT JOIN companies ON companies.id = hr_employees.company_id
+    ORDER BY hr_prior_jobs.customer_id, hr_prior_jobs.end_date DESC`).all()).results;
 }
 
 export async function deleteHrLeave(id: number) {

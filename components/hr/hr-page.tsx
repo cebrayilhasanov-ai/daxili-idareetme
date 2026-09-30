@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  CALENDAR_KINDS, LEAVE_KINDS, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
+  CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, LEAVE_KINDS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
   leaveDaysBetween, leaveKindLabel, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
   weekday, workNorm, type CalendarDay, type CalendarKind, type HrParams,
 } from "@/lib/hr-calc";
@@ -24,8 +24,10 @@ type HrEmployee = {
   opening_balance_days: number | null; user_employee_id: number | null; user_employee_name: string | null; note: string | null;
   photo_key: string | null; photo_name: string | null; prior_experience_days: number | null;
   contract_no: string | null; contract_date: string | null; contract_type: string | null; contract_end_date: string | null; probation_months: number | null;
-  hire_order_no: string | null; hire_order_date: string | null; emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null;
+  hire_order_no: string | null; hire_order_date: string | null; emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; marital_status: string | null;
 };
+type HrFamily = { id: number; hr_employee_id: number; relation: string; last_name: string | null; first_name: string; patronymic: string | null; birth_date: string | null; workplace: string | null; phone: string | null };
+type HrEducation = { id: number; hr_employee_id: number; level: string; institution: string; specialty: string | null; start_year: number | null; end_year: number | null; diploma_no: string | null; diploma_key: string | null; diploma_name: string | null };
 type HrPriorJob = { id: number; hr_employee_id: number; customer_id: number; customer_name: string | null; customer_voen: string | null; position: string; start_date: string; end_date: string };
 type HrCustomer = { id: number; voen: string | null; name: string; country: string | null };
 type HrLeave = { id: number; hr_employee_id: number; kind: string; start_date: string; end_date: string; days: number; order_no: string | null; order_date: string | null; note: string | null };
@@ -33,10 +35,10 @@ type HrSalary = { hr_employee_id: number; period: string; amount: number };
 type HrData = {
   employees: HrEmployee[]; leaves: HrLeave[]; salaries: HrSalary[]; calendar: CalendarDay[]; params: HrParams;
   companies: { id: number; name: string }[]; users: { id: number; name: string }[]; structure: { company_id: number; department: string; title: string }[];
-  priorJobs: HrPriorJob[]; customers: HrCustomer[];
+  priorJobs: HrPriorJob[]; customers: HrCustomer[]; family: HrFamily[]; education: HrEducation[];
 };
 type Call = (method: "POST" | "DELETE", payload: Record<string, unknown> | string) => Promise<HrData & { savedId?: number; customerId?: number }>;
-export type HrSection = "personnel" | "calendar" | "settings";
+export type HrSection = "personnel" | "calendar" | "settings" | "customers";
 
 const fullName = (e: HrEmployee) => [e.last_name, e.first_name, e.patronymic].filter(Boolean).join(" ");
 const days = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(2));
@@ -84,6 +86,7 @@ export function HrPage({ section }: { section: HrSection }) {
   if (!data) return <section className="panel pagepanel directorypanel"><div className="loading">HR məlumatları yüklənir...</div></section>;
   if (section === "calendar") return <CalendarSection data={data} call={call} />;
   if (section === "settings") return <SettingsSection data={data} call={call} />;
+  if (section === "customers") return <CustomerReportSection data={data} />;
   return <PersonnelSection data={data} call={call} />;
 }
 
@@ -138,17 +141,18 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
   </section>;
 }
 
-type Tab = "card" | "leaves" | "salary" | "settlement";
+type Tab = "card" | "family" | "leaves" | "salary" | "settlement";
 function EmployeeDialog({ employee, data, call, onSaved, onClose }: { employee: HrEmployee | null; data: HrData; call: Call; onSaved: (id: number) => void; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("card");
   return <>
     <DialogHeader className="businessdialogheader"><span className="formeyebrow">KADR UÇOTU</span><DialogTitle className="hrdialogtitle">{employee && <HrAvatar employee={employee} size={40} />}{employee ? fullName(employee) : "Yeni işçi"}</DialogTitle>
       <DialogDescription>{employee ? [employee.position, employee.company_name, `işə qəbul ${formatDay(employee.hire_date)}`].filter(Boolean).join(" · ") : "Şəxsiyyət vəsiqəsi, iş yeri və məzuniyyət məlumatlarını daxil edin. Bu işçi sistemə giriş almır."}</DialogDescription></DialogHeader>
     {employee && <div className="fixedsubtabs hrtabs">
-      {([["card", "Şəxsi kart"], ["leaves", "Məzuniyyətlər"], ["salary", "Əmək haqqı"], ["settlement", "Son hesablaşma"]] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>)}
+      {([["card", "Şəxsi kart"], ["family", "Ailə və təhsil"], ["leaves", "Məzuniyyətlər"], ["salary", "Əmək haqqı"], ["settlement", "Son hesablaşma"]] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>)}
     </div>}
     <div className="hrdialogbody">
       {tab === "card" && <CardTab employee={employee} data={data} call={call} onSaved={onSaved} onClose={onClose} />}
+      {employee && tab === "family" && <FamilyTab employee={employee} data={data} call={call} />}
       {employee && tab === "leaves" && <LeavesTab employee={employee} data={data} call={call} />}
       {employee && tab === "salary" && <SalaryTab employee={employee} data={data} call={call} />}
       {employee && tab === "settlement" && <SettlementTab employee={employee} data={data} call={call} />}
@@ -373,6 +377,133 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
     {error && <div className="errorbox">{error}</div>}
     <div className="hractions">{employee && <button className="deletetaskbtn" disabled={busy} onClick={() => void remove()}>Kartı sil</button>}{!form.phone.trim() && <small className="hrwarn">Telefon nömrəsi məcburidir</small>}<Button disabled={busy || !canSave} onClick={() => void save()}>{busy ? "Saxlanılır..." : employee ? "Dəyişiklikləri saxla" : "İşçini əlavə et"}</Button></div>
   </div>;
+}
+
+// ---------------------------------------------------------------- Ailə və təhsil
+const ageOn = (birth: string | null, today: string) => {
+  if (!birth || !isIsoDate(birth)) return null;
+  let age = Number(today.slice(0, 4)) - Number(birth.slice(0, 4));
+  if (today.slice(5) < birth.slice(5)) age -= 1;
+  return age;
+};
+const emptyFamily = (): Record<string, string> => ({ id: "", relation: "Oğlu", lastName: "", firstName: "", patronymic: "", birthDate: "", workplace: "", phone: "" });
+const emptyEducation = (): Record<string, string> => ({ id: "", level: "Bakalavr", institution: "", specialty: "", startYear: "", endYear: "", diplomaNo: "", diplomaKey: "", diplomaName: "" });
+function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrData; call: Call }) {
+  const today = todayIso();
+  const [family, setFamily] = useState(emptyFamily);
+  const [education, setEducation] = useState(emptyEducation);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const members = data.family.filter((f) => f.hr_employee_id === employee.id);
+  const schools = data.education.filter((e) => e.hr_employee_id === employee.id);
+  const under14 = members.filter((m) => (m.relation === "Oğlu" || m.relation === "Qızı") && (ageOn(m.birth_date, today) ?? 99) < 14).length;
+  const run = async (key: string, work: () => Promise<unknown>) => {
+    setBusy(key); setError("");
+    try { await work(); return true; } catch (e) { setError(e instanceof Error ? e.message : "Saxlanmadı."); return false; } finally { setBusy(""); }
+  };
+  const saveFamily = async () => { if (await run("family", () => call("POST", { action: "family", hrEmployeeId: employee.id, ...family }))) setFamily(emptyFamily()); };
+  const saveEducation = async () => { if (await run("education", () => call("POST", { action: "education", hrEmployeeId: employee.id, ...education }))) setEducation(emptyEducation()); };
+  const removeFamily = (m: HrFamily) => { if (window.confirm(`${m.relation} — ${m.first_name} qeydini silmək istəyirsiniz?`)) void run("family", () => call("DELETE", `type=family&id=${m.id}`)); };
+  const removeEducation = (e: HrEducation) => { if (window.confirm(`${e.institution} qeydini silmək istəyirsiniz?`)) void run("education", () => call("DELETE", `type=education&id=${e.id}`)); };
+  const uploadDiploma = (file: File | undefined) => {
+    if (!file) return;
+    void run("diploma", async () => {
+      if (file.size > 10 * 1024 * 1024) throw new Error("Diplom faylının həcmi 10 MB-dan çox ola bilməz.");
+      const body = new FormData(); body.append("file", file);
+      const response = await fetch("/api/file", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Fayl yüklənmədi.");
+      setEducation((f) => ({ ...f, diplomaKey: result.key, diplomaName: result.name }));
+    });
+  };
+  const fam = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFamily((f) => ({ ...f, [key]: e.target.value }));
+  const edu = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setEducation((f) => ({ ...f, [key]: e.target.value }));
+  const yearProps = (key: string) => ({ inputMode: "numeric" as const, placeholder: "il", value: education[key], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setEducation((f) => ({ ...f, [key]: e.target.value.replace(/\D/g, "").slice(0, 4) })) });
+  return <div className="hrtab">
+    <div className="hrgrid hrfamilytop">
+      <label className="field">Ailə vəziyyəti<select value={employee.marital_status || ""} disabled={busy === "marital"} onChange={(e) => void run("marital", () => call("POST", { action: "marital", hrEmployeeId: employee.id, maritalStatus: e.target.value }))}><option value="">—</option>{MARITAL_STATUSES.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+      {under14 > 0 && <small className="hrhint hrwarn hrwide">14 yaşadək {under14} uşaq. Bu, əlavə məzuniyyət günlərinə əsas ola bilər (qanuni şərtləri mühasiblə yoxlayın) — “Şəxsi kart” → “Digər əlavə günlər”.</small>}
+    </div>
+    <h4>{family.id ? "Ailə üzvünü redaktə et" : "Ailə üzvləri"}</h4>
+    <div className="hrgrid">
+      <label className="field">Qohumluq *<select value={family.relation} onChange={fam("relation")}>{FAMILY_RELATIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select></label>
+      <label className="field">Soyadı<Input value={family.lastName} onChange={fam("lastName")} /></label>
+      <label className="field">Adı *<Input value={family.firstName} onChange={fam("firstName")} /></label>
+      <label className="field">Ata adı<Input value={family.patronymic} onChange={fam("patronymic")} /></label>
+      <label className="field">Doğum tarixi<Input type="date" value={family.birthDate} onChange={fam("birthDate")} /></label>
+      <label className="field">İş və ya təhsil yeri<Input value={family.workplace} onChange={fam("workplace")} /></label>
+      <label className="field">Telefon<Input inputMode="tel" placeholder="+994 50 123 45 67" value={family.phone} onChange={fam("phone")} /></label>
+    </div>
+    <div className="hractions">{family.id && <button className="inlinecancel" onClick={() => setFamily(emptyFamily())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !family.firstName.trim()} onClick={() => void saveFamily()}>{busy === "family" ? "Saxlanılır..." : family.id ? "Yadda saxla" : "Ailə üzvünü əlavə et"}</Button></div>
+    {members.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Qohumluq</th><th>Soyadı, adı, ata adı</th><th>Doğum tarixi</th><th>Yaşı</th><th>İş / təhsil yeri</th><th>Telefon</th><th></th></tr></thead><tbody>
+      {members.map((m) => <tr key={m.id}><td>{m.relation}</td><td>{[m.last_name, m.first_name, m.patronymic].filter(Boolean).join(" ")}</td><td>{m.birth_date ? formatDay(m.birth_date) : "—"}</td><td>{ageOn(m.birth_date, today) ?? "—"}</td><td>{m.workplace || "—"}</td><td>{m.phone || "—"}</td>
+        <td><div className="tableactions"><button className="editcompanybtn" onClick={() => setFamily({ id: String(m.id), relation: m.relation, lastName: m.last_name || "", firstName: m.first_name, patronymic: m.patronymic || "", birthDate: m.birth_date || "", workplace: m.workplace || "", phone: m.phone || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeFamily(m)}>Sil</button></div></td></tr>)}
+    </tbody></table></div>}
+    <h4>{education.id ? "Təhsil qeydini redaktə et" : "Təhsil"}</h4>
+    <div className="hrgrid">
+      <label className="field">Səviyyə *<select value={education.level} onChange={edu("level")}>{EDUCATION_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
+      <label className="field hrwide">Təhsil müəssisəsi *<Input value={education.institution} onChange={edu("institution")} /></label>
+      <label className="field">İxtisas<Input value={education.specialty} onChange={edu("specialty")} /></label>
+      <label className="field">Təhsil illəri<span className="hrpair"><Input {...yearProps("startYear")} placeholder="başlama" /><Input {...yearProps("endYear")} placeholder="bitmə" /></span></label>
+      <label className="field">Diplomun nömrəsi<Input value={education.diplomaNo} onChange={edu("diplomaNo")} /></label>
+      <label className="field">Diplom (skan)<span className="hrscan"><Input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => uploadDiploma(e.target.files?.[0])} />
+        {busy === "diploma" ? <small>Yüklənir...</small> : education.diplomaKey ? <small><a href={`/api/file?key=${encodeURIComponent(education.diplomaKey)}`} target="_blank" rel="noreferrer">{education.diplomaName || "Bax"}</a> · <button type="button" className="hrlink" onClick={() => setEducation((f) => ({ ...f, diplomaKey: "", diplomaName: "" }))}>götür</button></small> : null}</span></label>
+    </div>
+    <div className="hractions">{education.id && <button className="inlinecancel" onClick={() => setEducation(emptyEducation())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !education.institution.trim()} onClick={() => void saveEducation()}>{busy === "education" ? "Saxlanılır..." : education.id ? "Yadda saxla" : "Təhsil qeydini əlavə et"}</Button></div>
+    {schools.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Səviyyə</th><th>Müəssisə</th><th>İxtisas</th><th>İllər</th><th>Diplom</th><th></th></tr></thead><tbody>
+      {schools.map((e) => <tr key={e.id}><td>{e.level}</td><td>{e.institution}</td><td>{e.specialty || "—"}</td><td>{e.start_year || e.end_year ? `${e.start_year || "…"} – ${e.end_year || "…"}` : "—"}</td>
+        <td>{e.diploma_no ? `№ ${e.diploma_no}` : ""}{e.diploma_key ? <>{e.diploma_no ? " · " : ""}<a href={`/api/file?key=${encodeURIComponent(e.diploma_key)}`} target="_blank" rel="noreferrer">skan</a></> : ""}{!e.diploma_no && !e.diploma_key ? "—" : ""}</td>
+        <td><div className="tableactions"><button className="editcompanybtn" onClick={() => setEducation({ id: String(e.id), level: e.level, institution: e.institution, specialty: e.specialty || "", startYear: e.start_year ? String(e.start_year) : "", endYear: e.end_year ? String(e.end_year) : "", diplomaNo: e.diploma_no || "", diplomaKey: e.diploma_key || "", diplomaName: e.diploma_name || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeEducation(e)}>Sil</button></div></td></tr>)}
+    </tbody></table></div>}
+    {error && <div className="errorbox">{error}</div>}
+  </div>;
+}
+
+// ---------------------------------------------------------------- Müştərilər üzrə hesabat
+type CustomerReportRow = { customer_id: number; hr_employee_id: number; last_name: string; first_name: string; patronymic: string | null; prior_position: string; start_date: string; end_date: string; current_position: string | null; company_name: string | null; termination_date: string | null };
+const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+function CustomerReportSection({ data }: { data: HrData }) {
+  const [rows, setRows] = useState<CustomerReportRow[] | null>(null);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [onlyActive, setOnlyActive] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/hr?report=customers").then(async (r) => { const body = await r.json(); if (!r.ok) throw new Error(body.error); if (!cancelled) setRows(body.rows || []); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Hesabat açılmadı."); });
+    return () => { cancelled = true; };
+  }, []);
+  const customers = useMemo(() => new Map(data.customers.map((c) => [c.id, c])), [data.customers]);
+  const person = (r: CustomerReportRow) => [r.last_name, r.first_name, r.patronymic].filter(Boolean).join(" ");
+  const q = query.trim().toLocaleLowerCase("az");
+  const groups = [...(rows || []).filter((r) => !onlyActive || !r.termination_date).reduce((map, r) => map.set(r.customer_id, [...(map.get(r.customer_id) || []), r]), new Map<number, CustomerReportRow[]>()).entries()]
+    .map(([id, list]) => ({ customer: customers.get(id), id, list }))
+    .filter((g) => !q || `${g.customer?.name || ""} ${g.customer?.voen || ""} ${g.list.map(person).join(" ")}`.toLocaleLowerCase("az").includes(q))
+    .sort((a, b) => b.list.length - a.list.length || (a.customer?.name || "").localeCompare(b.customer?.name || "", "az"));
+  const now = (r: CustomerReportRow) => r.termination_date ? `İşdən çıxıb (${formatDay(r.termination_date)})` : [r.company_name, r.current_position].filter(Boolean).join(" · ") || "—";
+  const exportCsv = () => {
+    const header = ["Müştəri", "VÖEN", "İşçi", "Oradakı vəzifəsi", "Başlama", "Bitmə", "Staj", "İndi bizdə"];
+    const lines = groups.flatMap((g) => g.list.map((r) => [g.customer?.name || `#${g.id}`, g.customer?.voen || "", person(r), r.prior_position, formatDay(r.start_date), formatDay(r.end_date), serviceText(serviceParts(r.start_date, r.end_date)), now(r)]));
+    const csv = "\uFEFF" + [header, ...lines].map((line) => line.map(csvCell).join(";")).join("\r\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    link.download = `musteriler-uzre-hesabat-${todayIso()}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+  const people = new Set(groups.flatMap((g) => g.list.map((r) => r.hr_employee_id))).size;
+  return <section className="panel pagepanel directorypanel">
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Müştərilər üzrə hesabat</h2><p>Müştərilərdə əvvəllər işləmiş əməkdaşlarımız · {groups.length} müştəri, {people} işçi</p></div><Button disabled={!groups.length} onClick={exportCsv}>Excel-ə yüklə (CSV)</Button></div>
+    <div className="hrfilters">
+      <label className="hrsearch">Axtarış<Input value={query} placeholder="Müştəri, VÖEN və ya işçi..." onChange={(e) => setQuery(e.target.value)} /></label>
+      <label className="hrcheck"><input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />Yalnız hazırda işləyənlər</label>
+    </div>
+    {error ? <div className="errorbox">{error}</div> : !rows ? <div className="loading">Yüklənir...</div> : !groups.length ? <div className="empty"><p>{rows.length ? "Filtrə uyğun nəticə tapılmadı." : "Hələ heç bir işçinin kartında əvvəlki iş yeri qeyd olunmayıb."}</p></div>
+      : <div className="tasktablewrap"><table className="tasktable hrtable"><thead><tr><th>İşçi</th><th>Oradakı vəzifəsi</th><th>Dövr</th><th>Staj</th><th>İndi bizdə</th></tr></thead>
+        {groups.map((g) => <tbody key={g.id}><tr className="hrreportgroup"><td colSpan={5}><b>{g.customer?.name || `Müştəri #${g.id}`}</b>{g.customer?.voen && <small> · VÖEN {g.customer.voen}</small>}<em>{g.list.length} işçi</em></td></tr>
+          {g.list.map((r, i) => <tr key={`${r.hr_employee_id}-${i}`}><td>{person(r)}</td><td>{r.prior_position}</td><td>{formatDay(r.start_date)} – {formatDay(r.end_date)}</td><td>{serviceText(serviceParts(r.start_date, r.end_date))}</td><td className={r.termination_date ? "hrsub" : ""}>{now(r)}</td></tr>)}
+        </tbody>)}</table></div>}
+  </section>;
 }
 
 const emptyLeave = (): Record<string, string> => ({ id: "", kind: "annual", startDate: "", endDate: "", days: "", orderNo: "", orderDate: "", note: "" });

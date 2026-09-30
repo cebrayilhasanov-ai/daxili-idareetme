@@ -32,6 +32,7 @@ type StructurePosition = { id:number; company_id:number; department:string; titl
 type ChatThread = { id:number; type:"group"|"direct"; name:string; avatar_key:string|null; last_message:string|null; last_message_at:string|null; unread:number };
 type ChatMessage = { id:number; thread_id:number; sender_user_id:number; sender_name:string; sender_avatar_key:string|null; body:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string };
 type ChatUser = { id:number; name:string; email:string; avatar_key:string|null };
+type FormerStaff = { customer_id:number; hr_employee_id:number; last_name:string; first_name:string; patronymic:string|null; prior_position:string; start_date:string; end_date:string; current_position:string|null; company_name:string|null; termination_date:string|null };
 type Customer = { id:number; entity_type:string|null; country:string|null; voen:string|null; name:string; legal_address:string|null; legal_address2:string|null; manager:string|null; created_at:string; usage_count?:number };
 type ChecklistItem = { id:number; task_id:number; title:string; done:number; created_at:string; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
 type StepRequest = { request_id?:number|null; request_status?:string|null; request_department?:string|null; request_reject_reason?:string|null; request_due_at?:string|null; request_agreed_due_at?:string|null; request_assignee_name?:string|null; request_answer?:string|null; request_answer_key?:string|null; request_answer_name?:string|null; request_answer_size?:number|null };
@@ -170,7 +171,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.51</small></div></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.52</small></div></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>İstifadəçilər</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -183,7 +184,7 @@ export default function Home(){
         if(id==="documents")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setDocumentSubTab(firstDocumentTab||"templates");setPage("documents");setMenu(false)}} onDoubleClick={()=>setDocumentsMenuOpen(v=>!v)}><Icon/>{label}</button>{documentsMenuOpen&&<div className="navchildren">{canTemplates&&<button className={page==="documents"&&documentSubTab==="templates"?"on":""} onClick={()=>{setDocumentSubTab("templates");setPage("documents");setMenu(false)}}>Şablonlar</button>}{can("documents.outgoing")&&<button className={page==="documents"&&documentSubTab==="outgoing"?"on":""} onClick={()=>{setDocumentSubTab("outgoing");setPage("documents");setMenu(false)}}>Çıxan Sənədlər</button>}{can("documents.incoming")&&<button className={page==="documents"&&documentSubTab==="incoming"?"on":""} onClick={()=>{setDocumentSubTab("incoming");setPage("documents");setMenu(false)}}>Daxil Olan Sənədlər{!viewAs&&incomingPending>0&&<em>{incomingPending}</em>}</button>}</div>}</Fragment>;
         if(id==="hr"){
           const goHr=(tab:"violations"|HrSection)=>{setHrSubTab(tab);setPage("hr");setMenu(false)};
-          return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>goHr(firstHrTab||"violations")} onDoubleClick={()=>setHrMenuOpen(v=>!v)}><Icon/>{label}</button>{hrMenuOpen&&<div className="navchildren">{can("hr.violations")&&<button className={page==="hr"&&hrSubTab==="violations"?"on":""} onClick={()=>goHr("violations")}>Noqsanlar</button>}{can("hr.personnel")&&<><button className={page==="hr"&&hrSubTab==="personnel"?"on":""} onClick={()=>goHr("personnel")}>Personallar</button><button className={page==="hr"&&hrSubTab==="calendar"?"on":""} onClick={()=>goHr("calendar")}>İstehsalat təqvimi</button><button className={page==="hr"&&hrSubTab==="settings"?"on":""} onClick={()=>goHr("settings")}>Hesablama parametrləri</button></>}</div>}</Fragment>;
+          return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>goHr(firstHrTab||"violations")} onDoubleClick={()=>setHrMenuOpen(v=>!v)}><Icon/>{label}</button>{hrMenuOpen&&<div className="navchildren">{can("hr.violations")&&<button className={page==="hr"&&hrSubTab==="violations"?"on":""} onClick={()=>goHr("violations")}>Noqsanlar</button>}{can("hr.personnel")&&<><button className={page==="hr"&&hrSubTab==="personnel"?"on":""} onClick={()=>goHr("personnel")}>Personallar</button><button className={page==="hr"&&hrSubTab==="customers"?"on":""} onClick={()=>goHr("customers")}>Müştərilər üzrə hesabat</button><button className={page==="hr"&&hrSubTab==="calendar"?"on":""} onClick={()=>goHr("calendar")}>İstehsalat təqvimi</button><button className={page==="hr"&&hrSubTab==="settings"?"on":""} onClick={()=>goHr("settings")}>Hesablama parametrləri</button></>}</div>}</Fragment>;
         }
         return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}{id==="chat"&&chatUnread>0&&<em>{chatUnread}</em>}</button></Fragment>;
       })}</nav>
@@ -206,7 +207,7 @@ export default function Home(){
         {pageAllowed&&page==="chat"&&<ChatPage currentUser={user} onUnread={setChatUnread}/>}
         {page==="employees"&&<EmployeesPage employees={data.employees} companies={data.companies} tasks={data.tasks} onNew={()=>{setEmployeePhoto(null);open("employee")}} onEdit={e=>{setEmployeePhoto(null);open("employee",{id:String(e.id),name:e.name,email:e.email||"",companyIds:e.company_ids||"",companyPositions:companyPositionsForm(e.company_positions),mainCompanyId:e.main_company_id?String(e.main_company_id):"",hiddenSections:e.hidden_sections||"[]"})}} onView={e=>{setViewAs(e);setPage("dashboard")}} onToggle={e=>void request("PATCH",{action:"employee",id:e.id,active:!Boolean(e.active)})} onDelete={e=>void deleteWorker(e)}/>}
         {page==="companies"&&<CompaniesPage companies={data.companies} tasks={data.tasks} onNew={()=>open("company")} onEdit={c=>open("company",{id:String(c.id),name:c.name,voen:c.voen||"",manager:c.manager||""})} onToggle={c=>void request("PATCH",{action:"company",id:c.id,active:!Boolean(c.active)})}/>}
-        {pageAllowed&&page==="customers"&&<CustomersPage isAdmin={isAdmin}/>}
+        {pageAllowed&&page==="customers"&&<CustomersPage isAdmin={isAdmin} canSeePersonnel={can("hr.personnel")}/>}
         {page==="audit"&&<AuditPage/>}
         {pageAllowed&&page==="documents"&&<>
         {documentSubTab==="templates"&&canTemplates&&<DocumentsPage isAdmin={isAdmin}/>}
@@ -929,7 +930,21 @@ const customerColumns:Array<{key:string;label:string;width:number;search:(item:C
   {key:"manager",label:"Rəhbər",width:160,search:i=>i.manager||"",render:i=><>{i.manager||"—"}</>},
 ];
 // Open to every user (the companies are all in one group): everyone can view and add customers; editing and deleting stay admin-only.
-function CustomersPage({isAdmin}:{isAdmin:boolean}){
+function CustomersPage({isAdmin,canSeePersonnel=false}:{isAdmin:boolean;canSeePersonnel?:boolean}){
+  // Which of our people worked at each customer (HR prior jobs) — only for users who may see personnel data.
+  const [formerStaff,setFormerStaff]=useState<Map<number,FormerStaff[]>|null>(null);
+  const [formerOpen,setFormerOpen]=useState<number|null>(null);
+  useEffect(()=>{
+    if(!canSeePersonnel)return;
+    let cancelled=false;
+    fetch("/api/hr?report=customers").then(r=>r.ok?r.json():{rows:[]}).then((body:{rows?:FormerStaff[]})=>{
+      if(cancelled)return;
+      const map=new Map<number,FormerStaff[]>();
+      (body.rows||[]).forEach(row=>map.set(row.customer_id,[...(map.get(row.customer_id)||[]),row]));
+      setFormerStaff(map);
+    }).catch(()=>{});
+    return()=>{cancelled=true};
+  },[canSeePersonnel]);
   const {order,widths,setWidth,moveColumn}=useTableColumns("customers2",customerColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
@@ -1022,11 +1037,16 @@ function CustomersPage({isAdmin}:{isAdmin:boolean}){
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştəri siyahısı</h2><p>{filtered.length} müştəri göstərilir</p></div><Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button></div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">{fields(form,setForm)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!requiredFilled(form)} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
-      <td data-label="Əməliyyat">{isAdmin&&<div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>{!item.usage_count&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}</div>}</td>
-    </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
+      <td data-label="Əməliyyat"><div className="tableactions">{isAdmin&&<><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>{!item.usage_count&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}</>}{(formerStaff?.get(item.id)?.length||0)>0&&<button className={`formerbtn${formerOpen===item.id?" on":""}`} onClick={()=>setFormerOpen(v=>v===item.id?null:item.id)}>Keçmiş əməkdaşlar ({formerStaff?.get(item.id)?.length})</button>}</div></td>
+    </tr>{formerOpen===item.id&&<tr className="formerrow"><td colSpan={order.length+1}><FormerStaffList rows={formerStaff?.get(item.id)||[]}/></td></tr>}</Fragment>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
   </section>;
+}
+function FormerStaffList({rows}:{rows:FormerStaff[]}){
+  return <div className="formerlist"><b>Bu müştəridə işləmiş əməkdaşlarımız</b><table><thead><tr><th>İşçi</th><th>Oradakı vəzifəsi</th><th>Dövr</th><th>İndi bizdə</th></tr></thead><tbody>
+    {rows.map((r,i)=><tr key={`${r.hr_employee_id}-${i}`}><td>{[r.last_name,r.first_name,r.patronymic].filter(Boolean).join(" ")}</td><td>{r.prior_position}</td><td>{formatDateOnly(r.start_date)} – {formatDateOnly(r.end_date)}</td><td>{r.termination_date?<span className="formergone">İşdən çıxıb ({formatDateOnly(r.termination_date)})</span>:[r.company_name,r.current_position].filter(Boolean).join(" · ")||"—"}</td></tr>)}
+  </tbody></table></div>;
 }
 function AuditPage(){
   const [items,setItems]=useState<AuditItem[]>([]);

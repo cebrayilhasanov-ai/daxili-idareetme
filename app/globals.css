@@ -668,3 +668,9 @@ nav button>em+.navcaret{margin-left:6px}
 .hrjobtotal{font-size:12px;color:#334155}.hrjobtotal b{color:#0b6b7b}
 @media(max-width:900px){.hrjobfields{grid-template-columns:1fr 1fr}.hrjobplace{grid-column:1/-1}}
 @media(max-width:600px){.hrpersonal{flex-direction:column;align-items:center}.hrpersonal>.hrgrid{width:100%}.hrjobfields{grid-template-columns:1fr}}
+.formerbtn{border:1px solid #bfe3e8;background:#f0fafb;color:#0b6b7b;font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;cursor:pointer;white-space:nowrap}.formerbtn.on{background:#0C8599;border-color:#0C8599;color:#fff}
+.formerrow>td{background:#f7fbfc!important;padding:10px 14px!important}
+.formerlist{display:grid;gap:6px}.formerlist>b{font-size:11px;color:#0b6b7b}.formerlist table{width:100%;border-collapse:collapse;font-size:11px}.formerlist th{text-align:left;font-size:10px;color:#64748b;font-weight:700;padding:4px 8px;border-bottom:1px solid #dbe5f0}.formerlist td{padding:5px 8px;border-bottom:1px solid #eef2f7}
+.formergone{color:#94a3b8}
+.hrfamilytop{align-items:center}
+.hrreportgroup td{background:#f0f7f9!important;font-size:12px!important}.hrreportgroup small{color:#64748b}.hrreportgroup em{float:right;font-style:normal;font-weight:700;color:#0b6b7b;font-size:11px}
