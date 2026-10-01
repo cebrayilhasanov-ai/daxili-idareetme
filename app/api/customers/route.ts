@@ -1,6 +1,6 @@
 import { createCustomer, deleteCustomer, getCustomers, updateCustomer } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
-import { requireSection } from "@/lib/permissions";
+import { requireAction, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 function authError(error: unknown) {
@@ -19,8 +19,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    // Any signed-in user may add a customer; editing and deleting remain admin-only.
-    const user = await requireSection(await requireUser(request), "dashboard.customers");
+    // Rights (Versiya 2.62): adding is open by default, editing and deleting only when the admin grants them.
+    const user = await requireAction(await requireUser(request), "dashboard.customers", "add");
     const body = await request.json();
     await createCustomer(body);
     await logAudit(user, "Müştəri yaradıldı", "customer", body.name);
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser(request, "admin");
+    const user = await requireAction(await requireUser(request), "dashboard.customers", "edit");
     const body = await request.json();
     await updateCustomer({ ...body, id: Number(body.id) });
     await logAudit(user, "Müştəri yeniləndi", "customer", body.name || `#${body.id}`);
@@ -40,7 +40,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireUser(request, "admin");
+    const user = await requireAction(await requireUser(request), "dashboard.customers", "delete");
     const id = Number(new URL(request.url).searchParams.get("id"));
     await deleteCustomer(id);
     await logAudit(user, "Müştəri silindi", "customer", `#${id}`);

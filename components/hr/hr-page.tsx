@@ -37,7 +37,10 @@ type HrData = {
   employees: HrEmployee[]; leaves: HrLeave[]; salaries: HrSalary[]; calendar: CalendarDay[]; params: HrParams;
   companies: { id: number; name: string }[]; users: { id: number; name: string }[]; structure: { company_id: number; department: string; title: string }[];
   priorJobs: HrPriorJob[]; customers: HrCustomer[]; family: HrFamily[]; education: HrEducation[];
+  // The viewer's rights in Personallar (Versiya 2.62), sent with every answer of /api/hr.
+  rights?: { add: boolean; edit: boolean; delete: boolean };
 };
+const rightsOf = (data: HrData) => data.rights ?? { add: true, edit: true, delete: true };
 type Call = (method: "POST" | "DELETE", payload: Record<string, unknown> | string) => Promise<HrData & { savedId?: number; customerId?: number }>;
 export type HrSection = "personnel" | "calendar" | "settings" | "customers";
 
@@ -251,7 +254,7 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
     try { await work(); } catch (e) { setExportError(e instanceof Error ? e.message : "Fayl hazırlanmadı."); } finally { setExporting(""); }
   };
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Personallar</h2><p>{excel.rows.length} işçi göstərilir · qalıqlar {formatDay(today)} tarixinə</p></div><div className="hrheadactions"><Button variant="outline" disabled={!excel.rows.length || Boolean(exporting)} onClick={() => void runExport("list", () => downloadPersonnelList(excel.rows, data, today))}><Download />{exporting === "list" ? "Hazırlanır..." : "Siyahını XLS endir"}</Button><Button onClick={() => setOpenId("new")}><Plus />Yeni işçi</Button></div></div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Personallar</h2><p>{excel.rows.length} işçi göstərilir · qalıqlar {formatDay(today)} tarixinə</p></div><div className="hrheadactions"><Button variant="outline" disabled={!excel.rows.length || Boolean(exporting)} onClick={() => void runExport("list", () => downloadPersonnelList(excel.rows, data, today))}><Download />{exporting === "list" ? "Hazırlanır..." : "Siyahını XLS endir"}</Button>{rightsOf(data).add && <Button onClick={() => setOpenId("new")}><Plus />Yeni işçi</Button>}</div></div>
     {exportError && <div className="errorbox">{exportError}</div>}
     {idAlerts.length > 0 && <button className="hralert" onClick={() => setStatus("idalert")}>⚠ {idAlerts.length} işçinin şəxsiyyət vəsiqəsinin müddəti bitib və ya 30 gün ərzində bitir — göstər</button>}
     {contractAlerts.length > 0 && <button className="hralert" onClick={() => setStatus("contractalert")}>⚠ {contractAlerts.length} işçinin müddətli əmək müqaviləsinin müddəti bitib və ya 30 gün ərzində bitir — göstər</button>}
@@ -518,7 +521,7 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
     </fieldset>}
     <label className="field">Qeyd<Input value={form.note} onChange={(e) => set("note")(e.target.value)} /></label>
     {error && <div className="errorbox">{error}</div>}
-    <div className="hractions">{employee && <button className="deletetaskbtn" disabled={busy} onClick={() => void remove()}>Kartı sil</button>}{!form.phone.trim() && <small className="hrwarn">Telefon nömrəsi məcburidir</small>}<Button disabled={busy || !canSave} onClick={() => void save()}>{busy ? "Saxlanılır..." : employee ? "Dəyişiklikləri saxla" : "İşçini əlavə et"}</Button></div>
+    <div className="hractions">{employee && rightsOf(data).delete && <button className="deletetaskbtn" disabled={busy} onClick={() => void remove()}>Kartı sil</button>}{(employee ? rightsOf(data).edit : rightsOf(data).add) ? <>{!form.phone.trim() && <small className="hrwarn">Telefon nömrəsi məcburidir</small>}<Button disabled={busy || !canSave} onClick={() => void save()}>{busy ? "Saxlanılır..." : employee ? "Dəyişiklikləri saxla" : "İşçini əlavə et"}</Button></> : <small className="hrhint">Kartı dəyişmək icazəniz yoxdur — yalnız baxış.</small>}</div>
   </div>;
 }
 
@@ -577,10 +580,10 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <label className="field">İş və ya təhsil yeri<Input value={family.workplace} onChange={fam("workplace")} /></label>
       <label className="field">Telefon<Input inputMode="tel" placeholder="+994 50 123 45 67" value={family.phone} onChange={fam("phone")} /></label>
     </div>
-    <div className="hractions">{family.id && <button className="inlinecancel" onClick={() => setFamily(emptyFamily())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !family.firstName.trim()} onClick={() => void saveFamily()}>{busy === "family" ? "Saxlanılır..." : family.id ? "Yadda saxla" : "Ailə üzvünü əlavə et"}</Button></div>
+    {rightsOf(data).edit && <div className="hractions">{family.id && <button className="inlinecancel" onClick={() => setFamily(emptyFamily())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !family.firstName.trim()} onClick={() => void saveFamily()}>{busy === "family" ? "Saxlanılır..." : family.id ? "Yadda saxla" : "Ailə üzvünü əlavə et"}</Button></div>}
     {members.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Qohumluq</th><th>Soyadı, adı, ata adı</th><th>Doğum tarixi</th><th>Yaşı</th><th>İş / təhsil yeri</th><th>Telefon</th><th></th></tr></thead><tbody>
       {members.map((m) => <tr key={m.id}><td>{m.relation}</td><td>{[m.last_name, m.first_name, m.patronymic].filter(Boolean).join(" ")}</td><td>{m.birth_date ? formatDay(m.birth_date) : "—"}</td><td>{ageOn(m.birth_date, today) ?? "—"}</td><td>{m.workplace || "—"}</td><td>{m.phone || "—"}</td>
-        <td><div className="tableactions"><button className="editcompanybtn" onClick={() => setFamily({ id: String(m.id), relation: m.relation, lastName: m.last_name || "", firstName: m.first_name, patronymic: m.patronymic || "", birthDate: m.birth_date || "", workplace: m.workplace || "", phone: m.phone || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeFamily(m)}>Sil</button></div></td></tr>)}
+        <td>{rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setFamily({ id: String(m.id), relation: m.relation, lastName: m.last_name || "", firstName: m.first_name, patronymic: m.patronymic || "", birthDate: m.birth_date || "", workplace: m.workplace || "", phone: m.phone || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeFamily(m)}>Sil</button></div>}</td></tr>)}
     </tbody></table></div>}
     <h4>{education.id ? "Təhsil qeydini redaktə et" : "Təhsil"}</h4>
     <div className="hrgrid">
@@ -592,11 +595,11 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <label className="field">Diplom (skan)<span className="hrscan"><Input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => uploadDiploma(e.target.files?.[0])} />
         {busy === "diploma" ? <small>Yüklənir...</small> : education.diplomaKey ? <small><a href={`/api/file?key=${encodeURIComponent(education.diplomaKey)}`} target="_blank" rel="noreferrer">{education.diplomaName || "Bax"}</a> · <button type="button" className="hrlink" onClick={() => setEducation((f) => ({ ...f, diplomaKey: "", diplomaName: "" }))}>götür</button></small> : null}</span></label>
     </div>
-    <div className="hractions">{education.id && <button className="inlinecancel" onClick={() => setEducation(emptyEducation())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !education.institution.trim()} onClick={() => void saveEducation()}>{busy === "education" ? "Saxlanılır..." : education.id ? "Yadda saxla" : "Təhsil qeydini əlavə et"}</Button></div>
+    {rightsOf(data).edit && <div className="hractions">{education.id && <button className="inlinecancel" onClick={() => setEducation(emptyEducation())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !education.institution.trim()} onClick={() => void saveEducation()}>{busy === "education" ? "Saxlanılır..." : education.id ? "Yadda saxla" : "Təhsil qeydini əlavə et"}</Button></div>}
     {schools.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Səviyyə</th><th>Müəssisə</th><th>İxtisas</th><th>İllər</th><th>Diplom</th><th></th></tr></thead><tbody>
       {schools.map((e) => <tr key={e.id}><td>{e.level}</td><td>{e.institution}</td><td>{e.specialty || "—"}</td><td>{e.start_year || e.end_year ? `${e.start_year || "…"} – ${e.end_year || "…"}` : "—"}</td>
         <td>{e.diploma_no ? `№ ${e.diploma_no}` : ""}{e.diploma_key ? <>{e.diploma_no ? " · " : ""}<a href={`/api/file?key=${encodeURIComponent(e.diploma_key)}`} target="_blank" rel="noreferrer">skan</a></> : ""}{!e.diploma_no && !e.diploma_key ? "—" : ""}</td>
-        <td><div className="tableactions"><button className="editcompanybtn" onClick={() => setEducation({ id: String(e.id), level: e.level, institution: e.institution, specialty: e.specialty || "", startYear: e.start_year ? String(e.start_year) : "", endYear: e.end_year ? String(e.end_year) : "", diplomaNo: e.diploma_no || "", diplomaKey: e.diploma_key || "", diplomaName: e.diploma_name || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeEducation(e)}>Sil</button></div></td></tr>)}
+        <td>{rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setEducation({ id: String(e.id), level: e.level, institution: e.institution, specialty: e.specialty || "", startYear: e.start_year ? String(e.start_year) : "", endYear: e.end_year ? String(e.end_year) : "", diplomaNo: e.diploma_no || "", diplomaKey: e.diploma_key || "", diplomaName: e.diploma_name || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeEducation(e)}>Sil</button></div>}</td></tr>)}
     </tbody></table></div>}
     {error && <div className="errorbox">{error}</div>}
   </div>;
@@ -691,11 +694,11 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
     {holidaysInside.length > 0 && <small className="hrhint">Bu dövrə düşən {holidaysInside.length} bayram günü hesablanmır: {holidaysInside.map((d) => `${formatDay(d.date)}${d.name ? ` (${d.name})` : ""}`).join(", ")}.</small>}
     {form.kind === "unpaid" && params.unpaidExtendsWorkYear && <small className="hrhint">Ödənişsiz məzuniyyət günləri iş ilini uzadır (parametrlərdə dəyişmək olar).</small>}
     {error && <div className="errorbox">{error}</div>}
-    <div className="hractions">{form.id && <button className="inlinecancel" onClick={() => setForm(emptyLeave())}>Ləğv et</button>}<Button disabled={busy || !form.startDate || !form.endDate} onClick={() => void save()}>{busy ? "Saxlanılır..." : form.id ? "Yadda saxla" : "Əlavə et"}</Button></div>
+    {rightsOf(data).edit && <div className="hractions">{form.id && <button className="inlinecancel" onClick={() => setForm(emptyLeave())}>Ləğv et</button>}<Button disabled={busy || !form.startDate || !form.endDate} onClick={() => void save()}>{busy ? "Saxlanılır..." : form.id ? "Yadda saxla" : "Əlavə et"}</Button></div>}
     <h4>Qeydə alınmış məzuniyyətlər</h4>
     <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Növ</th><th>Dövr</th><th>Gün</th><th>Əmr</th><th>Qeyd</th><th></th></tr></thead><tbody>
       {leaves.map((l) => <tr key={l.id}><td>{leaveKindLabel(l.kind)}</td><td>{formatDay(l.start_date)} – {formatDay(l.end_date)}</td><td>{days(Number(l.days))}</td><td>{l.order_no ? `№ ${l.order_no}` : "—"}{l.order_date && <small className="hrsub">{formatDay(l.order_date)}</small>}</td><td>{l.note || "—"}</td>
-        <td>{l.order_id ? <small className="hrsub">əmrlə</small> : <div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ id: String(l.id), kind: l.kind, startDate: l.start_date, endDate: l.end_date, days: String(l.days), orderNo: l.order_no || "", orderDate: l.order_date || "", note: l.note || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => void remove(l)}>Sil</button></div>}</td></tr>)}
+        <td>{l.order_id ? <small className="hrsub">əmrlə</small> : rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ id: String(l.id), kind: l.kind, startDate: l.start_date, endDate: l.end_date, days: String(l.days), orderNo: l.order_no || "", orderDate: l.order_date || "", note: l.note || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => void remove(l)}>Sil</button></div>}</td></tr>)}
     </tbody></table>{!leaves.length && <div className="empty"><p>Hələ məzuniyyət qeydə alınmayıb.</p></div>}</div>
     <h4>Qalığın hesablanması ({formatDay(balance.asOf)} tarixinə)</h4>
     <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Tarix</th><th>Əməliyyat</th><th>+ gün</th><th>− gün</th><th>Qalıq</th></tr></thead><tbody>
@@ -735,10 +738,10 @@ function SalaryTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <span><small>Son {params.avgMonths} ayın cəmi</small><b>{money(average.total)}</b></span>
     </div>
     <small className="hrhint">Hər ay üçün işçiyə hesablanmış əmək haqqını yazın (orta əmək haqqına daxil olan ödənişlər). Orta əmək haqqı {formatDay(reference)} tarixindən əvvəlki {params.avgMonths} ay üzrə hesablanır; məbləğ yazılmayan aylar nəzərə alınmır. Dəyişiklik xanadan çıxanda saxlanılır.</small>
-    <div className="hractions left"><Button variant="outline" disabled={busy || !employee.monthly_salary} onClick={() => void fill()}>Boş ayları vəzifə maaşı ilə doldur (son {params.avgMonths} ay)</Button></div>
+    {rightsOf(data).edit && <div className="hractions left"><Button variant="outline" disabled={busy || !employee.monthly_salary} onClick={() => void fill()}>Boş ayları vəzifə maaşı ilə doldur (son {params.avgMonths} ay)</Button></div>}
     {error && <div className="errorbox">{error}</div>}
     <div className="hrsalarygrid">{periods.map((p) => <label key={p} className={`field${counted.has(p) ? " counted" : ""}`}>{periodLabel(p)}{counted.has(p) && <small>ortaya daxildir</small>}
-      <Input inputMode="decimal" value={drafts[p] ?? String(byPeriod.get(p) ?? "")} onChange={(e) => setDrafts((d) => ({ ...d, [p]: e.target.value }))} onBlur={() => void commit(p)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></label>)}</div>
+      <Input inputMode="decimal" readOnly={!rightsOf(data).edit} value={drafts[p] ?? String(byPeriod.get(p) ?? "")} onChange={(e) => setDrafts((d) => ({ ...d, [p]: e.target.value }))} onBlur={() => void commit(p)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></label>)}</div>
   </div>;
 }
 
@@ -828,13 +831,13 @@ function CalendarSection({ data, call }: { data: HrData; call: Call }) {
       <label className="field">Tarix<Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
       <label className="field">Günün növü<select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as CalendarKind })}>{CALENDAR_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
       <label className="field hrwide">Adı / əsas<Input value={form.name} placeholder="məs. Novruz bayramı; NK-nın qərarı" onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-      <div className="hractions"><Button disabled={busy || !form.date} onClick={() => void run(async () => { await call("POST", { action: "calendar-day", ...form }); setForm({ date: "", kind: form.kind, name: "" }); })}>Əlavə et</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => call("POST", { action: "calendar-seed", year }))}>Standart bayramları əlavə et ({year})</Button></div>
+      {rightsOf(data).edit && <div className="hractions"><Button disabled={busy || !form.date} onClick={() => void run(async () => { await call("POST", { action: "calendar-day", ...form }); setForm({ date: "", kind: form.kind, name: "" }); })}>Əlavə et</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => call("POST", { action: "calendar-seed", year }))}>Standart bayramları əlavə et ({year})</Button></div>}
     </div>
     {error && <div className="errorbox">{error}</div>}
     <div className="hrcalendarcols">
       <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Tarix</th><th>Gün</th><th>Növ</th><th>Adı</th><th></th></tr></thead><tbody>
         {special.map((d) => <tr key={d.date}><td>{formatDay(d.date)}</td><td>{WEEKDAYS[weekday(d.date) - 1]}</td><td><span className={`hrkind ${d.kind}`}>{kindLabel(d.kind)}</span></td><td>{d.name || "—"}</td>
-          <td><div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ date: d.date, kind: d.kind, name: d.name || "" })}>Redaktə</button><button className="deletetaskbtn" disabled={busy} onClick={() => void run(() => call("DELETE", `type=calendar&date=${d.date}`))}>Sil</button></div></td></tr>)}
+          <td>{rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ date: d.date, kind: d.kind, name: d.name || "" })}>Redaktə</button><button className="deletetaskbtn" disabled={busy} onClick={() => void run(() => call("DELETE", `type=calendar&date=${d.date}`))}>Sil</button></div>}</td></tr>)}
       </tbody></table>{!special.length && <div className="empty"><p>{year} ili üçün xüsusi gün daxil edilməyib.</p></div>}</div>
       <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Ay</th><th>İş günü (5 günlük)</th><th>İş saatı (5 günlük)</th><th>İş günü (6 günlük)</th></tr></thead><tbody>
         {months.map((m) => <tr key={m.name}><td>{m.name}</td><td>{m.five.days}</td><td>{m.five.hours}</td><td>{m.six.days}</td></tr>)}
@@ -902,7 +905,7 @@ function SettingsSection({ data, call }: { data: HrData; call: Call }) {
       {!stepsValid && <div className="errorbox">Pilləli dəyərləri “il:dəyər” formatında, vergüllə ayıraraq yazın.</div>}
       {error && <div className="errorbox">{error}</div>}
       {saved && <div className="hrok">Parametrlər saxlanıldı.</div>}
-      <div className="hractions"><Button disabled={busy || !stepsValid} onClick={() => void save()}>{busy ? "Saxlanılır..." : "Parametrləri saxla"}</Button></div>
+      {rightsOf(data).edit && <div className="hractions"><Button disabled={busy || !stepsValid} onClick={() => void save()}>{busy ? "Saxlanılır..." : "Parametrləri saxla"}</Button></div>}
     </div>
   </section>;
 }

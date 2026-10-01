@@ -1,53 +1,24 @@
 import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
+import { actionKey, deniedFromStored, parseStoredPermissions, type SectionAction, type SectionKey } from "@/lib/permission-model";
 
-// Sections the admin can hide per employee ("Giriş icazələri" in the Personal dialog). An employee stores the keys it may NOT
-// see (employees.hidden_sections, a JSON array), so everything stays open by default and sections added later start visible
-// (except OPT_IN_SECTIONS below).
-// "tasks.manager" (tasks given by a manager) is never hidden, otherwise assigned work would disappear.
-export const SECTION_KEYS = [
-  "dashboard.customers",
-  "tasks.requests",
-  "tasks.mine",
-  "tasks.monthly",
-  "tasks.weekly",
-  "documents.templates",
-  "documents.outgoing",
-  "documents.incoming",
-  "hr.violations",
-  "hr.personnel",
-  "hr.orders",
-  "chat",
-] as const;
-export type SectionKey = (typeof SECTION_KEYS)[number];
+// The keys, defaults and the stored format live in lib/permission-model.ts (the page uses the same rules).
+export { SECTION_KEYS, OPT_IN_SECTIONS, LEVELED_SECTIONS, type SectionKey, type SectionAction } from "@/lib/permission-model";
 
-// Sections that start CLOSED (personal ID data, salaries): for these keys the stored list names the ones the admin has
-// opened, the reverse of every other key. deniedSections() turns the stored list into the set of sections that are locked.
-export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel", "hr.orders"];
-export function deniedSections(stored: SectionKey[]): Set<SectionKey> {
-  const denied = new Set(stored.filter((key) => !OPT_IN_SECTIONS.includes(key)));
-  for (const key of OPT_IN_SECTIONS) if (!stored.includes(key)) denied.add(key);
-  return denied;
+export function parseHiddenSections(raw: unknown): string[] {
+  return parseStoredPermissions(raw);
 }
 
-export function parseHiddenSections(raw: unknown): SectionKey[] {
-  let list: unknown = raw;
-  if (typeof raw === "string") {
-    try { list = JSON.parse(raw); } catch { list = []; }
-  }
-  if (!Array.isArray(list)) return [];
-  return [...new Set(list.filter((key): key is SectionKey => (SECTION_KEYS as readonly string[]).includes(String(key))))];
-}
-
-export async function hiddenSections(user: SessionUser): Promise<Set<SectionKey>> {
+// Everything the user may NOT do: closed sections ("chat") and denied rights ("documents.outgoing:add"). The admin may do everything.
+export async function hiddenSections(user: SessionUser): Promise<Set<string>> {
   if (user.role === "admin") return new Set();
-  if (!user.employeeId) return new Set(OPT_IN_SECTIONS);
+  if (!user.employeeId) return deniedFromStored([]);
   try {
     const row = await env.DB.prepare("SELECT hidden_sections FROM employees WHERE id = ?").bind(user.employeeId).first<{ hidden_sections: string | null }>();
-    return deniedSections(parseHiddenSections(row?.hidden_sections));
+    return deniedFromStored(parseStoredPermissions(row?.hidden_sections));
   } catch {
-    // The column is added by the catalog schema; until then only the opt-in sections stay closed.
-    return new Set(OPT_IN_SECTIONS);
+    // The column is added by the catalog schema; until then only the defaults apply.
+    return deniedFromStored([]);
   }
 }
 
@@ -55,4 +26,24 @@ export async function hiddenSections(user: SessionUser): Promise<Set<SectionKey>
 export async function requireSection<U extends SessionUser>(user: U, key: SectionKey): Promise<U> {
   if ((await hiddenSections(user)).has(key)) throw new Error("FORBIDDEN");
   return user;
+}
+
+// One right of a leveled section (Baxış, Əlavə et, Dəyişiklik et, Sil).
+export async function requireAction<U extends SessionUser>(user: U, section: SectionKey, action: SectionAction): Promise<U> {
+  const denied = await hiddenSections(user);
+  if (denied.has(section) || denied.has(actionKey(section, action))) throw new Error("FORBIDDEN");
+  return user;
+}
+
+// Any one of several rights (e.g. a customer card created while adding or editing an HR card).
+export async function requireAnyAction<U extends SessionUser>(user: U, section: SectionKey, actions: SectionAction[]): Promise<U> {
+  const denied = await hiddenSections(user);
+  if (denied.has(section) || actions.every((action) => denied.has(actionKey(section, action)))) throw new Error("FORBIDDEN");
+  return user;
+}
+
+export async function sectionRights(user: SessionUser, section: SectionKey) {
+  const denied = await hiddenSections(user);
+  const has = (action: SectionAction) => !denied.has(section) && !denied.has(actionKey(section, action));
+  return { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete") };
 }

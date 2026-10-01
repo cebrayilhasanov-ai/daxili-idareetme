@@ -716,3 +716,9 @@ tr.ordercancelled td{color:#94a3b8;text-decoration:line-through}tr.ordercancelle
 .overviewstats strong{font-size:18px;color:#0f172a}
 .overviewstats span.alert{background:#fff7ed;color:#c2410c}.overviewstats span.alert strong{color:#c2410c}
 .overviewcard>i{margin-top:auto;padding-top:4px;font-style:normal;font-size:12px;font-weight:700;color:#0C8599}
+/* Versiya 2.63: per-section rights (Baxış, Əlavə et, Dəyişiklik et, Sil) in "Giriş icazələri". */
+.permissionleveled{display:grid;gap:2px;padding:2px 0 4px}
+.permissionleveled+.permissionleveled,.permissionchildren label+.permissionleveled,.permissionleveled+label{border-top:1px dashed #eef2f7}
+.permissionactions{display:flex;flex-wrap:wrap;gap:2px 16px;padding-left:27px}
+.permissionchildren .permissionactions label{padding:3px 0;font-size:11px;color:#475569;gap:6px}
+.businessform .permissiontree .permissionactions input[type=checkbox]{width:14px!important;height:14px!important;min-width:14px}

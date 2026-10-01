@@ -32,7 +32,10 @@ type OrdersData = {
   children: { hr_employee_id: number; relation: string; birth_date: string | null }[]; companies: { id: number; name: string; manager: string | null }[];
   numbering: { company_id: number; grp: string; pattern: string }[]; params: HrParams; legal: LeaveLegal; terminationLegal: TerminationLegal;
   templates: { id: number; name: string; template1_key: string | null; template1_name: string | null }[];
+  // The viewer's rights in Əmrlər (Versiya 2.62): Sil is cancelling an order.
+  rights?: { add: boolean; edit: boolean; delete: boolean };
 };
+const rightsOf = (data: OrdersData) => data.rights ?? { add: true, edit: true, delete: true };
 type Send = (payload: Record<string, unknown>) => Promise<OrdersData & { savedId?: number }>;
 type Pay = { monthlySalary: number | null; salaries: SalaryRow[] };
 
@@ -208,9 +211,9 @@ function OrderRegister({ grp, columns, data, send, onEdit, busy, run, setNotice 
       {order.map((key) => <td key={key} data-label={columnsByKey[key].label}>{columnsByKey[key].render(o)}</td>)}
       <td data-label="Əməliyyat"><div className="tableactions">
         <button className="editcompanybtn" disabled={busy === `print${o.id}`} onClick={() => void run(`print${o.id}`, () => printOrder(o, data))}><Printer />{grp === "termination" ? "Əmr və hesablaşma" : "Çap et"}</button>
-        {o.status !== "cancelled" && <label className={`editcompanybtn orderupload${o.status === "pending" ? " need" : ""}`}>{busy === `sign${o.id}` ? "Yüklənir..." : <><Upload />{o.signed_key ? "Nüsxəni dəyiş" : "İmzalı nüsxəni yüklə"}</>}<input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => { upload(o, e.target.files?.[0]); e.target.value = ""; }} /></label>}
-        {o.status === "pending" && <button className="editcompanybtn" onClick={() => onEdit(o)}>Düzəlt</button>}
-        {o.status !== "cancelled" && <button className="deletetaskbtn" disabled={Boolean(busy)} onClick={() => cancel(o)}>Ləğv et</button>}
+        {o.status !== "cancelled" && rightsOf(data).edit && <label className={`editcompanybtn orderupload${o.status === "pending" ? " need" : ""}`}>{busy === `sign${o.id}` ? "Yüklənir..." : <><Upload />{o.signed_key ? "Nüsxəni dəyiş" : "İmzalı nüsxəni yüklə"}</>}<input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => { upload(o, e.target.files?.[0]); e.target.value = ""; }} /></label>}
+        {o.status === "pending" && rightsOf(data).edit && <button className="editcompanybtn" onClick={() => onEdit(o)}>Düzəlt</button>}
+        {o.status !== "cancelled" && rightsOf(data).delete && <button className="deletetaskbtn" disabled={Boolean(busy)} onClick={() => cancel(o)}>Ləğv et</button>}
         {o.status === "cancelled" && o.cancel_reason && <small className="hrsub" title={o.cancel_reason}>Səbəb: {o.cancel_reason}</small>}
       </div></td>
     </tr>)}</tbody></table>
@@ -273,7 +276,7 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
     setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
-    {!open && <div className="hractions left"><Button onClick={() => { setForm(emptyLeaveForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni məzuniyyət əmri</Button></div>}
+    {!open && rightsOf(data).add && <div className="hractions left"><Button onClick={() => { setForm(emptyLeaveForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni məzuniyyət əmri</Button></div>}
     {notice && <div className="hrok">{notice}</div>}
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
@@ -347,7 +350,7 @@ function TerminationOrders({ data, send }: { data: OrdersData; send: Send }) {
     setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
-    {!open && <div className="hractions left"><Button onClick={() => { setForm(emptyTerminationForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni işdən çıxma əmri</Button></div>}
+    {!open && rightsOf(data).add && <div className="hractions left"><Button onClick={() => { setForm(emptyTerminationForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni işdən çıxma əmri</Button></div>}
     {notice && <div className="hrok">{notice}</div>}
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
@@ -432,7 +435,7 @@ function OtherOrders({ data, send }: { data: OrdersData; send: Send }) {
     setMissing([]); setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
-    {!open && <div className="hractions left"><Button onClick={() => { setForm(emptyOtherForm()); setMissing([]); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni əmr</Button></div>}
+    {!open && rightsOf(data).add && <div className="hractions left"><Button onClick={() => { setForm(emptyOtherForm()); setMissing([]); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni əmr</Button></div>}
     {notice && <div className="hrok">{notice}</div>}
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
@@ -500,6 +503,6 @@ function OrderSettings({ data, send }: { data: OrdersData; send: Send }) {
     </fieldset>
     {error && <div className="errorbox">{error}</div>}
     {saved && <div className="hrok">{saved}</div>}
-    <div className="hractions"><Button disabled={busy} onClick={() => void save()}>{busy ? "Saxlanılır..." : "Yadda saxla"}</Button></div>
+    {rightsOf(data).edit && <div className="hractions"><Button disabled={busy} onClick={() => void save()}>{busy ? "Saxlanılır..." : "Yadda saxla"}</Button></div>}
   </div>;
 }

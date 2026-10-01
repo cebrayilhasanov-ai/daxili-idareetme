@@ -1,6 +1,6 @@
 import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
-import { hiddenSections, requireSection } from "@/lib/permissions";
+import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
@@ -22,8 +22,8 @@ export async function GET(request: Request) {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     const personalWorkId = Number(new URL(request.url).searchParams.get("personalWorkId"));
     await assertAccess(user, personalWorkId);
-    // A step can be sent to another department only by someone who may use Sorğular.
-    const canRequest = !(await hiddenSections(user)).has("tasks.requests");
+    // A step can be sent to another department only by someone who may add Sorğular.
+    const canRequest = (await sectionRights(user, "tasks.requests")).add;
     const targets = canRequest ? await getPersonalWorkRequestTargets(personalWorkId, user.employeeId) : { departments: [], ownDepartment: null };
     return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: await getPersonalWorkDelegateCandidates(personalWorkId), canRequest, requestDepartments: targets.departments, ownDepartment: targets.ownDepartment });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
@@ -49,7 +49,7 @@ export async function PATCH(request: Request) {
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
     if (body.requestDepartment) {
-      await requireSection(user, "tasks.requests");
+      await requireAction(user, "tasks.requests", "add");
       const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, attachmentKey: body.attachmentKey, attachmentName: body.attachmentName, attachmentSize: body.attachmentSize, attachmentType: body.attachmentType });
       return Response.json({ items });
     }

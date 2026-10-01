@@ -3,7 +3,7 @@ import {
   getIncomingDocuments, recordApproval, reviewIncomingDocument, updateIncomingDocument,
 } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
-import { requireSection } from "@/lib/permissions";
+import { requireAction, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 // Daxil Olan Sənədlər (Versiya 2.59): registering needs the section permission; seeing a document, the director's look and
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       await logAudit(user, "Daxil olan sənəd üzrə sorğu yaradıldı", "incoming-document", `#${body.id} → ${body.toDepartment}`);
       return Response.json({ ...(await (await listResponse(user)).json()), requestId });
     }
-    await requireSection(user, "documents.incoming");
+    await requireAction(user, "documents.incoming", "add");
     // A sender whose VÖEN is not in the customer list gets its card created right from the registration form.
     if (body.action === "customer") {
       const customer = body.customer || {};
