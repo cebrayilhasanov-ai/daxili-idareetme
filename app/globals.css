@@ -722,3 +722,15 @@ tr.ordercancelled td{color:#94a3b8;text-decoration:line-through}tr.ordercancelle
 .permissionactions{display:flex;flex-wrap:wrap;gap:2px 16px;padding-left:27px}
 .permissionchildren .permissionactions label{padding:3px 0;font-size:11px;color:#475569;gap:6px}
 .businessform .permissiontree .permissionactions input[type=checkbox]{width:14px!important;height:14px!important;min-width:14px}
+/* Versiya 2.64: the work area is at least one screen tall (the background picture covers the whole screen); the sidebar can be folded away. */
+main{min-height:100vh}
+.navcollapse{margin-left:auto;align-self:flex-start;display:grid;place-items:center;width:28px;height:28px;flex:none;border:0;border-radius:8px;background:#ffffff12;color:#9fb0c7;cursor:pointer}
+.navcollapse:hover{background:#ffffff24;color:#fff}.navcollapse svg{width:16px;height:16px}
+.navexpand{display:none}
+@media(min-width:731px){
+  .shell.navcollapsed .side{display:none}
+  .shell.navcollapsed main{margin-left:0;padding-left:44px}
+  .navexpand{display:grid;place-items:center;position:fixed;left:0;top:18px;z-index:25;width:24px;height:46px;border:0;border-radius:0 10px 10px 0;background:#12262B;color:#fff;cursor:pointer;box-shadow:0 4px 14px #0f172a33}
+  .navexpand:hover{width:30px}.navexpand svg{width:16px;height:16px}
+}
+@media(max-width:730px){.navcollapse{display:none}}
