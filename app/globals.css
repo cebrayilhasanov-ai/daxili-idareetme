@@ -745,55 +745,8 @@ main.hasbg>header{background:#ffffffb8;-webkit-backdrop-filter:blur(8px);backdro
 .headrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .backbtn{display:inline-flex;align-items:center;gap:3px;height:30px;padding:0 11px 0 6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0C8599;font-size:12px;font-weight:800;cursor:pointer;flex:none}
 .backbtn:hover{background:#ecfeff;border-color:#0C8599}.backbtn svg{width:16px;height:16px}
-/* Versiya 2.71: personal settings (password, background, profile photo) open from the user card at the bottom of the sidebar. */
-.admin{position:relative}
-.profilebtn{margin-left:auto;border:0;background:transparent;color:#9fb3ca;border-radius:8px;padding:6px;display:grid;place-items:center;cursor:pointer}
-.profilebtn:hover,.profilebtn.on{background:#ffffff14;color:#fff}
-.admin .profilebtn+.logoutbtn{margin-left:0}
-.profileshade{position:fixed;inset:0;border:0;background:transparent;z-index:29;cursor:default}
-.profilemenu{position:absolute;left:0;right:0;bottom:calc(100% + 8px);z-index:30;display:grid;gap:2px;padding:6px;background:#fff;border-radius:12px;box-shadow:0 12px 32px #0f172a40}
-.profilemenu button{display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:700;color:#172237;text-align:left;cursor:pointer}
-.profilemenu button:hover{background:#ecfeff;color:#0C8599}.profilemenu svg{width:16px;height:16px;color:#0C8599}
-/* Versiya 2.72: Çat is a floating window in the bottom-right corner, opened from 💬 next to the bell. */
-body.chatresizing{user-select:none;cursor:grabbing}
-.chatbtn.on{color:#0C8599;border-color:#0C8599;background:#ecfeff}
-.chatwindow{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;flex-direction:column;background:#fff;border:1px solid #cfe1db;border-radius:14px;box-shadow:0 18px 50px #0f172a40;overflow:hidden}
-.chatwindow.expanded{left:50%;top:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);width:min(1200px,94vw);height:min(860px,88vh)}
-.chatwinbar{display:flex;align-items:center;gap:8px;flex:none;padding:7px 7px 7px 14px;background:linear-gradient(120deg,#12262B,#0C8599);color:#fff;cursor:grab;touch-action:none;user-select:none}
-.chatwindow.expanded .chatwinbar{cursor:default}
-.chatwinbar>svg{width:17px;height:17px}.chatwinbar b{font-size:13px}
-.chatwinbar em,.chatminiopen em{font-style:normal;background:#ef4444;color:#fff;border-radius:10px;padding:2px 6px;font-size:10px;font-weight:800}
-.chatwinbtns{margin-left:auto;display:flex;gap:2px}
-.chatwinbtns button{width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer}
-.chatwinbtns button:hover{background:#ffffff26}.chatwinbtns svg{width:16px;height:16px}
-.chatwindow .chatpanel{flex:1;min-height:0;height:auto;width:auto;margin:0;grid-template-columns:300px minmax(0,1fr);border:0!important;border-radius:0!important;box-shadow:none!important}
-.chatwindow .chatlisthead,.chatwindow .chatroomhead{height:62px;padding:10px 14px}
-.chatpanel.compact{grid-template-columns:minmax(0,1fr)}
-.chatpanel.compact .chatlist{border-right:0}
-.chatpanel.compact .chatroom{display:none}
-.chatpanel.compact.showroom .chatroom{display:grid}
-.chatpanel.compact.showroom .chatlist{display:none}
-.chatback{flex:none;width:32px;height:32px;border:0;border-radius:8px;background:#f1f5f9;color:#172237;display:grid;place-items:center;cursor:pointer}
-.chatback:hover{background:#e2e8f0}.chatback svg{width:18px;height:18px}
-.chatedge{position:absolute;z-index:5;touch-action:none}
-.chatedge-n,.chatedge-s{left:12px;right:12px;height:6px;cursor:ns-resize}.chatedge-n{top:0}.chatedge-s{bottom:0}
-.chatedge-e,.chatedge-w{top:12px;bottom:12px;width:6px;cursor:ew-resize}.chatedge-e{right:0}.chatedge-w{left:0}
-.chatedge-ne,.chatedge-nw,.chatedge-se,.chatedge-sw{width:14px;height:14px}
-.chatedge-nw{top:0;left:0;cursor:nwse-resize}.chatedge-se{bottom:0;right:0;cursor:nwse-resize}
-.chatedge-ne{top:0;right:0;cursor:nesw-resize}.chatedge-sw{bottom:0;left:0;cursor:nesw-resize}
-.chatmini{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;background:#12262B;color:#fff;border-radius:999px;box-shadow:0 12px 30px #0f172a40;overflow:hidden}
-.chatminiopen{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:#fff;padding:11px 6px 11px 16px;font-size:13px;cursor:pointer}
-.chatminiopen svg{width:17px;height:17px}
-.chatminiclose{border:0;background:transparent;color:#9fb0c7;padding:11px 12px;display:grid;place-items:center;cursor:pointer}
-.chatminiclose:hover{color:#fff}.chatminiclose svg{width:15px;height:15px}
-@media(max-width:730px){
-  .chatwindow,.chatwindow.expanded{inset:0!important;width:auto!important;height:auto!important;transform:none;border-radius:0;border:0}
-  .chatwindow .chatpanel{grid-template-columns:minmax(0,1fr)}
-  .chatedge{display:none}
-}
 /* Versiya 2.73: new-message card in the bottom-right corner (above the chat window when it is open). */
 .chattoast{position:fixed;right:20px;bottom:20px;z-index:45;display:flex;align-items:stretch;width:min(340px,calc(100vw - 32px));background:#fff;border:1px solid #cfe1db;border-left:4px solid #0C8599;border-radius:12px;box-shadow:0 16px 40px #0f172a33;overflow:hidden;animation:chattoastin .2s ease-out}
-.chattoast.abovechat{bottom:auto;top:96px}
 @keyframes chattoastin{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
 .chattoastbody{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:11px 6px 11px 12px;border:0;background:transparent;text-align:left;cursor:pointer}
 .chattoastbody>i{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#e6f6f8;color:#0C8599;font-style:normal;font-weight:800;font-size:12px;overflow:hidden}
@@ -802,3 +755,38 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .chattoastbody b{font-size:13px;color:#172237;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chattoastbody small{font-size:12px;color:#475569;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .chattoastclose{flex:none;border:0;background:transparent;color:#94a3b8;padding:0 10px;cursor:pointer}.chattoastclose:hover{color:#172237}.chattoastclose svg{width:15px;height:15px}
+/* Versiya 2.74: Çat is a page again (opened from 💬), with the resizable and movable panel of 2.66–2.68. */
+/* Versiya 2.66: resizable chat panel and a movable line between the conversation list and the conversation (wide screens). */
+@media(min-width:801px){
+  .chatpanel{position:relative;margin:0 auto;max-width:100%;width:var(--chat-w,auto);height:var(--chat-h,calc(100vh - 122px));grid-template-columns:var(--chat-list,320px) minmax(0,1fr)}
+  .chatpanel.sized{min-height:420px}
+  .chathandle{position:absolute;z-index:5;touch-action:none}
+  .chathandle-l,.chathandle-r{top:0;bottom:10px;width:8px;cursor:ew-resize}
+  .chathandle-l{left:0}.chathandle-r{right:0}
+  .chathandle-b{left:10px;right:10px;bottom:0;height:8px;cursor:ns-resize}
+  .chathandle-bl,.chathandle-br{bottom:0;width:16px;height:16px}
+  .chathandle-bl{left:0;cursor:nesw-resize}.chathandle-br{right:0;cursor:nwse-resize}
+  .chathandle-list{top:0;bottom:0;left:calc(var(--chat-list,320px) - 4px);width:8px;cursor:col-resize}
+  .chathandle:hover,.chatresizing .chathandle:active{background:#0C859933}
+  .chathandle-list:hover{background:linear-gradient(90deg,transparent 3px,#0C8599 3px,#0C8599 5px,transparent 5px)}
+}
+@media(max-width:800px){.chathandle{display:none}}
+body.chatresizing{user-select:none;cursor:grabbing}
+@media(min-width:731px){.shell.navcollapsed main.hasbg>header{margin-left:-44px;padding-left:44px}}
+/* Versiya 2.67: a narrowed chat panel slides left/right by its top bars, kept inside the work area. */
+@media(min-width:801px){
+  .chatpanel.haswidth{margin-left:clamp(0px,calc((100% - var(--chat-w)) / 2 + var(--chat-x,0px)),calc(100% - var(--chat-w)));margin-right:0}
+  .chatpanel.haswidth .chatlisthead,.chatpanel.haswidth .chatroomhead{cursor:grab}
+  .chatresizing .chatpanel .chatlisthead,.chatresizing .chatpanel .chatroomhead{cursor:grabbing}
+}
+/* Versiya 2.68: a smaller chat panel also moves up and down by its top bars. */
+@media(min-width:801px){
+  .chatpanel.sized{margin-top:var(--chat-y,0px)}
+  .chatpanel.sized .chatlisthead,.chatpanel.sized .chatroomhead{cursor:grab}
+}
+.chatsound{border:0;background:#f1f5f9;color:#0C8599;border-radius:8px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;flex:none}
+.chatsound:hover{background:#e0f2f4}.chatsound svg{width:17px;height:17px}
+/* Versiya 2.74: 💬 and 🔔 in the header look like the refresh button (white square with a border), also on a phone. */
+.actions .bellbtn{width:42px;height:42px;border:1px solid #e2e8f0;background:#fff;border-radius:11px;display:grid;place-items:center;color:inherit;cursor:pointer}
+.actions .bellbtn:hover{border-color:#0C8599}
+.actions .chatbtn.on{color:#0C8599;border-color:#0C8599;background:#ecfeff}

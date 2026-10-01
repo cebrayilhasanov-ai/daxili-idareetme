@@ -24,29 +24,29 @@ type Approval = { canFinal: boolean; departments: Array<{ canApprove: boolean }>
 const approvalActionable = (a: Approval) => Boolean(a && (a.canFinal || a.departments.some((d) => d.canApprove)));
 const waitsForDirector = (status: string) => status === "Rəhbərin baxışında" || status === "Rəhbərdə";
 
-export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, activeCompanyId, open }: {
-  showTemplates: boolean; showOutgoing: boolean; showIncoming: boolean; activeCompanyId: number | null;
+export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, showCustomers, onOpenCustomers, activeCompanyId, open }: {
+  showTemplates: boolean; showOutgoing: boolean; showIncoming: boolean; showCustomers: boolean; onOpenCustomers: () => void; activeCompanyId: number | null;
   open: (tab: "templates" | "outgoing" | "incoming") => void;
 }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   useEffect(() => {
     let cancelled = false;
     const get = (url: string, on: boolean): Promise<Record<string, unknown>> => on ? fetch(url).then((r) => r.ok ? r.json() : {}).catch(() => ({})) : Promise.resolve({});
-    void Promise.all([get("/api/documents", showTemplates), get("/api/documents/outgoing", showOutgoing), get("/api/documents/incoming", showIncoming)]).then(([tpl, out, inc]) => {
+    void Promise.all([get("/api/documents", showTemplates), get("/api/documents/outgoing", showOutgoing), get("/api/documents/incoming", showIncoming), get("/api/customers", showCustomers)]).then(([tpl, out, inc, cus]) => {
       if (cancelled) return;
       const inScope = (companyId: number | null) => !activeCompanyId || companyId === activeCompanyId;
       const outgoing = ((out.items || []) as Array<{ company_id: number | null; final_key: string | null; approval?: Approval }>).filter((i) => inScope(i.company_id));
       const incoming = ((inc.items || []) as Array<{ company_id: number; status: string; approval?: Approval }>).filter((i) => inScope(i.company_id));
       const directorOf = (inc.directorOf || []) as number[];
       setCounts({
-        templates: ((tpl.items || []) as unknown[]).length,
+        templates: ((tpl.items || []) as unknown[]).length, customers: ((cus.items || []) as unknown[]).length,
         outgoing: outgoing.length, outgoingNoFinal: outgoing.filter((i) => !i.final_key).length, outgoingApproval: outgoing.filter((i) => approvalActionable(i.approval)).length,
         incoming: incoming.length, incomingDirector: incoming.filter((i) => waitsForDirector(i.status) && directorOf.includes(i.company_id)).length,
         incomingApproval: incoming.filter((i) => approvalActionable(i.approval)).length, isDirector: directorOf.length,
       });
     });
     return () => { cancelled = true; };
-  }, [showTemplates, showOutgoing, showIncoming, activeCompanyId]);
+  }, [showTemplates, showOutgoing, showIncoming, showCustomers, activeCompanyId]);
   const n = (key: string) => counts ? counts[key] ?? 0 : null;
   const cards: OverviewCard[] = [];
   if (showIncoming) cards.push({ key: "incoming", title: "Daxil olan sənədlər", text: "Daxil olan sənədlərin qeydiyyatı, rəhbərin baxışı, tapşırıqlar və təsdiq.", onOpen: () => open("incoming"), stats: [
@@ -59,6 +59,8 @@ export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, a
     { label: "hazır sənəd yüklənməyib", value: n("outgoingNoFinal"), alert: true },
     { label: "təsdiqimi gözləyir", value: n("outgoingApproval"), alert: true },
   ] });
+  // Versiya 2.74: Müştərilər — the other side of the documents — sits here, before Şablonlar.
+  if (showCustomers) cards.push({ key: "customers", title: "Müştərilər", text: "Müştəri və təşkilat kartları (VÖEN, ünvan, telefon).", onOpen: onOpenCustomers, stats: [{ label: "müştəri", value: n("customers") }] });
   if (showTemplates) cards.push({ key: "templates", title: "Şablonlar", text: "Sənəd növləri, şablon faylları, papka və ad qaydaları.", onOpen: () => open("templates"), stats: [{ label: "şablon", value: n("templates") }] });
   return <SectionOverview cards={cards} loading={!counts}/>;
 }
