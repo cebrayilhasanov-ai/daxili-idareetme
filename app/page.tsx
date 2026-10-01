@@ -186,7 +186,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.65</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.66</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>İstifadəçilər</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -206,7 +206,7 @@ export default function Home(){
       </div>
       <div className="admin"><span>{initials(viewAs?viewAs.name:user.name)}</span><div><b>{viewAs?viewAs.name:user.name}</b><small>{viewAs?"İstifadəçi":isAdmin?"Baş administrator":"İstifadəçi"}</small><small>{viewAs?(viewAs.email||"—"):user.email}</small></div>{isAdmin&&myOwnEmployee&&!viewAs&&<button className="switchuserbtn" title="İstifadəçi hesabına keç" onClick={()=>{setViewAs(myOwnEmployee);setPage("dashboard")}}><Users/></button>}<button className="logoutbtn" title="Çıxış" onClick={()=>void signOut()}><LogOut/></button></div>
     </aside>
-    <main className={user.backgroundKey?"hasbg":undefined} style={user.backgroundKey?{backgroundImage:`linear-gradient(rgba(246,248,255,.55),rgba(242,246,251,.55)), url(/api/file?key=${encodeURIComponent(user.backgroundKey)})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:undefined}>
+    <main className={user.backgroundKey?"hasbg":undefined} style={user.backgroundKey?{backgroundImage:`linear-gradient(rgba(246,248,255,.2),rgba(242,246,251,.2)), url(/api/file?key=${encodeURIComponent(user.backgroundKey)})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:undefined}>
       <header><button className="hamb" onClick={()=>setMenu(true)}><Menu/></button><div><h1>{title[page]}</h1><p>{effectiveView?`${effectiveView.name} tapşırıqları`:"İstifadəçiləri, tapşırıqları və nəticələri vahid sistemdə idarə edin"}</p></div><div className="actions"><button onClick={()=>void load()} title="Yenilə"><RefreshCw/></button><div className="bellwrap">{notifOpen&&<button className="notifshade" aria-label="Bağla" onClick={()=>setNotifOpen(false)}/>}<button className="bellbtn" title="Bildirişlər" onClick={()=>setNotifOpen(v=>!v)}><Bell/>{(shownChatUnread+shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0))>0&&<em className="headerbadge">{shownChatUnread+shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0)}</em>}</button>{notifOpen&&<div className="notifpanel">{can("chat")&&<div className="notifsection"><b>Oxunmamış mesajlar</b><button onClick={()=>{setNotifOpen(false);setPage("chat")}}>{chatUnread>0?`${chatUnread} yeni mesaj`:"Yeni mesaj yoxdur"}</button></div>}{!viewAs&&can("tasks.requests")&&<div className="notifsection"><b>Sorğular</b><button onClick={()=>{setNotifOpen(false);setPage("requests")}}>{requestsPending>0?`${requestsPending} sorğu sizi gözləyir`:"Gözləyən sorğu yoxdur"}</button></div>}<div className="notifsection"><b>Gecikən tapşırıqlar</b>{overdue.length?<>{overdue.slice(0,5).map(t=><button key={t.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{t.title} — {t.employee_name}</button>)}{overdue.length>5&&<small>+{overdue.length-5} daha</small>}</>:<small>Gecikən tapşırıq yoxdur</small>}</div>{isAdmin&&!viewAs&&<div className="notifsection"><b>Tarix dəyişikliyi tələbləri</b>{pendingDateRequests.length?<>{pendingDateRequests.slice(0,5).map(r=><button key={r.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{r.task_title} — {r.employee_name} → {formatDate(r.proposed_due_at)}</button>)}{pendingDateRequests.length>5&&<small>+{pendingDateRequests.length-5} daha</small>}</>:<small>Gözləyən tələb yoxdur</small>}</div>}</div>}</div></div></header>
       {viewAs&&<div className="viewasbar"><div><strong>{viewAs.name}</strong><span>İstifadəçi görünüşündəsiniz</span></div><button onClick={()=>{setViewAs(null);setPage("employees")}}>Admin görünüşünə qayıt</button></div>}
       {error&&<div className="errorbox">{error}</div>}
@@ -267,7 +267,47 @@ function UsersPage(){
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><small className="sectioneyebrow">GİRİŞ VƏ İCAZƏLƏR</small><h2>İstifadəçilər</h2><p>Yeni hesab yaradın və giriş icazələrini idarə edin</p></div><Button onClick={()=>setOpen(true)}><Plus/>Yeni istifadəçi</Button></div>{error&&<div className="errorbox">{error}</div>}<div className="usercards">{users.map(u=><article key={u.id}><i>{initials(u.name)}</i><div><h3>{u.name}</h3><p>{u.email}</p><small>{u.role==="admin"?"Baş administrator":"İstifadəçi"}</small></div><span className={u.active?"recordstatus active":"recordstatus inactive"}>{u.active?"Aktiv":"Deaktiv"}</span>{u.role!=="admin"&&<button className={u.active?"deactivatebtn":"activatebtn"} onClick={()=>void toggle(u)}>{u.active?"Deaktiv et":"Aktiv et"}</button>}</article>)}</div><Dialog open={open} onOpenChange={setOpen}><DialogContent className="businessdialog" resizable><FormShell title="Yeni istifadəçi" desc="İstifadəçi öz e-poçtu və müvəqqəti şifrəsi ilə daxil olacaq."><Field label="Ad və soyad" value={form.name} set={v=>setForm({...form,name:v})}/><Field label="Vəzifə" value={form.position} set={v=>setForm({...form,position:v})}/><Field label="E-poçt" type="email" value={form.email} set={v=>setForm({...form,email:v})}/><Field label="Müvəqqəti şifrə (ən az 8 simvol)" type="password" value={form.password} set={v=>setForm({...form,password:v})}/><Button disabled={!form.name||!form.email||form.password.length<8} onClick={()=>void create()}>Hesabı yarat</Button></FormShell></DialogContent></Dialog></section>
 }
 
+// Chat panel size (Versiya 2.66): its left/right edges, bottom edge and bottom corners resize it (it stays centred), and the line
+// between the conversation list and the conversation moves. Remembered per browser; a double click on a handle restores the default.
+type ChatLayout={width:number|null;height:number|null;list:number};
+const CHAT_LAYOUT_DEFAULT:ChatLayout={width:null,height:null,list:320};
+type ChatHandle="l"|"r"|"b"|"bl"|"br"|"list";
+function useChatLayout(){
+  const [layout,setLayout]=useState<ChatLayout>(CHAT_LAYOUT_DEFAULT);
+  useEffect(()=>{try{const raw=window.localStorage.getItem("chat:layout");if(raw)setLayout({...CHAT_LAYOUT_DEFAULT,...JSON.parse(raw)})}catch{}},[]);
+  const save=(next:ChatLayout)=>{setLayout(next);try{window.localStorage.setItem("chat:layout",JSON.stringify(next))}catch{}};
+  const clamp=(value:number,min:number,max:number)=>Math.min(Math.max(value,min),Math.max(min,max));
+  const startDrag=(kind:ChatHandle)=>(e:React.PointerEvent)=>{
+    // Each handle sits directly inside the chat panel.
+    const panel=(e.currentTarget as HTMLElement).parentElement;if(!panel||e.button!==0)return;
+    e.preventDefault();
+    const rect=panel.getBoundingClientRect();
+    const room=panel.parentElement?.clientWidth||rect.width;
+    const start={x:e.clientX,y:e.clientY,w:rect.width,h:rect.height,list:layout.list};
+    let latest=layout;
+    const move=(ev:PointerEvent)=>{
+      const dx=ev.clientX-start.x,dy=ev.clientY-start.y;
+      const next={...latest};
+      if(kind==="list")next.list=clamp(start.list+dx,200,start.w-360);
+      else{
+        // The panel is centred, so a side edge moves by the cursor while the width changes on both sides.
+        if(kind==="l"||kind==="bl")next.width=clamp(start.w-2*dx,560,room);
+        if(kind==="r"||kind==="br")next.width=clamp(start.w+2*dx,560,room);
+        if(kind==="b"||kind==="bl"||kind==="br")next.height=clamp(start.h+dy,420,4000);
+      }
+      latest=next;setLayout(next);
+    };
+    const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);document.body.classList.remove("chatresizing");save(latest)};
+    document.body.classList.add("chatresizing");
+    window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);
+  };
+  const reset=(kind:ChatHandle)=>()=>save(kind==="list"?{...layout,list:CHAT_LAYOUT_DEFAULT.list}:{...layout,width:null,height:null});
+  const style={"--chat-list":`${layout.list}px`,...(layout.width?{"--chat-w":`${layout.width}px`}:{}),...(layout.height?{"--chat-h":`${layout.height}px`}:{})} as React.CSSProperties;
+  const handles=(["l","r","b","bl","br","list"] as ChatHandle[]).map(kind=><span key={kind} className={`chathandle chathandle-${kind}`} title={kind==="list"?"Sürüşdürün — siyahının eni (ikiqat klik: ilkin)":"Sürüşdürün — çatın ölçüsü (ikiqat klik: ilkin)"} onPointerDown={startDrag(kind)} onDoubleClick={reset(kind)}/>);
+  return {style,handles,sized:Boolean(layout.width||layout.height)};
+}
 function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:number)=>void}){
+  const chatLayout=useChatLayout();
   const [chat,setChat]=useState<ChatData|null>(null);
   const [selected,setSelected]=useState(0);
   const [message,setMessage]=useState("");
@@ -297,7 +337,8 @@ function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:nu
     const ticks:"sent"|"read"|null=mine&&active?.type==="direct"?(m.id<=Number(chat?.readUpTo||0)?"read":"sent"):null;
     timeline.push({kind:"msg",message:m,grouped,showName,mine,ticks});
   });
-  return <section className="panel chatpanel">
+  return <section className={chatLayout.sized?"panel chatpanel sized":"panel chatpanel"} style={chatLayout.style}>
+    {chatLayout.handles}
     <aside className="chatlist"><div className="chatlisthead"><div><span className="sectioneyebrow">DAXİLİ YAZIŞMA</span><h2>Söhbətlər</h2></div><MessageCircle/></div>
       <div className="chatsearch"><input placeholder="Axtarış..." value={threadQuery} onChange={e=>setThreadQuery(e.target.value)}/></div>
       <div className="threadlist">{filteredThreads.map(t=><button key={t.id} className={t.id===selected?"active":""} onClick={()=>void choose(t.id)}><i className={t.type!=="group"&&t.avatar_key?"hasphoto":""}>{t.type==="group"?<Users/>:avatarNode(t.avatar_key,t.name)}</i><span><b>{t.name}</b><small>{t.last_message||"Hələ mesaj yoxdur"}</small></span><span className="threadside">{t.last_message_at&&<time>{threadTime(t.last_message_at)}</time>}{Number(t.unread)>0&&<em>{t.unread}</em>}</span></button>)}</div>
