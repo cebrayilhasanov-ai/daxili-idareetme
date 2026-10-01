@@ -125,7 +125,7 @@ async function ensureSchema() {
   // Per-firm documents: the written (draft) and client-signed (final) files, each renamed by the template's rule and stored either
   // in a server folder (*_path) or, where no folder can be written, in the FILES bucket (*_key). file_base_name keeps both stages on one name.
   if (!documentColumns.results.some((column) => column.name === "file_name_pattern")) await db().prepare("ALTER TABLE document_templates ADD COLUMN file_name_pattern TEXT").run();
-  // Daxil Olan Sənədlər of this type: the folder their scan goes to and how it is named.
+  // Daxil olan sənədlər of this type: the folder their scan goes to and how it is named.
   if (!documentColumns.results.some((column) => column.name === "incoming_folder_path")) await db().prepare("ALTER TABLE document_templates ADD COLUMN incoming_folder_path TEXT").run();
   if (!documentColumns.results.some((column) => column.name === "incoming_name_pattern")) await db().prepare("ALTER TABLE document_templates ADD COLUMN incoming_name_pattern TEXT").run();
   // "İmzalı nüsxə geri qaytarılır": whether the other side must send one signed copy back (contract, act) or not (a letter).
@@ -138,7 +138,7 @@ async function ensureSchema() {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
   await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
-  // Daxil Olan Sənədlər: registered incoming documents (their scan is stored like outgoing files) and, once sent for execution, the task it became.
+  // Daxil olan sənədlər: registered incoming documents (their scan is stored like outgoing files) and, once sent for execution, the task it became.
   await db().prepare(`CREATE TABLE IF NOT EXISTS incoming_documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     company_id INTEGER NOT NULL REFERENCES companies(id),
@@ -1425,7 +1425,7 @@ async function nextOutgoingNumber(column: "outgoing_no" | "incoming_no", company
   return String((row?.maxNo || 0) + 1).padStart(6, "0");
 }
 
-// Çıxan Sənədlər visibility (Versiya 2.60), as for incoming documents: registrars (section permission) see and handle their
+// Çıxan sənədlər visibility (Versiya 2.60), as for incoming documents: registrars (section permission) see and handle their
 // firms' documents, the firm's director sees all of the firm's, members of a related department see those read-only.
 function outgoingDepartments(row: Record<string, unknown>) {
   const related = parseDepartments(row.related_departments);
@@ -1694,7 +1694,7 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
     oldKey: record[`${kind}_key`] ? String(record[`${kind}_key`]) : null,
     missingRuleNote: "Şablonda papka göstərilməyib — sənəd sistemdə saxlanıldı.",
   });
-  // Daxil olma No of the signed copy: Çıxan Sənədlər' own sequence per firm, separate from Daxil Olan Sənədlər. Only a document whose
+  // Daxil olma No of the signed copy: Çıxan sənədlər' own sequence per firm, separate from Daxil olan sənədlər. Only a document whose
   // signed copy comes back gets one — for a letter the file is just a copy of what we sent, and nothing "came in".
   const own = record.signed_copy_returns;
   const comesBack = own !== null && own !== undefined ? Boolean(Number(own)) : Boolean(await templateReturnsSignedCopy(record.document_type));
@@ -1714,9 +1714,9 @@ export async function readOutgoingFile(user: SessionUser, id: number, kind: "dra
   return loadDocumentFile(record[`${kind}_path`], record[`${kind}_key`], record[`${kind}_name`], record[`${kind}_type`]);
 }
 
-// ---------- Daxil Olan Sənədlər ----------
+// ---------- Daxil olan sənədlər ----------
 
-// Daxil Olan Sənədlər has its own Daxil olma No sequence per firm, independent of Çıxan Sənədlər.
+// Daxil olan sənədlər has its own Daxil olma No sequence per firm, independent of Çıxan sənədlər.
 async function nextIncomingNumber(companyId: number) {
   const row = await db().prepare("SELECT MAX(CAST(incoming_no AS INTEGER)) AS maxNo FROM incoming_documents WHERE company_id = ?").bind(companyId).first<{ maxNo: number | null }>();
   return String((row?.maxNo || 0) + 1).padStart(6, "0");
@@ -1724,7 +1724,7 @@ async function nextIncomingNumber(companyId: number) {
 
 export const DEFAULT_INCOMING_NAME = "{DaxilOlmaNo}_{Təşkilat}_{Tarix}";
 
-// Workflow (agreed with the admin): Ümumi şöbə — whoever may open Daxil Olan Sənədlər — registers the document and either marks it
+// Workflow (agreed with the admin): Ümumi şöbə — whoever may open Daxil olan sənədlər — registers the document and either marks it
 // "Məlumat üçün", sends it straight to one or more departments, or passes it to the director (the head of the top of the firm's
 // structure), who picks the department(s). Each department's head gets a task and hands the work on inside it (Həvalə et).
 async function incomingScope(user: SessionUser) {
@@ -1788,7 +1788,7 @@ function incomingValues(record: Record<string, unknown>) {
 }
 
 // Who may do what with incoming documents (agreed flow, Versiya 2.59):
-// - registrars (Ümumi şöbə: whoever holds the "Daxil Olan Sənədlər" permission) register documents of their firms, tag the related
+// - registrars (Ümumi şöbə: whoever holds the "Daxil olan sənədlər" permission) register documents of their firms, tag the related
 //   departments and may correct or delete them while nothing has happened on them yet;
 // - the firm's director sees every document of the firm, acknowledges it ("Tanış oldum") and gives tasks by dərkənar;
 // - members of a related department (and of a department a request on the document went to) see it read-only and may raise a
@@ -2101,7 +2101,7 @@ export async function directIncomingDocument(user: SessionUser, input: { id: num
       `Göndərən: ${record.sender_name}${record.sender_doc_no ? `, №${record.sender_doc_no}` : ""}${record.sender_doc_date ? ` (${record.sender_doc_date})` : ""}`,
       record.summary ? `Məzmun: ${record.summary}` : "",
       others.length ? `Tapşırıq həm də bunlara verilib: ${others.join(", ")}.` : "",
-      "Sənədin özü: Sənədlər → Daxil Olan Sənədlər.",
+      "Sənədin özü: Sənədlər → Daxil olan sənədlər.",
     ].filter(Boolean).join("\n");
     const task = await db().prepare(`INSERT INTO tasks (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
       .bind(target.head.id, companyId, title, description, dueAt, dueAt, now).run();
@@ -2147,7 +2147,7 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
   return { name: saved.name, path: saved.path, note: saved.note };
 }
 
-// A department head the document was sent to may open its scan even without access to Daxil Olan Sənədlər.
+// A department head the document was sent to may open its scan even without access to Daxil olan sənədlər.
 export async function readIncomingFile(user: SessionUser, id: number) {
   await ensureSchema();
   const { record, rights } = await incomingForAction(user, id);
@@ -2282,7 +2282,7 @@ export async function listViolationsForEmployee(employeeId: number) {
 export async function createViolation(input: { employeeId: number; companyId?: number; title: string; note?: string; createdByName?: string }) {
   await ensureSchema();
   const title = input.title?.trim();
-  if (!title) throw new Error("Noqsanın başlığını yazın.");
+  if (!title) throw new Error("Nöqsanın başlığını yazın.");
   if (!input.employeeId) throw new Error("Personal seçin.");
   await db().prepare(`INSERT INTO employee_violations (employee_id, company_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
     .bind(input.employeeId, input.companyId || null, title, input.note?.trim() || null, input.createdByName || null, new Date().toISOString()).run();
@@ -2293,7 +2293,7 @@ export async function deleteViolation(id: number) {
   await db().prepare("DELETE FROM employee_violations WHERE id = ?").bind(id).run();
 }
 
-// Noqsanlar managed by an employee: the people and firms they may pick from (narrowed to their departments in the route).
+// Nöqsanlar managed by an employee: the people and firms they may pick from (narrowed to their departments in the route).
 export async function violationTargets(companyIds: number[]) {
   await ensureSchema();
   if (!companyIds.length) return { employees: [], companies: [] };
@@ -2308,7 +2308,7 @@ export async function violationTargets(companyIds: number[]) {
 export async function updateViolation(input: { id: number; companyId?: number | null; title: string; note?: string }) {
   await ensureSchema();
   const title = input.title?.trim();
-  if (!title) throw new Error("Noqsanın başlığını yazın.");
+  if (!title) throw new Error("Nöqsanın başlığını yazın.");
   await db().prepare("UPDATE employee_violations SET company_id = ?, title = ?, note = ? WHERE id = ?")
     .bind(input.companyId || null, title, input.note?.trim() || null, input.id).run();
 }

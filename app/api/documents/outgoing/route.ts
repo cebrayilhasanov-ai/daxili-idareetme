@@ -1,6 +1,6 @@
 import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, recordApproval, updateOutgoingDocument } from "@/db/catalog";
 
-// Çıxan Sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
+// Çıxan sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
 // (db/catalog.ts, outgoingRights) — department members and the director see their documents without the permission.
 import { requireUser } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    // Anyone who holds the Çıxan Sənədlər permission registers documents for their own firms.
+    // Anyone who holds the Çıxan sənədlər permission registers documents for their own firms.
     const user = await requireAction(await requireUser(request), "documents.outgoing", "add");
     const body = await request.json();
     const created = await createOutgoingDocument(user, { ...body, companyId: Number(body.companyId) });

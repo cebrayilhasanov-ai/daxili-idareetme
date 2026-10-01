@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
-// Noqsanlar (Versiya 2.62): with only Baxış an employee sees the violations recorded on them; with Əlavə et, Dəyişiklik et or
+// Nöqsanlar (Versiya 2.62): with only Baxış an employee sees the violations recorded on them; with Əlavə et, Dəyişiklik et or
 // Sil they manage violations — since 2.65 only of the people in the departments they oversee (db/department-scope.ts).
 // The admin manages all of them.
 
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     const companyId = body.companyId ? Number(body.companyId) : null;
     await checkTarget(await departmentScope(user), Number(body.employeeId), companyId);
     await createViolation({ employeeId: Number(body.employeeId), companyId: companyId ?? undefined, title: String(body.title || ""), note: body.note, createdByName: user.name });
-    await logAudit(user, "Noqsan qeydə alındı", "employee", `#${body.employeeId}`);
+    await logAudit(user, "Nöqsan qeydə alındı", "employee", `#${body.employeeId}`);
     return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Qeyd saxlanmadı." }, { status: 400 }); }
 }
@@ -74,7 +74,7 @@ export async function PATCH(request: Request) {
     const row = await checkExisting(scope, id);
     await checkTarget(scope, row.employee_id, companyId);
     await updateViolation({ id, companyId, title: String(body.title || ""), note: body.note });
-    await logAudit(user, "Noqsan qeydi dəyişdirildi", "employee", `#${id}`);
+    await logAudit(user, "Nöqsan qeydi dəyişdirildi", "employee", `#${id}`);
     return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Qeyd dəyişdirilmədi." }, { status: 400 }); }
 }
@@ -86,7 +86,7 @@ export async function DELETE(request: Request) {
     if (!id) return Response.json({ error: "Silinəcək qeyd seçilməyib." }, { status: 400 });
     await checkExisting(await departmentScope(user), id);
     await deleteViolation(id);
-    await logAudit(user, "Noqsan qeydi silindi", "employee", `#${id}`);
+    await logAudit(user, "Nöqsan qeydi silindi", "employee", `#${id}`);
     return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Qeyd silinmədi." }, { status: 500 }); }
 }

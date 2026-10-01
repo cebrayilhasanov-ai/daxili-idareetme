@@ -16,7 +16,7 @@ import {
 } from "@/lib/hr-orders";
 import { docxParagraphs } from "@/lib/docx-text";
 
-// HR → Əmrlər: leave, termination and other orders are written here (never on the card), printed from the system and take
+// Kadrlar → Əmrlər: leave, termination and other orders are written here (never on the card), printed from the system and take
 // effect once their signed copy is uploaded — a leave then goes on the card, a termination fills the card's "İşdən çıxma".
 // Other orders take their text from a "Digər əmr" template's Word file.
 

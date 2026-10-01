@@ -54,7 +54,7 @@ export async function ensureRequestSchema() {
   if (!columns.results.some((column) => column.name === "task_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN task_id INTEGER REFERENCES tasks(id)").run();
   // A request sent from a step of "İşlərim" (Mənim iş axınım) remembers that step, so the step can show its status and answer.
   if (!columns.results.some((column) => column.name === "personal_work_item_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN personal_work_item_id INTEGER").run();
-  // A request a department raised on an incoming document (Daxil Olan Sənədlər → "Sorğu yarat").
+  // A request a department raised on an incoming document (Daxil olan sənədlər → "Sorğu yarat").
   if (!columns.results.some((column: { name: string }) => column.name === "incoming_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN incoming_id INTEGER").run();
   // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
   await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
@@ -106,7 +106,7 @@ async function loadStructure() {
 
 type Structure = Awaited<ReturnType<typeof loadStructure>>;
 
-// Department lookups for other modules (Daxil Olan Sənədlər): an employee's department in a firm, and the departments they head there.
+// Department lookups for other modules (Daxil olan sənədlər): an employee's department in a firm, and the departments they head there.
 export async function companyDepartments() {
   const structure = await loadStructure();
   const headedBy = (companyId: number, employeeId: number | null) => {

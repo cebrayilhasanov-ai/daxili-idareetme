@@ -99,7 +99,7 @@ export async function ensureHrSchema() {
   await db().prepare("CREATE INDEX IF NOT EXISTS hr_prior_jobs_customer ON hr_prior_jobs(customer_id)").run();
   const jobColumns = (await db().prepare("PRAGMA table_info(hr_prior_jobs)").all<{ name: string }>()).results;
   if (!jobColumns.some((c: { name: string }) => c.name === "termination_reason")) await db().prepare("ALTER TABLE hr_prior_jobs ADD COLUMN termination_reason TEXT").run();
-  // A leave given by an order points at it; such a leave is changed or removed only through its order (HR → Əmrlər).
+  // A leave given by an order points at it; such a leave is changed or removed only through its order (Kadrlar → Əmrlər).
   const leaveColumns = (await db().prepare("PRAGMA table_info(hr_leaves)").all<{ name: string }>()).results;
   if (!leaveColumns.some((c: { name: string }) => c.name === "order_id")) await db().prepare("ALTER TABLE hr_leaves ADD COLUMN order_id INTEGER").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS hr_family (
@@ -240,7 +240,7 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
     const same = await db().prepare("SELECT id, last_name, first_name FROM hr_employees WHERE fin = ? AND id != ?").bind(fin, id || 0).first<{ id: number; last_name: string; first_name: string }>();
     if (same) throw new Error(`Bu FİN artıq ${same.last_name} ${same.first_name} adlı işçidə qeydə alınıb.`);
   }
-  // Termination is recorded by a signed termination order (HR → Əmrlər), never from the card: the card keeps what is stored.
+  // Termination is recorded by a signed termination order (Kadrlar → Əmrlər), never from the card: the card keeps what is stored.
   const stored = id ? await db().prepare("SELECT termination_date, termination_reason FROM hr_employees WHERE id = ?").bind(id).first<{ termination_date: string | null; termination_reason: string | null }>() : null;
   const terminationDate = stored?.termination_date || null;
   if (terminationDate && terminationDate < hireDate) throw new Error("İşə qəbul tarixi işdən çıxma tarixindən sonra ola bilməz.");
@@ -332,8 +332,8 @@ export async function saveHrLeave(input: Record<string, unknown>) {
   if (!employeeId) throw new Error("İşçi seçilməyib.");
   const kind = String(input.kind || "");
   if (!LEAVE_KINDS.some((k) => k.key === kind)) throw new Error("Məzuniyyətin növünü seçin.");
-  // Leaves come from signed orders (HR → Əmrlər); on the card only sick notes are recorded, and a leave made by an order stays as the order says.
-  if (kind !== "sick") throw new Error("Məzuniyyət yalnız əmr əsasında qeydə alınır — HR → Əmrlər bölməsindən məzuniyyət əmri verin.");
+  // Leaves come from signed orders (Kadrlar → Əmrlər); on the card only sick notes are recorded, and a leave made by an order stays as the order says.
+  if (kind !== "sick") throw new Error("Məzuniyyət yalnız əmr əsasında qeydə alınır — Kadrlar → Əmrlər bölməsindən məzuniyyət əmri verin.");
   if (Number(input.id)) await assertNotFromOrder(Number(input.id));
   const start = date(input.startDate, "Başlama tarixi"), end = date(input.endDate, "Bitmə tarixi");
   if (!start || !end) throw new Error("Başlama və bitmə tarixlərini daxil edin.");
@@ -416,7 +416,7 @@ export async function getHrCustomerReport() {
 
 async function assertNotFromOrder(id: number) {
   const row = await db().prepare("SELECT order_id FROM hr_leaves WHERE id = ?").bind(id).first<{ order_id: number | null }>();
-  if (row?.order_id) throw new Error("Bu məzuniyyət əmr əsasında qeydə alınıb — onu yalnız əmri ləğv etməklə dəyişmək olar (HR → Əmrlər).");
+  if (row?.order_id) throw new Error("Bu məzuniyyət əmr əsasında qeydə alınıb — onu yalnız əmri ləğv etməklə dəyişmək olar (Kadrlar → Əmrlər).");
 }
 
 export async function deleteHrLeave(id: number) {

@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       return Response.json({ rows: rows.filter((r) => visible.has(Number(r.hr_employee_id))) });
     }
     return Response.json(await hrBody(user));
-  } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "HR məlumatları açılmadı." }, { status: 500 }); }
+  } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Kadr məlumatları açılmadı." }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
@@ -55,12 +55,12 @@ export async function POST(request: Request) {
     if (body.id && ["leave", "family", "education"].includes(String(body.action))) await requireCardRowInScope(scope, body.action, Number(body.id));
     if (body.action === "employee") {
       const id = await saveHrEmployee(body);
-      await logAudit(user, body.id ? "HR: işçi kartı yeniləndi" : "HR: işçi əlavə edildi", "hr_employee", `${body.lastName || ""} ${body.firstName || ""}`.trim() || `#${id}`);
+      await logAudit(user, body.id ? "Kadrlar: işçi kartı yeniləndi" : "Kadrlar: işçi əlavə edildi", "hr_employee", `${body.lastName || ""} ${body.firstName || ""}`.trim() || `#${id}`);
       return Response.json(await hrBody(user, { savedId: id }));
     }
     if (body.action === "customer") {
       const customerId = await createHrCustomer(body.customer || {});
-      await logAudit(user, "Müştəri yaradıldı (HR, əvvəlki iş yeri)", "customer", String(body.customer?.name || ""));
+      await logAudit(user, "Müştəri yaradıldı (Kadrlar, əvvəlki iş yeri)", "customer", String(body.customer?.name || ""));
       return Response.json(await hrBody(user, { customerId }));
     }
     if (body.action === "leave") await saveHrLeave(body);
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     else if (body.action === "salary-fill") await fillHrSalaries(Number(body.hrEmployeeId), Number(body.months) || 12);
     else if (body.action === "calendar-day") await saveHrCalendarDay(body);
     else if (body.action === "calendar-seed") await seedHrCalendar(Number(body.year));
-    else if (body.action === "params") { await saveHrParams(body.params); await logAudit(user, "HR: hesablama parametrləri dəyişdirildi", "hr_settings", null); }
+    else if (body.action === "params") { await saveHrParams(body.params); await logAudit(user, "Kadrlar: hesablama parametrləri dəyişdirildi", "hr_settings", null); }
     else return Response.json({ error: "Əməliyyat seçilməyib." }, { status: 400 });
     return Response.json(await hrBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Məlumat saxlanmadı." }, { status: 400 }); }
@@ -91,7 +91,7 @@ export async function DELETE(request: Request) {
       if (!id) return Response.json({ error: "İşçi seçilməyib." }, { status: 400 });
       const label = await hrEmployeeLabel(id);
       await deleteHrEmployee(id);
-      await logAudit(user, "HR: işçi kartı silindi", "hr_employee", label);
+      await logAudit(user, "Kadrlar: işçi kartı silindi", "hr_employee", label);
     } else if (type === "leave") await deleteHrLeave(Number(params.get("id")));
     else if (type === "family") await deleteHrFamilyMember(Number(params.get("id")));
     else if (type === "education") await deleteHrEducation(Number(params.get("id")));

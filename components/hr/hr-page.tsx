@@ -75,7 +75,7 @@ export function HrPage({ section }: { section: HrSection }) {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/hr").then(async (r) => { const body = await r.json(); if (!r.ok) throw new Error(body.error); if (!cancelled) setData(body); })
-      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "HR məlumatları açılmadı."); });
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Kadr məlumatları açılmadı."); });
     return () => { cancelled = true; };
   }, []);
   const call: Call = async (method, payload) => {
@@ -88,7 +88,7 @@ export function HrPage({ section }: { section: HrSection }) {
     return body;
   };
   if (error) return <section className="panel pagepanel directorypanel"><div className="errorbox">{error}</div></section>;
-  if (!data) return <section className="panel pagepanel directorypanel"><div className="loading">HR məlumatları yüklənir...</div></section>;
+  if (!data) return <section className="panel pagepanel directorypanel"><div className="loading">Kadr məlumatları yüklənir...</div></section>;
   if (section === "calendar") return <CalendarSection data={data} call={call} />;
   if (section === "settings") return <SettingsSection data={data} call={call} />;
   if (section === "customers") return <CustomerReportSection data={data} />;
@@ -518,7 +518,7 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       {employee.termination_date
         ? <div className="hrgrid"><span className="field">İşdən çıxma tarixi<b className="hrreadonly">{formatDay(employee.termination_date)}</b></span><span className="field hrwide">Əsas<b className="hrreadonly">{reasonLabel(employee.termination_reason)}</b></span></div>
         : <small className="hrhint">İşçi işləyir.</small>}
-      <small className="hrhint">İşdən çıxma yalnız əmr əsasında qeydə alınır: <b>HR → Əmrlər → İşdən çıxma əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə tarix və əsas buraya yazılır; əmr ləğv edilərsə, silinir.{employee.termination_date && !employee.termination_order_id ? " (Bu qeyd əmrlər bölməsindən əvvəl əl ilə yazılıb.)" : ""}</small>
+      <small className="hrhint">İşdən çıxma yalnız əmr əsasında qeydə alınır: <b>Kadrlar → Əmrlər → İşdən çıxma əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə tarix və əsas buraya yazılır; əmr ləğv edilərsə, silinir.{employee.termination_date && !employee.termination_order_id ? " (Bu qeyd əmrlər bölməsindən əvvəl əl ilə yazılıb.)" : ""}</small>
     </fieldset>}
     <label className="field">Qeyd<Input value={form.note} onChange={(e) => set("note")(e.target.value)} /></label>
     {error && <div className="errorbox">{error}</div>}
@@ -606,7 +606,7 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   </div>;
 }
 
-// ---------------------------------------------------------------- Müştərilər üzrə hesabat
+// ---------------------------------------------------------------- Əvvəlki iş yerləri
 type CustomerReportRow = { customer_id: number; hr_employee_id: number; last_name: string; first_name: string; patronymic: string | null; prior_position: string; start_date: string; end_date: string; prior_termination_reason: string | null; current_position: string | null; company_name: string | null; termination_date: string | null };
 const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
 function CustomerReportSection({ data }: { data: HrData }) {
@@ -640,7 +640,7 @@ function CustomerReportSection({ data }: { data: HrData }) {
   };
   const people = new Set(groups.flatMap((g) => g.list.map((r) => r.hr_employee_id))).size;
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Müştərilər üzrə hesabat</h2><p>Müştərilərdə əvvəllər işləmiş əməkdaşlarımız · {groups.length} müştəri, {people} işçi</p></div><Button disabled={!groups.length} onClick={exportCsv}>Excel-ə yüklə (CSV)</Button></div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Əvvəlki iş yerləri</h2><p>Müştərilərdə əvvəllər işləmiş əməkdaşlarımız · {groups.length} müştəri, {people} işçi</p></div><Button disabled={!groups.length} onClick={exportCsv}>Excel-ə yüklə (CSV)</Button></div>
     <div className="hrfilters">
       <label className="hrsearch">Axtarış<Input value={query} placeholder="Müştəri, VÖEN və ya işçi..." onChange={(e) => setQuery(e.target.value)} /></label>
       <label className="hrcheck"><input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />Yalnız hazırda işləyənlər</label>
@@ -682,7 +682,7 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <span><small>İstifadə olunub</small><b>{days(balance.used)}</b></span>
       {balance.current && <span><small>Cari iş ili</small><b className="hrsmall">{formatDay(balance.current.start)} – {formatDay(balance.current.end)}</b><small>{balance.current.entitlement} gün hüquq · ümumi staj {balance.current.stageYears} il</small></span>}
     </div>
-    <small className="hrhint">Məzuniyyətlər yalnız əmr əsasında qeydə alınır: <b>HR → Əmrlər → Məzuniyyət əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə məzuniyyət bu siyahıya düşür və qalıqdan çıxılır. Kartda yalnız xəstəlik vərəqəsi qeyd olunur.</small>
+    <small className="hrhint">Məzuniyyətlər yalnız əmr əsasında qeydə alınır: <b>Kadrlar → Əmrlər → Məzuniyyət əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə məzuniyyət bu siyahıya düşür və qalıqdan çıxılır. Kartda yalnız xəstəlik vərəqəsi qeyd olunur.</small>
     <h4>{form.id ? "Xəstəlik vərəqəsini redaktə et" : "Xəstəlik vərəqəsi"}</h4>
     <div className="hrgrid hrleaveform">
       <label className="field">Başlama<Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></label>
@@ -803,7 +803,7 @@ function SettlementTab({ employee, data }: { employee: HrEmployee; data: HrData 
       </tbody></table></div>
     </>}
     <div className="hractions"><Button variant="outline" disabled={!result} onClick={print}><Printer />Çap et</Button></div>
-    <small className="hrhint">Bu tab hesablamaya baxmaq və çap etmək üçündür. İşdən çıxmanı rəsmiləşdirmək üçün <b>HR → Əmrlər → İşdən çıxma əmrləri</b> bölməsində əmr verin — əmrlə birlikdə bu hesablaşma da çap olunur.</small>
+    <small className="hrhint">Bu tab hesablamaya baxmaq və çap etmək üçündür. İşdən çıxmanı rəsmiləşdirmək üçün <b>Kadrlar → Əmrlər → İşdən çıxma əmrləri</b> bölməsində əmr verin — əmrlə birlikdə bu hesablaşma da çap olunur.</small>
   </div>;
 }
 

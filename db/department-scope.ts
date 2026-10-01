@@ -2,7 +2,7 @@ import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { companyDepartments } from "@/db/requests";
 
-// HR by department (Versiya 2.65): in Noqsanlar, Personallar and Əmrlər everyone works — within the rights the admin gave —
+// HR by department (Versiya 2.65): in Nöqsanlar, Personallar and Əmrlər everyone works — within the rights the admin gave —
 // only with the people of the departments they oversee: their own, and those under them in the firm's structure
 // (Firmalar → Struktur, "reports to"). The director, at the top, oversees the whole firm; the admin everything (scope null).
 
@@ -76,7 +76,7 @@ export async function requireOrderInScope(scope: DepartmentScope, orderId: numbe
   await requireHrEmployeeInScope(scope, row.hr_employee_id);
 }
 
-// An app user (Noqsanlar are recorded on them) is in the scope when they work in an overseen department of the firm —
+// An app user (Nöqsanlar are recorded on them) is in the scope when they work in an overseen department of the firm —
 // the violation's firm, or any of the viewer's firms when the violation has none.
 export async function userScopeTest(scope: DepartmentScope) {
   const departmentsOf = await userDepartments();

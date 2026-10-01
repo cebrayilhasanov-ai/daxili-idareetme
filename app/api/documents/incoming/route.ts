@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { requireAction, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
-// Daxil Olan Sənədlər (Versiya 2.59): registering needs the section permission; seeing a document, the director's look and
+// Daxil olan sənədlər (Versiya 2.59): registering needs the section permission; seeing a document, the director's look and
 // tasks, and raising a request from it are decided per document (db/catalog.ts, incomingRights) — so department members and
 // the director reach it without the permission.
 

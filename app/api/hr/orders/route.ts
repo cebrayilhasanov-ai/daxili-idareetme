@@ -53,23 +53,23 @@ export async function POST(request: Request) {
     }
     let savedId: number | undefined;
     if (body.action === "leave") {
-      if (body.id) { await updateLeaveOrder(body); await logAudit(user, "HR: məzuniyyət əmri dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
-      else { savedId = await createLeaveOrder(user, body); await logAudit(user, "HR: məzuniyyət əmri qeydə alındı", "hr_order", await orderLabel(savedId)); }
+      if (body.id) { await updateLeaveOrder(body); await logAudit(user, "Kadrlar: məzuniyyət əmri dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
+      else { savedId = await createLeaveOrder(user, body); await logAudit(user, "Kadrlar: məzuniyyət əmri qeydə alındı", "hr_order", await orderLabel(savedId)); }
     } else if (body.action === "termination") {
-      if (body.id) { await updateTerminationOrder(body); await logAudit(user, "HR: işdən çıxma əmri dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
-      else { savedId = await createTerminationOrder(user, body); await logAudit(user, "HR: işdən çıxma əmri qeydə alındı", "hr_order", await orderLabel(savedId)); }
+      if (body.id) { await updateTerminationOrder(body); await logAudit(user, "Kadrlar: işdən çıxma əmri dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
+      else { savedId = await createTerminationOrder(user, body); await logAudit(user, "Kadrlar: işdən çıxma əmri qeydə alındı", "hr_order", await orderLabel(savedId)); }
     } else if (body.action === "other") {
-      if (body.id) { await updateOtherOrder(body); await logAudit(user, "HR: əmr dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
-      else { savedId = await createOtherOrder(user, body); await logAudit(user, "HR: əmr qeydə alındı", "hr_order", await orderLabel(savedId)); }
+      if (body.id) { await updateOtherOrder(body); await logAudit(user, "Kadrlar: əmr dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }
+      else { savedId = await createOtherOrder(user, body); await logAudit(user, "Kadrlar: əmr qeydə alındı", "hr_order", await orderLabel(savedId)); }
     } else if (body.action === "sign") {
       await signOrder(body);
-      await logAudit(user, "HR: əmrin imzalı nüsxəsi yükləndi", "hr_order", await orderLabel(Number(body.id)));
+      await logAudit(user, "Kadrlar: əmrin imzalı nüsxəsi yükləndi", "hr_order", await orderLabel(Number(body.id)));
     } else if (body.action === "cancel") {
       await cancelOrder(body);
-      await logAudit(user, "HR: əmr ləğv edildi", "hr_order", `${await orderLabel(Number(body.id))} — ${String(body.reason || "")}`);
+      await logAudit(user, "Kadrlar: əmr ləğv edildi", "hr_order", `${await orderLabel(Number(body.id))} — ${String(body.reason || "")}`);
     } else if (body.action === "settings") {
       await saveOrderSettings(body);
-      await logAudit(user, "HR: əmr parametrləri dəyişdirildi", "hr_settings", null);
+      await logAudit(user, "Kadrlar: əmr parametrləri dəyişdirildi", "hr_settings", null);
     } else return Response.json({ error: "Əməliyyat seçilməyib." }, { status: 400 });
     return Response.json(await ordersBody(user, { savedId }));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Əmr saxlanmadı." }, { status: 400 }); }

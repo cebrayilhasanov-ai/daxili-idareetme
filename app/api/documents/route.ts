@@ -13,7 +13,7 @@ function authError(error: unknown) {
 export async function GET(request: Request) {
   try {
     const user = await requireUser(request);
-    // Şablonlar is admin-only; employees read the list only through Çıxan Sənədlər (to download a template while writing).
+    // Şablonlar is admin-only; employees read the list only through Çıxan sənədlər (to download a template while writing).
     if (user.role !== "admin") await requireSection(user, "documents.outgoing");
     return Response.json({ items: await getDocumentTemplates(), storage: user.role === "admin" ? await getDocumentStorage() : undefined });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }

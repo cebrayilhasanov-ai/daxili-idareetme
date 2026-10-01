@@ -49,12 +49,12 @@ export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, a
   }, [showTemplates, showOutgoing, showIncoming, activeCompanyId]);
   const n = (key: string) => counts ? counts[key] ?? 0 : null;
   const cards: OverviewCard[] = [];
-  if (showIncoming) cards.push({ key: "incoming", title: "Daxil Olan Sənədlər", text: "Daxil olan sənədlərin qeydiyyatı, rəhbərin baxışı, tapşırıqlar və təsdiq.", onOpen: () => open("incoming"), stats: [
+  if (showIncoming) cards.push({ key: "incoming", title: "Daxil olan sənədlər", text: "Daxil olan sənədlərin qeydiyyatı, rəhbərin baxışı, tapşırıqlar və təsdiq.", onOpen: () => open("incoming"), stats: [
     { label: "sənəd", value: n("incoming") },
     ...(counts?.isDirector ? [{ label: "rəhbərin baxışında", value: n("incomingDirector"), alert: true }] : []),
     { label: "təsdiqimi gözləyir", value: n("incomingApproval"), alert: true },
   ] });
-  if (showOutgoing) cards.push({ key: "outgoing", title: "Çıxan Sənədlər", text: "Göndərilən sənədlərin qeydiyyatı, hazır sənəd və təsdiq.", onOpen: () => open("outgoing"), stats: [
+  if (showOutgoing) cards.push({ key: "outgoing", title: "Çıxan sənədlər", text: "Göndərilən sənədlərin qeydiyyatı, hazır sənəd və təsdiq.", onOpen: () => open("outgoing"), stats: [
     { label: "sənəd", value: n("outgoing") },
     { label: "hazır sənəd yüklənməyib", value: n("outgoingNoFinal"), alert: true },
     { label: "təsdiqimi gözləyir", value: n("outgoingApproval"), alert: true },
@@ -89,17 +89,20 @@ export function HrOverview({ showViolations, showPersonnel, showOrders, activeCo
   }, [showViolations, showPersonnel, showOrders, activeCompanyId]);
   const n = (key: string) => counts ? counts[key] ?? 0 : null;
   const cards: OverviewCard[] = [];
-  if (showViolations) cards.push({ key: "violations", title: "Noqsanlar", text: "İşçilər üzrə qeydə alınmış nöqsanlar.", onOpen: () => open("violations"), stats: [
+  if (showViolations) cards.push({ key: "violations", title: "Nöqsanlar", text: "İşçilər üzrə qeydə alınmış nöqsanlar.", onOpen: () => open("violations"), stats: [
     { label: "bu ay", value: n("violationsMonth"), alert: true }, { label: "cəmi", value: n("violations") },
   ] });
   if (showPersonnel) {
     cards.push({ key: "personnel", title: "Personallar", text: "İşçi kartları, məzuniyyət qalığı, son hesablaşma.", onOpen: () => open("personnel"), stats: [{ label: "işləyən", value: n("working") }] });
-    cards.push({ key: "customers", title: "Müştərilər üzrə hesabat", text: "İşçilərin əvvəlki iş yerləri müştərilər üzrə.", onOpen: () => open("customers") });
+    cards.push({ key: "customers", title: "Əvvəlki iş yerləri", text: "İşçilərin əvvəlki iş yerləri müştərilər üzrə.", onOpen: () => open("customers") });
     cards.push({ key: "calendar", title: "İstehsalat təqvimi", text: "Bayram, qeyri-iş və köçürülən günlər.", onOpen: () => open("calendar") });
     cards.push({ key: "settings", title: "Hesablama parametrləri", text: "Məzuniyyət və hesablaşma qaydaları, hüquqi əsaslar.", onOpen: () => open("settings") });
   }
   if (showOrders) cards.push({ key: "orders", title: "Əmrlər", text: "Məzuniyyət, işdən çıxma və digər əmrlər.", onOpen: () => open("orders"), stats: [
     { label: "imzalı nüsxə gözləyir", value: n("ordersPending"), alert: true }, { label: "cəmi", value: n("orders") },
   ] });
+  // Same order as the menu (Versiya 2.71): daily work first, settings-like sections last.
+  const order = ["personnel", "orders", "violations", "customers", "calendar", "settings"];
+  cards.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   return <SectionOverview cards={cards} loading={!counts}/>;
 }
