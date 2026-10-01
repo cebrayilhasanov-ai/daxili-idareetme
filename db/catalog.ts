@@ -3,6 +3,7 @@ import type { SessionUser } from "@/lib/auth";
 import { periodWindow } from "@/lib/fixed-periods";
 import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { parseHiddenSections, sectionRights } from "@/lib/permissions";
+import { formatPhone } from "@/lib/phone";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -1506,7 +1507,7 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const result = await db().prepare(`INSERT INTO outgoing_documents
     (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
-    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, input.phone || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, formatPhone(input.phone) || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
   return { id: Number(result.meta.last_row_id), outgoingNo };
 }
 
@@ -1543,7 +1544,7 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
       input.documentDate ?? current.document_date,
       input.voen ?? current.voen,
       input.organizationName ?? current.organization_name,
-      input.phone ?? current.phone,
+      input.phone === undefined ? current.phone : formatPhone(input.phone) || null,
       input.note ?? current.note,
       await signedCopyOverride(input.documentType ?? current.document_type, input.signedCopyReturns, current.signed_copy_returns),
       input.id,
@@ -2174,7 +2175,7 @@ function customerPhone(value: string | null | undefined) {
   if (!/^\+?[\d\s()-]+$/.test(phone)) throw new Error("Telefon nömrəsi yalnız rəqəm, boşluq, \"+\", \"-\" və mötərizədən ibarət ola bilər.");
   const digits = phone.replace(/\D/g, "").length;
   if (digits < 7 || digits > 15) throw new Error("Telefon nömrəsi 7–15 rəqəmdən ibarət olmalıdır.");
-  return phone;
+  return formatPhone(phone);
 }
 
 export async function getCustomers() {

@@ -1,4 +1,5 @@
 import { env } from "@/lib/runtime";
+import { formatPhone } from "@/lib/phone";
 import { createCustomer, findCustomerByVoen, getCustomers } from "@/db/catalog";
 import { CALENDAR_KINDS, LEAVE_KINDS, TERMINATION_REASONS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
 
@@ -195,7 +196,7 @@ function phoneValue(value: unknown, label: string, required: boolean) {
   if (!/^\+?[\d\s()-]+$/.test(v)) throw new Error(`${label} yalnız rəqəm, boşluq, "+", "-" və mötərizədən ibarət ola bilər.`);
   const digits = v.replace(/\D/g, "").length;
   if (digits < 9 || digits > 15) throw new Error(`${label} 9–15 rəqəmdən ibarət olmalıdır.`);
-  return v.replace(/\s+/g, " ");
+  return formatPhone(v);
 }
 
 type PriorJobInput = { customerId: number; position: string; startDate: string; endDate: string; terminationReason: string };

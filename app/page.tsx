@@ -13,6 +13,7 @@ import { HrPage, type HrSection } from "@/components/hr/hr-page";
 import { OrdersPage } from "@/components/hr/orders-page";
 import { DocumentsOverview, HrOverview, SectionOverview } from "@/components/section-overview";
 import { ACTIONS, ACTION_LABELS, LEVELED_SECTIONS, actionKey, deniedFromStored, parseStoredPermissions, storedFromDenied, type SectionAction } from "@/lib/permission-model";
+import { formatPhone } from "@/lib/phone";
 import { MONTH_NAMES, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, formatBakuDate, monthlyKey, overdueDays, periodState, periodWindow, weeksOfMonth } from "@/lib/fixed-periods";
 
 type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; is_department_head?:number };
@@ -214,7 +215,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.69</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.70</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>İstifadəçilər</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -1029,7 +1030,7 @@ const customerColumns:Array<{key:string;label:string;width:number;search:(item:C
   {key:"name",label:"Müştərinin adı",width:200,search:i=>i.name||"",render:i=><b>{i.name}</b>},
   {key:"address",label:"Hüquqi ünvan",width:340,search:i=>i.legal_address||"",render:i=><>{i.legal_address||"—"}</>},
   {key:"manager",label:"Rəhbər",width:160,search:i=>i.manager||"",render:i=><>{i.manager||"—"}</>},
-  {key:"phone",label:"Telefon",width:140,search:i=>i.phone||"",render:i=><>{i.phone||"—"}</>},
+  {key:"phone",label:"Telefon",width:140,search:i=>formatPhone(i.phone),render:i=><>{formatPhone(i.phone)||"—"}</>},
 ];
 // Open to every user (the companies are all in one group): everyone can view and add customers; editing and deleting stay admin-only.
 function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePersonnel?:boolean;rights:{add:boolean;edit:boolean;remove:boolean}}){
@@ -1131,7 +1132,7 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     name:(values,set)=><label className="field" key="name">Müştərinin adı<Input value={values.name||""} onChange={e=>set({...values,name:e.target.value})}/></label>,
     address:(values,set)=><label className="field addressfield" key="address">Hüquqi ünvan<Input value={values.legalAddress||""} onChange={e=>set({...values,legalAddress:e.target.value})} onBlur={e=>set({...values,legalAddress:properCase(e.target.value)})}/></label>,
     manager:(values,set)=><label className="field" key="manager">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>,
-    phone:(values,set)=><label className="field" key="phone">Telefon<Input inputMode="tel" placeholder="+994 12 345 67 89" value={values.phone||""} onChange={e=>set({...values,phone:e.target.value})}/></label>,
+    phone:(values,set)=><label className="field" key="phone">Telefon<Input inputMode="tel" placeholder="+99412 345 67 89" value={values.phone||""} onChange={e=>set({...values,phone:e.target.value})} onBlur={()=>set({...values,phone:formatPhone(values.phone)})}/></label>,
   };
   const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.map(key=>fieldRenderers[key](values,set))}</>;
   const excel=useExcelFilters("customers",customerColumns,items);
@@ -1555,7 +1556,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId}:{isAdmin:bool
     {key:"documentDate",label:"Sənədin tarixi",width:110,search:item=>formatDateOnly(item.document_date),render:item=><>{formatDateOnly(item.document_date)}</>},
     {key:"voen",label:"Voeni",width:100,search:item=>item.voen||"",render:item=><>{item.voen||"—"}</>},
     {key:"organizationName",label:"Təşkilatın adı",width:170,search:item=>item.organization_name||"",render:item=><>{item.organization_name||"—"}</>},
-    {key:"phone",label:"Müştərinin Telefonu",width:140,search:item=>item.phone||"",render:item=><>{item.phone||"—"}</>},
+    {key:"phone",label:"Müştərinin Telefonu",width:140,search:item=>formatPhone(item.phone),render:item=><>{formatPhone(item.phone)||"—"}</>},
     {key:"note",label:"Əlavə Qeydlər",width:180,search:item=>item.note||"",render:item=><>{item.note||"—"}</>},
     {key:"draft",label:"İlkin sənəd (Word)",width:210,search:item=>item.draft_name||item.attachment_name||"Yoxdur",render:item=><div className="docstage">
       {stageFile(item,"draft")||(item.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} target="_blank" rel="noreferrer" title="Köhnə qaydada əlavə olunub">{item.attachment_name||"Fayl"}<small>{formatFileSize(item.attachment_size||0)}</small></a>:<span className="nodocument">Yüklənməyib</span>)}
@@ -1768,7 +1769,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
       <Field label="Adı" value={customerForm.name||""} set={v=>setCustomerForm({...customerForm,name:v})}/>
       <Field label="Hüquqi ünvanı" value={customerForm.legalAddress||""} set={v=>setCustomerForm({...customerForm,legalAddress:v})}/>
       <Field label="Rəhbəri" value={customerForm.manager||""} set={v=>setCustomerForm({...customerForm,manager:v})}/>
-      <Field label="Telefonu" type="tel" value={customerForm.phone||""} set={v=>setCustomerForm({...customerForm,phone:v})}/>
+      <label className="field" onBlur={()=>setCustomerForm(f=>({...f,phone:formatPhone(f.phone)}))}>Telefonu<Input type="tel" placeholder="+99450 123 45 67" value={customerForm.phone||""} onChange={e=>setCustomerForm({...customerForm,phone:e.target.value})}/></label>
     </div>
     <div className="inlineactions"><Button disabled={busy||!(customerForm.name||"").trim()||!(customerForm.phone||"").trim()} onClick={()=>void createCustomer(key,values,set)}>{busy?"Yaradılır...":"Müştəri siyahısına əlavə et"}</Button></div>
   </div>;

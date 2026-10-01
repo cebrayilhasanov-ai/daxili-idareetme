@@ -5,6 +5,7 @@ import { Download, Plus, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { formatPhone } from "@/lib/phone";
 import { ActionsHeader, ColGroup, SortableTh, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
 import {
   CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
@@ -122,8 +123,8 @@ function employeeCard(e: HrEmployee, data: HrData, today: string): CardSection[]
   const family = data.family.filter((f) => f.hr_employee_id === e.id);
   const education = data.education.filter((x) => x.hr_employee_id === e.id);
   const sections: CardSection[] = [
-    { title: "Şəxsi məlumatlar", fields: [["Soyad", dash(e.last_name)], ["Ad", dash(e.first_name)], ["Ata adı", dash(e.patronymic)], ["Doğum tarixi", dayOrDash(e.birth_date)], ["Cins", dash(e.gender)], ["Telefon", dash(e.phone)]] },
-    { title: "Təcili əlaqə şəxsi", fields: [["Adı, soyadı", dash(e.emergency_name)], ["Qohumluq", dash(e.emergency_relation)], ["Telefon", dash(e.emergency_phone)]] },
+    { title: "Şəxsi məlumatlar", fields: [["Soyad", dash(e.last_name)], ["Ad", dash(e.first_name)], ["Ata adı", dash(e.patronymic)], ["Doğum tarixi", dayOrDash(e.birth_date)], ["Cins", dash(e.gender)], ["Telefon", dash(formatPhone(e.phone))]] },
+    { title: "Təcili əlaqə şəxsi", fields: [["Adı, soyadı", dash(e.emergency_name)], ["Qohumluq", dash(e.emergency_relation)], ["Telefon", dash(formatPhone(e.emergency_phone))]] },
     { title: "Şəxsiyyət vəsiqəsi", fields: [["FİN", dash(e.fin)], ["Seriya və nömrə", dash([e.id_series, e.id_number].filter(Boolean).join(" "))], ["Verən orqan", dash(e.id_issued_by)], ["Verilmə tarixi", dayOrDash(e.id_issued_at)], ["Etibarlıdır (tarixədək)", dayOrDash(e.id_valid_until)], ["Qeydiyyat ünvanı", dash(e.reg_address)]] },
     { title: "İş yeri", fields: [["Firma", dash(e.company_name)], ["Şöbə", dash(e.department)], ["Vəzifə", dash(e.position)], ["İşə qəbul tarixi", dayOrDash(e.hire_date)], ["Bu firmada staj", serviceText(serviceParts(e.hire_date, asOf))], ["İş həftəsi", `${e.work_week || 5} günlük`], ["Vəzifə maaşı", e.monthly_salary ? money(e.monthly_salary) : "—"], ["Sistem istifadəçisi", dash(e.user_employee_name)]] },
     { title: "Əvvəlki iş yerləri", table: prior.jobs.length ? { head: ["İş yeri", "VÖEN", "Vəzifə", "Dövr", "Staj", "İşdən çıxma əsası"], rows: prior.jobs.map((j) => [dash(j.customer_name), dash(j.customer_voen), j.position, `${formatDay(j.start_date)} – ${formatDay(j.end_date)}`, serviceText(serviceParts(j.start_date, j.end_date)), j.termination_reason ? reasonLabel(j.termination_reason) : "—"]) } : undefined,
@@ -189,7 +190,7 @@ async function downloadPersonnelList(list: PersonnelRow[], data: HrData, today: 
     "Müqavilənin növü", "Müqavilənin bitmə tarixi", "Vəzifə maaşı (₼)", "Məzuniyyət qalığı (gün)", "Vəsiqə etibarlıdır", "Ailə vəziyyəti", "Təhsil", "Status", "İşdən çıxma tarixi", "İşdən çıxma əsası"];
   const rows: (XlsxCell | null)[][] = [head.map((c) => ({ value: c, fontWeight: "bold", backgroundColor: "#DDEFF2", wrap: true }))];
   for (const { e, balance } of list) {
-    rows.push([e.last_name, e.first_name, e.patronymic, e.fin, dayOrDash(e.birth_date), e.gender, e.phone, e.company_name, e.department, e.position, dayOrDash(e.hire_date),
+    rows.push([e.last_name, e.first_name, e.patronymic, e.fin, dayOrDash(e.birth_date), e.gender, formatPhone(e.phone), e.company_name, e.department, e.position, dayOrDash(e.hire_date),
       serviceText(serviceParts(e.hire_date, e.termination_date || today)), serviceText(priorOf(e, data).total), e.contract_type ? contractTypeLabel(e.contract_type) : "",
       e.contract_type === "fixed" ? dayOrDash(e.contract_end_date) : "", e.monthly_salary ?? undefined, Math.round(balance.balance * 100) / 100, dayOrDash(e.id_valid_until), e.marital_status,
       highestEducation(e, data), e.termination_date ? "İşdən çıxıb" : "İşləyir", e.termination_date ? formatDay(e.termination_date) : "", e.termination_date ? reasonLabel(e.termination_reason) : ""]
@@ -211,7 +212,7 @@ function personnelColumns(today: string): PersonnelColumn[] {
     { key: "name", label: "İşçi", width: width("name"), search: (r) => fullName(r.e), render: (r) => <span className="hrperson"><HrAvatar employee={r.e} /><span><b>{fullName(r.e)}</b>{r.e.fin && <small className="hrsub">FİN {r.e.fin}</small>}</span></span> },
     { key: "company", label: "Firma / şöbə", width: width("company"), search: (r) => r.e.company_name || "", render: (r) => <>{r.e.company_name || "—"}{r.e.department && <small className="hrsub">{r.e.department}</small>}</> },
     { key: "position", label: "Vəzifə", width: width("position"), search: (r) => r.e.position || "", render: (r) => <>{r.e.position || "—"}</> },
-    { key: "phone", label: "Telefon", width: width("phone"), search: (r) => r.e.phone || "", render: (r) => <>{r.e.phone || "—"}</> },
+    { key: "phone", label: "Telefon", width: width("phone"), search: (r) => formatPhone(r.e.phone), render: (r) => <>{formatPhone(r.e.phone) || "—"}</> },
     { key: "hire", label: "İşə qəbul", width: width("hire"), search: (r) => formatDay(r.e.hire_date), sort: (r) => r.e.hire_date, render: (r) => <>{formatDay(r.e.hire_date)}</> },
     { key: "service", label: "Staj (bu firmada)", width: width("service"), search: (r) => serviceText(serviceParts(r.e.hire_date, r.e.termination_date || today)), sort: (r) => r.e.hire_date, render: (r) => <>{serviceText(serviceParts(r.e.hire_date, r.e.termination_date || today))}</> },
     { key: "balance", label: "Məzuniyyət qalığı", width: width("balance"), search: (r) => `${days(r.balance.balance)} gün`, sort: (r) => r.balance.balance, render: (r) => <b className={r.balance.balance < 0 ? "hrneg" : "hrpos"}>{days(r.balance.balance)} gün</b> },
@@ -385,7 +386,7 @@ function PriorJobRow({ row, index, customers, onChange, onRemove, onCreateCustom
         <label className="field">Adı *<Input value={creating.name} onChange={(e) => setCreating({ ...creating, name: e.target.value })} /></label>
         <label className="field">Hüquqi ünvanı *<Input value={creating.legalAddress} onChange={(e) => setCreating({ ...creating, legalAddress: e.target.value })} /></label>
         <label className="field">Rəhbəri *<Input value={creating.manager} onChange={(e) => setCreating({ ...creating, manager: e.target.value })} /></label>
-        <label className="field">Telefonu *<Input inputMode="tel" placeholder="+994 12 345 67 89" value={creating.phone} onChange={(e) => setCreating({ ...creating, phone: e.target.value })} /></label>
+        <label className="field">Telefonu *<Input inputMode="tel" placeholder="+99412 345 67 89" value={creating.phone} onChange={(e) => setCreating({ ...creating, phone: e.target.value })} onBlur={() => setCreating((c) => c && { ...c, phone: formatPhone(c.phone) })} /></label>
       </div>
       {error && <small className="hrbad">{error}</small>}
       <div className="hractions"><button type="button" className="inlinecancel" disabled={busy} onClick={() => setCreating(null)}>Ləğv et</button><Button type="button" disabled={busy || !creating.name.trim() || !creating.legalAddress.trim() || !creating.manager.trim() || !creating.phone.trim()} onClick={() => void create()}>{busy ? "Yaradılır..." : "Müştəri siyahısına əlavə et"}</Button></div>
@@ -445,7 +446,7 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
     <span className="hrscan"><Input type="file" accept="image/*,application/pdf" disabled={Boolean(uploading)} onChange={(e) => void upload(side, e.target.files?.[0])} />
       {uploading === side ? <small>Yüklənir...</small> : form[`id${side}Key`] ? <small><a href={`/api/file?key=${encodeURIComponent(form[`id${side}Key`])}`} target="_blank" rel="noreferrer">{form[`id${side}Name`] || "Bax"}</a> · <button type="button" className="hrlink" onClick={() => setForm((f) => ({ ...f, [`id${side}Key`]: "", [`id${side}Name`]: "" }))}>götür</button></small> : null}</span></label>;
   const digitsOnly = (key: string, max?: number) => ({ inputMode: "numeric" as const, readOnly: Boolean(prior), onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(key)(e.target.value.replace(/\D/g, "").slice(0, max)) });
-  const phoneProps = { inputMode: "tel", placeholder: "+994 50 123 45 67" };
+  const phoneProps = (key: string) => ({ inputMode: "tel", placeholder: "+99450 123 45 67", onBlur: () => set(key)(formatPhone(form[key])) });
   const canSave = form.lastName.trim() && form.firstName.trim() && form.hireDate && form.phone.trim();
   return <div className="hrcard">
     <fieldset><legend>Şəxsi məlumatlar</legend><div className="hrpersonal">
@@ -458,13 +459,13 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
         {field("Soyad *", "lastName")}{field("Ad *", "firstName")}{field("Ata adı", "patronymic")}
         {field("Doğum tarixi", "birthDate", { type: "date" })}
         <label className="field">Cins<select value={form.gender} onChange={(e) => set("gender")(e.target.value)}><option value="">—</option><option value="Kişi">Kişi</option><option value="Qadın">Qadın</option></select></label>
-        {field("Telefon *", "phone", phoneProps)}
+        {field("Telefon *", "phone", phoneProps("phone"))}
       </div>
     </div></fieldset>
     <fieldset><legend>Təcili əlaqə şəxsi</legend><div className="hrgrid">
       {field("Adı, soyadı", "emergencyName")}
       <label className="field">Qohumluq<Input list="hr-relations" value={form.emergencyRelation} onChange={(e) => set("emergencyRelation")(e.target.value)} /><datalist id="hr-relations">{RELATIONS.map((r) => <option key={r} value={r} />)}</datalist></label>
-      {field(form.emergencyName.trim() ? "Telefon *" : "Telefon", "emergencyPhone", phoneProps)}
+      {field(form.emergencyName.trim() ? "Telefon *" : "Telefon", "emergencyPhone", phoneProps("emergencyPhone"))}
     </div></fieldset>
     <fieldset><legend>Şəxsiyyət vəsiqəsi</legend><div className="hrgrid">
       {field("FİN", "fin", { maxLength: 7, onChange: (e: React.ChangeEvent<HTMLInputElement>) => set("fin")(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7)) })}
@@ -578,11 +579,11 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <label className="field">Ata adı<Input value={family.patronymic} onChange={fam("patronymic")} /></label>
       <label className="field">Doğum tarixi<Input type="date" value={family.birthDate} onChange={fam("birthDate")} /></label>
       <label className="field">İş və ya təhsil yeri<Input value={family.workplace} onChange={fam("workplace")} /></label>
-      <label className="field">Telefon<Input inputMode="tel" placeholder="+994 50 123 45 67" value={family.phone} onChange={fam("phone")} /></label>
+      <label className="field">Telefon<Input inputMode="tel" placeholder="+99450 123 45 67" value={family.phone} onChange={fam("phone")} onBlur={() => setFamily((f) => ({ ...f, phone: formatPhone(f.phone) }))} /></label>
     </div>
     {rightsOf(data).edit && <div className="hractions">{family.id && <button className="inlinecancel" onClick={() => setFamily(emptyFamily())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !family.firstName.trim()} onClick={() => void saveFamily()}>{busy === "family" ? "Saxlanılır..." : family.id ? "Yadda saxla" : "Ailə üzvünü əlavə et"}</Button></div>}
     {members.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Qohumluq</th><th>Soyadı, adı, ata adı</th><th>Doğum tarixi</th><th>Yaşı</th><th>İş / təhsil yeri</th><th>Telefon</th><th></th></tr></thead><tbody>
-      {members.map((m) => <tr key={m.id}><td>{m.relation}</td><td>{[m.last_name, m.first_name, m.patronymic].filter(Boolean).join(" ")}</td><td>{m.birth_date ? formatDay(m.birth_date) : "—"}</td><td>{ageOn(m.birth_date, today) ?? "—"}</td><td>{m.workplace || "—"}</td><td>{m.phone || "—"}</td>
+      {members.map((m) => <tr key={m.id}><td>{m.relation}</td><td>{[m.last_name, m.first_name, m.patronymic].filter(Boolean).join(" ")}</td><td>{m.birth_date ? formatDay(m.birth_date) : "—"}</td><td>{ageOn(m.birth_date, today) ?? "—"}</td><td>{m.workplace || "—"}</td><td>{formatPhone(m.phone) || "—"}</td>
         <td>{rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setFamily({ id: String(m.id), relation: m.relation, lastName: m.last_name || "", firstName: m.first_name, patronymic: m.patronymic || "", birthDate: m.birth_date || "", workplace: m.workplace || "", phone: m.phone || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeFamily(m)}>Sil</button></div>}</td></tr>)}
     </tbody></table></div>}
     <h4>{education.id ? "Təhsil qeydini redaktə et" : "Təhsil"}</h4>
