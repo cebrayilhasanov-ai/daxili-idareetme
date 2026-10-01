@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { TERMINATION_REASONS } from "@/lib/hr-calc";
 import { ORDER_TEMPLATE_TOKENS } from "@/lib/hr-orders";
 import { ActionsHeader, ColGroup, SortableTh, joinClass, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
-import { Bell, Briefcase, Image as ImageIcon, Settings, UserCog, ChevronDown, ChevronLeft, ChevronRight, Building2, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
+import { Bell, Briefcase, Image as ImageIcon, Maximize2, Minimize2, Minus, Settings, UserCog, ChevronDown, ChevronLeft, ChevronRight, Building2, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -121,13 +121,14 @@ export default function Home(){
   useEffect(()=>{
     const onPop=(e:PopStateEvent)=>{
       const raw=e.state?.nav;if(typeof raw!=="string")return;
-      try{const n=JSON.parse(raw);setPage(n.page);setTaskSubTab(n.taskSubTab);setTasksSection(n.tasksSection);setDocumentSubTab(n.documentSubTab);setHrSubTab(n.hrSubTab);setMenu(false)}catch{}
+      try{const n=JSON.parse(raw);setPage(n.page==="chat"?"dashboard":n.page);setTaskSubTab(n.taskSubTab);setTasksSection(n.tasksSection);setDocumentSubTab(n.documentSubTab);setHrSubTab(n.hrSubTab);setMenu(false)}catch{}
     };
     window.addEventListener("popstate",onPop);
     return()=>window.removeEventListener("popstate",onPop);
   },[]);
   // Personal settings (password, background, profile photo) live in the user card at the bottom of the sidebar (Versiya 2.71).
   const [profileMenu,setProfileMenu]=useState(false);
+  const [chatOpen,setChatOpen]=useState(false);
   const [notifOpen,setNotifOpen]=useState(false);
   const [seenOverdue,setSeenOverdue]=useState<number[]>([]);
   const [activeCompanyId,setActiveCompanyId]=useState<number|null>(null);
@@ -159,7 +160,6 @@ export default function Home(){
   // Sections hidden from whoever's view this is: none for the admin, the employee's own set otherwise (an admin in "İstifadəçi görünüşü" previews it).
   const deniedSections=effectiveView?deniedFromStored(parseHiddenSections(effectiveView.hidden_sections)):new Set<string>();
   const can=(key:string)=>!deniedSections.has(key);
-  const shownChatUnread=can("chat")?chatUnread:0;
   const shownRequestsPending=!viewAs&&can("tasks.requests")?requestsPending:0;
   // Şablonlar is the admin's own workspace (naming rules, folders); employees only reach the template files from Çıxan sənədlər.
   const canTemplates=isAdmin&&!viewAs;
@@ -204,7 +204,7 @@ export default function Home(){
     :page==="documents"&&documentSubTab!=="overview"?{label:"Sənədlər",go:()=>setDocumentSubTab("overview")}
     :page==="hr"&&hrSubTab!=="overview"?{label:"Kadrlar",go:()=>setHrSubTab("overview")}
     :null;
-  const nav:[Page,string,React.ComponentType][]=[["dashboard","Ana səhifə",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","Kadrlar",Briefcase],["chat","Çat",MessageCircle],["settings","Tənzimləmələr",Settings]];
+  const nav:[Page,string,React.ComponentType][]=[["dashboard","Ana səhifə",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","Kadrlar",Briefcase],["settings","Tənzimləmələr",Settings]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
   const pageAllowed=page==="customers"?can("dashboard.customers"):page==="requests"?can("tasks.requests"):page==="chat"?can("chat"):page==="hr"?hrSubTab==="overview"?Boolean(firstHrTab):can(hrSubTab==="violations"?"hr.violations":hrSubTab==="orders"?"hr.orders":"hr.personnel")
     :page==="documents"?(documentSubTab==="overview"?Boolean(firstDocumentTab):documentSubTab==="templates"?can(`documents.${documentSubTab}`):canDocument(documentSubTab)):page==="tasks"?(taskSubTab==="overview"?true:taskSubTab==="tasks"?tasksSection==="manager"||can("tasks.mine"):can(`tasks.${taskSubTab}`)):true;
@@ -217,9 +217,9 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.71</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.72</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
-      <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):id==="settings"?isAdmin||can("dashboard.customers"):true).map(([id,label,Icon])=>{
+      <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="settings"?isAdmin||can("dashboard.customers"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
         if(id==="settings"){
           const inSettings=page==="settings"||page==="companies"||page==="customers"||page==="employees"||page==="audit";
@@ -248,7 +248,7 @@ export default function Home(){
         </div></>}</div>
     </aside>
     <main className={user.backgroundKey?"hasbg":undefined} style={user.backgroundKey?{backgroundImage:`linear-gradient(rgba(246,248,255,.2),rgba(242,246,251,.2)), url(/api/file?key=${encodeURIComponent(user.backgroundKey)})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:undefined}>
-      <header><button className="hamb" onClick={()=>setMenu(true)}><Menu/></button><div><div className="headrow">{back&&<button className="backbtn" title={`${back.label} bölməsinə qayıt`} onClick={back.go}><ChevronLeft/>{back.label}</button>}<h1>{subTitle||title[page]}</h1></div><p>{effectiveView?`${effectiveView.name} tapşırıqları`:"İstifadəçiləri, tapşırıqları və nəticələri vahid sistemdə idarə edin"}</p></div><div className="actions"><button onClick={()=>void load()} title="Yenilə"><RefreshCw/></button><div className="bellwrap">{notifOpen&&<button className="notifshade" aria-label="Bağla" onClick={()=>setNotifOpen(false)}/>}<button className="bellbtn" title="Bildirişlər" onClick={()=>setNotifOpen(v=>!v)}><Bell/>{(shownChatUnread+shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0))>0&&<em className="headerbadge">{shownChatUnread+shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0)}</em>}</button>{notifOpen&&<div className="notifpanel">{can("chat")&&<div className="notifsection"><b>Oxunmamış mesajlar</b><button onClick={()=>{setNotifOpen(false);setPage("chat")}}>{chatUnread>0?`${chatUnread} yeni mesaj`:"Yeni mesaj yoxdur"}</button></div>}{!viewAs&&can("tasks.requests")&&<div className="notifsection"><b>Sorğular</b><button onClick={()=>{setNotifOpen(false);setPage("requests")}}>{requestsPending>0?`${requestsPending} sorğu sizi gözləyir`:"Gözləyən sorğu yoxdur"}</button></div>}<div className="notifsection"><b>Gecikən tapşırıqlar</b>{overdue.length?<>{overdue.slice(0,5).map(t=><button key={t.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{t.title} — {t.employee_name}</button>)}{overdue.length>5&&<small>+{overdue.length-5} daha</small>}</>:<small>Gecikən tapşırıq yoxdur</small>}</div>{isAdmin&&!viewAs&&<div className="notifsection"><b>Tarix dəyişikliyi tələbləri</b>{pendingDateRequests.length?<>{pendingDateRequests.slice(0,5).map(r=><button key={r.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{r.task_title} — {r.employee_name} → {formatDate(r.proposed_due_at)}</button>)}{pendingDateRequests.length>5&&<small>+{pendingDateRequests.length-5} daha</small>}</>:<small>Gözləyən tələb yoxdur</small>}</div>}</div>}</div></div></header>
+      <header><button className="hamb" onClick={()=>setMenu(true)}><Menu/></button><div><div className="headrow">{back&&<button className="backbtn" title={`${back.label} bölməsinə qayıt`} onClick={back.go}><ChevronLeft/>{back.label}</button>}<h1>{subTitle||title[page]}</h1></div><p>{effectiveView?`${effectiveView.name} tapşırıqları`:"İstifadəçiləri, tapşırıqları və nəticələri vahid sistemdə idarə edin"}</p></div><div className="actions"><button onClick={()=>void load()} title="Yenilə"><RefreshCw/></button>{!viewAs&&can("chat")&&<div className="bellwrap"><button className={chatOpen?"bellbtn chatbtn on":"bellbtn chatbtn"} title="Çat" aria-pressed={chatOpen} onClick={()=>setChatOpen(v=>!v)}><MessageCircle/>{chatUnread>0&&<em className="headerbadge">{chatUnread}</em>}</button></div>}<div className="bellwrap">{notifOpen&&<button className="notifshade" aria-label="Bağla" onClick={()=>setNotifOpen(false)}/>}<button className="bellbtn" title="Bildirişlər" onClick={()=>setNotifOpen(v=>!v)}><Bell/>{(shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0))>0&&<em className="headerbadge">{shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0)}</em>}</button>{notifOpen&&<div className="notifpanel">{!viewAs&&can("tasks.requests")&&<div className="notifsection"><b>Sorğular</b><button onClick={()=>{setNotifOpen(false);setPage("requests")}}>{requestsPending>0?`${requestsPending} sorğu sizi gözləyir`:"Gözləyən sorğu yoxdur"}</button></div>}<div className="notifsection"><b>Gecikən tapşırıqlar</b>{overdue.length?<>{overdue.slice(0,5).map(t=><button key={t.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{t.title} — {t.employee_name}</button>)}{overdue.length>5&&<small>+{overdue.length-5} daha</small>}</>:<small>Gecikən tapşırıq yoxdur</small>}</div>{isAdmin&&!viewAs&&<div className="notifsection"><b>Tarix dəyişikliyi tələbləri</b>{pendingDateRequests.length?<>{pendingDateRequests.slice(0,5).map(r=><button key={r.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{r.task_title} — {r.employee_name} → {formatDate(r.proposed_due_at)}</button>)}{pendingDateRequests.length>5&&<small>+{pendingDateRequests.length-5} daha</small>}</>:<small>Gözləyən tələb yoxdur</small>}</div>}</div>}</div></div></header>
       {viewAs&&<div className="viewasbar"><div><strong>{viewAs.name}</strong><span>İstifadəçi görünüşündəsiniz</span></div><button onClick={()=>{setViewAs(null);setPage("employees")}}>Admin görünüşünə qayıt</button></div>}
       {error&&<div className="errorbox">{error}</div>}
       {loading?<div className="loading">Məlumatlar yüklənir...</div>:<>
@@ -267,7 +267,6 @@ export default function Home(){
         {tasksSection==="mine"&&<PersonalWorksPage isAdmin={isAdmin} currentUserId={user.id} viewAsEmployeeId={viewAs?.id??null} companies={companyScopeActive?myCompanies:data.companies} employees={activeEmployees} activeCompanyId={activeCompanyId}/>}</>}
         {(taskSubTab==="monthly"||taskSubTab==="weekly")&&<>{isAdmin&&!viewAs&&<div className="fixedsubtabs"><button className={fixedTab==="catalog"?"on":""} onClick={()=>setFixedTab("catalog")}>Sabit işlərin siyahısı</button><button className={fixedTab==="assignments"?"on":""} onClick={()=>setFixedTab("assignments")}>Personal sabit işlər</button></div>}<WorkList employeeView={Boolean(effectiveView)} tab={fixedTab} frequency={taskSubTab} items={data.workItems} assignments={(effectiveView?data.workAssignments.filter(a=>a.employee_id===effectiveView.id):data.workAssignments).filter(a=>!companyScopeActive||!activeCompanyId||a.company_id===activeCompanyId)} completions={data.workCompletions||[]} employees={activeEmployees} companies={data.companies.filter(c=>Boolean(c.active))} form={form} setForm={setForm} onAdd={()=>void request("POST",{action:"work-item",title:form.workTitle,description:form.workDescription,frequency:taskSubTab})} onDue={(item,dueDay)=>void request("PATCH",{action:"work-item",id:item.id,dueDay})} onAssign={()=>void request("POST",{action:"work-assignment",workDefinitionId:Number(form.assignWorkId),companyIds:(form.assignCompanyIds||"").split(",").filter(Boolean).map(Number),employeeId:Number(form.assignEmployeeId)})} onCatalogAssign={(workDefinitionId,companyId,employeeId)=>void request("POST",{action:"work-assignment",workDefinitionId,companyIds:[companyId],employeeId})} onComplete={(assignmentId,periodKey)=>void request("PATCH",{action:"work-completion",assignmentId,periodKey})}/></>}</>}
         {pageAllowed&&page==="requests"&&<RequestsPage isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null} onActionable={setRequestsPending}/>}
-        {pageAllowed&&page==="chat"&&<ChatPage currentUser={user} onUnread={setChatUnread}/>}
         {page==="employees"&&<EmployeesPage employees={data.employees} companies={data.companies} tasks={data.tasks} onNew={()=>{setEmployeePhoto(null);open("employee")}} onEdit={e=>{setEmployeePhoto(null);open("employee",{id:String(e.id),name:e.name,email:e.email||"",companyIds:e.company_ids||"",companyPositions:companyPositionsForm(e.company_positions),mainCompanyId:e.main_company_id?String(e.main_company_id):"",hiddenSections:e.hidden_sections||"[]"})}} onView={e=>{setViewAs(e);setPage("dashboard")}} onToggle={e=>void request("PATCH",{action:"employee",id:e.id,active:!Boolean(e.active)})} onDelete={e=>void deleteWorker(e)}/>}
         {page==="settings"&&<SectionOverview cards={[
           ...(isAdmin&&!viewAs?[{key:"companies",title:"Firmalar",text:"Firmaların məlumatları və strukturu (şöbələr, vəzifələr, tabeçilik).",stats:[{label:"aktiv firma",value:data.companies.filter(c=>Boolean(c.active)).length}],onOpen:()=>setPage("companies")},
@@ -289,6 +288,7 @@ export default function Home(){
         {pageAllowed&&page==="hr"&&hrSubTab==="violations"&&<ViolationsPage isAdmin={isAdmin} employeeFilter={violationEmployeeFilter} onClearEmployeeFilter={()=>setViolationEmployeeFilter(null)} employees={data.employees} companies={data.companies} activeCompanyId={activeCompanyId}/>}
       </>}
     </main>
+    {chatOpen&&!viewAs&&can("chat")&&<ChatWidget currentUser={user} unread={chatUnread} onUnread={setChatUnread} onClose={()=>setChatOpen(false)}/>}
     <Dialog open={dialog!==null} onOpenChange={v=>!v&&setDialog(null)}><DialogContent className="businessdialog" resizable>
       {dialog==="employee"&&<FormShell title={form.id?"İstifadəçi məlumatlarını redaktə et":"Yeni istifadəçi"} desc={form.id?"Ad, e-poçt, firmalar və hər firma üzrə vəzifəni yeniləyin.":"İstifadəçi, giriş hesabı və işləyəcəyi firmalar birlikdə təyin ediləcək."}><Field label="Ad və soyad" value={form.name||""} set={v=>setForm({...form,name:v})}/><Field label="E-poçt" type="email" value={form.email||""} set={v=>setForm({...form,email:v})}/><label className="field filefield">Şəkil (istəyə bağlı, maks. 5 MB)<Input type="file" accept="image/*" onChange={e=>setEmployeePhoto(e.target.files?.[0]||null)}/>{employeePhoto&&<small>{employeePhoto.name}</small>}</label>{!form.id&&<Field label="Müvəqqəti şifrə (ən az 8 simvol)" type="password" value={form.password||""} set={v=>setForm({...form,password:v})}/>}<label className="field">Əsas iş yeri<select value={form.mainCompanyId||""} onChange={e=>{const id=e.target.value;setForm(f=>{const ids=new Set((f.companyIds||"").split(",").filter(Boolean));if(id)ids.add(id);return {...f,mainCompanyId:id,companyIds:[...ids].join(",")}})}}><option value="">Firma seçin</option>{data.companies.filter(c=>Boolean(c.active)||String(c.id)===form.mainCompanyId).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><EmployeeCompanyPicker companies={data.companies.filter(c=>Boolean(c.active))} companyIds={form.companyIds||""} companyPositions={form.companyPositions||"{}"} onChange={(companyIds,companyPositions)=>setForm(f=>({...f,companyIds,companyPositions,mainCompanyId:companyIds.split(",").includes(f.mainCompanyId||"")?f.mainCompanyId:""}))}/><PermissionTree hidden={parseHiddenSections(form.hiddenSections)} onChange={next=>setForm(f=>({...f,hiddenSections:JSON.stringify(next)}))} employee={form.id?data.employees.find(e=>String(e.id)===form.id)||null:null} assignments={data.workAssignments} copyFrom={data.employees.filter(e=>Boolean(e.active)&&String(e.id)!==form.id)}/><Button disabled={uploadingPhoto||(form.id?(!form.name||!form.email):(!form.name||!form.email||(form.password||"").length<8))} onClick={()=>form.id?void saveEmployeeEdit():void createPersonnel()}>{uploadingPhoto?"Şəkil yüklənir...":form.id?"Dəyişiklikləri saxla":"İstifadəçini və giriş hesabını yarat"}</Button></FormShell>}
       {dialog==="company"&&<FormShell title={form.id?"Firma məlumatlarını redaktə et":"Yeni firma"} desc="Firmanın əsas məlumatlarını daxil edin."><Field label="Firmanın adı" value={form.name||""} set={v=>setForm({...form,name:v})}/><Field label="VÖEN" value={form.voen||""} set={v=>setForm({...form,voen:v})}/><Field label="Rəhbər" value={form.manager||""} set={v=>setForm({...form,manager:v})}/><Button disabled={!form.name} onClick={()=>void request(form.id?"PATCH":"POST",{action:"company",id:form.id?Number(form.id):undefined,name:form.name,voen:form.voen||"",manager:form.manager||""})}>{form.id?"Dəyişiklikləri saxla":"Firmanı əlavə et"}</Button></FormShell>}
@@ -314,68 +314,79 @@ function UsersPage(){
   return <section className="panel pagepanel directorypanel"><div className="pageactions directoryhead"><div><small className="sectioneyebrow">GİRİŞ VƏ İCAZƏLƏR</small><h2>İstifadəçilər</h2><p>Yeni hesab yaradın və giriş icazələrini idarə edin</p></div><Button onClick={()=>setOpen(true)}><Plus/>Yeni istifadəçi</Button></div>{error&&<div className="errorbox">{error}</div>}<div className="usercards">{users.map(u=><article key={u.id}><i>{initials(u.name)}</i><div><h3>{u.name}</h3><p>{u.email}</p><small>{u.role==="admin"?"Baş administrator":"İstifadəçi"}</small></div><span className={u.active?"recordstatus active":"recordstatus inactive"}>{u.active?"Aktiv":"Deaktiv"}</span>{u.role!=="admin"&&<button className={u.active?"deactivatebtn":"activatebtn"} onClick={()=>void toggle(u)}>{u.active?"Deaktiv et":"Aktiv et"}</button>}</article>)}</div><Dialog open={open} onOpenChange={setOpen}><DialogContent className="businessdialog" resizable><FormShell title="Yeni istifadəçi" desc="İstifadəçi öz e-poçtu və müvəqqəti şifrəsi ilə daxil olacaq."><Field label="Ad və soyad" value={form.name} set={v=>setForm({...form,name:v})}/><Field label="Vəzifə" value={form.position} set={v=>setForm({...form,position:v})}/><Field label="E-poçt" type="email" value={form.email} set={v=>setForm({...form,email:v})}/><Field label="Müvəqqəti şifrə (ən az 8 simvol)" type="password" value={form.password} set={v=>setForm({...form,password:v})}/><Button disabled={!form.name||!form.email||form.password.length<8} onClick={()=>void create()}>Hesabı yarat</Button></FormShell></DialogContent></Dialog></section>
 }
 
-// Chat panel size (Versiya 2.66): its left/right edges, bottom edge and bottom corners resize it (it stays centred), and the line
-// between the conversation list and the conversation moves. A smaller panel is moved by its top bars: left/right (2.67, CSS keeps
-// it inside the work area) and up/down (2.68, never above the page title nor below the bottom of the window). Remembered per browser; a double click on a handle or a top bar restores the default.
-type ChatLayout={width:number|null;height:number|null;list:number;x:number;y:number};
-const CHAT_LAYOUT_DEFAULT:ChatLayout={width:null,height:null,list:320,x:0,y:0};
-type ChatHandle="l"|"r"|"b"|"bl"|"br"|"list"|"move";
-function useChatLayout(){
-  const [layout,setLayout]=useState<ChatLayout>(CHAT_LAYOUT_DEFAULT);
-  useEffect(()=>{try{const raw=window.localStorage.getItem("chat:layout");if(raw)setLayout({...CHAT_LAYOUT_DEFAULT,...JSON.parse(raw)})}catch{}},[]);
-  const save=(next:ChatLayout)=>{setLayout(next);try{window.localStorage.setItem("chat:layout",JSON.stringify(next))}catch{}};
+// Çat as a floating window (Versiya 2.72): opened from 💬 next to the bell, in the bottom-right corner, it stays open while the
+// user moves between sections. The title bar moves it, the edges and corners resize it (kept inside the window), "—" folds
+// it into a bar, "⤢" shows the two-column view, "✕" closes it. Place and size are remembered per browser; a double click on
+// the title bar puts it back in the corner. On a phone it fills the screen.
+type ChatWin={x:number|null;y:number|null;w:number;h:number};
+const CHAT_WIN_DEFAULT:ChatWin={x:null,y:null,w:380,h:560};
+type ChatEdge="move"|"n"|"s"|"e"|"w"|"ne"|"nw"|"se"|"sw";
+function ChatWidget({currentUser,unread,onUnread,onClose}:{currentUser:AppUser;unread:number;onUnread:(value:number)=>void;onClose:()=>void}){
+  const [win,setWin]=useState<ChatWin>(CHAT_WIN_DEFAULT);
+  const [expanded,setExpanded]=useState(false);
+  const [minimized,setMinimized]=useState(false);
+  const [thread,setThread]=useState(0);
+  useEffect(()=>{try{const raw=window.localStorage.getItem("chat:window");if(raw)setWin({...CHAT_WIN_DEFAULT,...JSON.parse(raw)})}catch{}},[]);
+  const save=(next:ChatWin)=>{setWin(next);try{window.localStorage.setItem("chat:window",JSON.stringify(next))}catch{}};
   const clamp=(value:number,min:number,max:number)=>Math.min(Math.max(value,min),Math.max(min,max));
-  const startDrag=(kind:ChatHandle)=>(e:React.PointerEvent)=>{
-    // Each handle sits directly inside the chat panel; a top bar is found from inside it (its buttons and fields keep working).
-    if(kind==="move"&&(e.target as HTMLElement).closest("button,input,textarea,select,a"))return;
-    const panel=kind==="move"?(e.currentTarget as HTMLElement).closest<HTMLElement>(".chatpanel"):(e.currentTarget as HTMLElement).parentElement;if(!panel||e.button!==0)return;
+  const startDrag=(edge:ChatEdge)=>(e:React.PointerEvent)=>{
+    if(expanded||e.button!==0)return;
+    if(edge==="move"&&(e.target as HTMLElement).closest("button"))return;
+    const box=(e.currentTarget as HTMLElement).closest<HTMLElement>(".chatwindow");if(!box)return;
     e.preventDefault();
-    const rect=panel.getBoundingClientRect();
-    const room=panel.parentElement?.clientWidth||rect.width;
-    const start={x:e.clientX,y:e.clientY,w:rect.width,h:rect.height,list:layout.list,offset:layout.x,offsetY:layout.y,top:rect.top-layout.y};
-    let latest=layout;
+    const r=box.getBoundingClientRect();
+    const start={px:e.clientX,py:e.clientY,left:r.left,top:r.top,right:r.right,bottom:r.bottom};
+    const W=window.innerWidth,H=window.innerHeight,MINW=320,MINH=380;
+    let latest:ChatWin={x:r.left,y:r.top,w:r.width,h:r.height};
     const move=(ev:PointerEvent)=>{
-      const dx=ev.clientX-start.x,dy=ev.clientY-start.y;
-      const next={...latest};
-      if(kind==="move"){
-        const free=Math.max(0,(room-start.w)/2);next.x=clamp(start.offset+dx,-free,free);
-        next.y=clamp(start.offsetY+dy,0,window.innerHeight-start.top-start.h-12);
-      }
-      else if(kind==="list")next.list=clamp(start.list+dx,200,start.w-360);
+      const dx=ev.clientX-start.px,dy=ev.clientY-start.py;
+      let {left,top,right,bottom}=start;
+      if(edge==="move"){const w=right-left,h=bottom-top;left=clamp(left+dx,0,W-w);top=clamp(top+dy,0,H-h);right=left+w;bottom=top+h}
       else{
-        // The panel is centred, so a side edge moves by the cursor while the width changes on both sides.
-        if(kind==="l"||kind==="bl")next.width=clamp(start.w-2*dx,560,room);
-        if(kind==="r"||kind==="br")next.width=clamp(start.w+2*dx,560,room);
-        if(kind==="b"||kind==="bl"||kind==="br")next.height=clamp(start.h+dy,420,4000);
+        if(edge.includes("w"))left=clamp(left+dx,0,right-MINW);
+        if(edge.includes("e"))right=clamp(right+dx,left+MINW,W);
+        if(edge.includes("n"))top=clamp(top+dy,0,bottom-MINH);
+        if(edge.includes("s"))bottom=clamp(bottom+dy,top+MINH,H);
       }
-      latest=next;setLayout(next);
+      latest={x:left,y:top,w:right-left,h:bottom-top};setWin(latest);
     };
     const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);document.body.classList.remove("chatresizing");save(latest)};
     document.body.classList.add("chatresizing");
     window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);
   };
-  const reset=(kind:ChatHandle)=>()=>save(kind==="move"?{...layout,x:0,y:0}:kind==="list"?{...layout,list:CHAT_LAYOUT_DEFAULT.list}:{...layout,width:null,height:null,x:0,y:0});
-  const style={"--chat-list":`${layout.list}px`,"--chat-x":`${layout.x}px`,"--chat-y":`${layout.y}px`,...(layout.width?{"--chat-w":`${layout.width}px`}:{}),...(layout.height?{"--chat-h":`${layout.height}px`}:{})} as React.CSSProperties;
-  const handles=(["l","r","b","bl","br","list"] as const).map(kind=><span key={kind} className={`chathandle chathandle-${kind}`} title={kind==="list"?"Sürüşdürün — siyahının eni (ikiqat klik: ilkin)":"Sürüşdürün — çatın ölçüsü (ikiqat klik: ilkin)"} onPointerDown={startDrag(kind)} onDoubleClick={reset(kind)}/>);
-  const mover={onPointerDown:startDrag("move"),onDoubleClick:reset("move"),title:"Sürüşdürün — çatı sağa-sola, yuxarı-aşağı aparın (ikiqat klik: ilkin yerinə)"};
-  return {style,handles,mover,className:`panel chatpanel${layout.width||layout.height?" sized":""}${layout.width?" haswidth":""}`};
+  if(minimized)return <div className="chatmini"><button className="chatminiopen" title="Çatı aç" onClick={()=>setMinimized(false)}><MessageCircle/><b>Çat</b>{unread>0&&<em>{unread}</em>}</button><button className="chatminiclose" title="Bağla" onClick={onClose}><X/></button></div>;
+  // Until it is moved the window sits in the corner; a remembered place is kept inside the browser window when that shrinks.
+  const place:React.CSSProperties=expanded?{}:win.x===null||win.y===null?{width:win.w,height:win.h}:{width:win.w,height:win.h,left:`clamp(0px, ${win.x}px, calc(100vw - ${win.w}px))`,top:`clamp(0px, ${win.y}px, calc(100vh - ${win.h}px))`,right:"auto",bottom:"auto"};
+  return <div className={`chatwindow${expanded?" expanded":""}`} style={place} role="dialog" aria-label="Çat">
+    <div className="chatwinbar" onPointerDown={startDrag("move")} onDoubleClick={()=>{if(!expanded)save({...win,x:null,y:null})}} title={expanded?undefined:"Sürüşdürün — pəncərəni aparın (ikiqat klik: küncə qaytar)"}>
+      <MessageCircle/><b>Çat</b>{unread>0&&<em>{unread}</em>}
+      <span className="chatwinbtns"><button title="Yığ" onClick={()=>setMinimized(true)}><Minus/></button><button title={expanded?"Kiçilt":"Böyüt"} onClick={()=>setExpanded(v=>!v)}>{expanded?<Minimize2/>:<Maximize2/>}</button><button title="Bağla" onClick={onClose}><X/></button></span>
+    </div>
+    <ChatPage currentUser={currentUser} onUnread={onUnread} compact={!expanded} initialThread={thread} onThread={setThread}/>
+    {!expanded&&(["n","s","e","w","ne","nw","se","sw"] as ChatEdge[]).map(edge=><span key={edge} className={`chatedge chatedge-${edge}`} onPointerDown={startDrag(edge)}/>)}
+  </div>;
 }
-function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:number)=>void}){
-  const chatLayout=useChatLayout();
+function ChatPage({currentUser,onUnread,compact=false,initialThread=0,onThread}:{currentUser:AppUser;onUnread:(value:number)=>void;compact?:boolean;initialThread?:number;onThread?:(id:number)=>void}){
   const [chat,setChat]=useState<ChatData|null>(null);
-  const [selected,setSelected]=useState(0);
+  const [selected,setSelected]=useState(initialThread);
+  // In the small window the list and the conversation take turns; a conversation counts as read only once it is on screen.
+  const [showRoom,setShowRoom]=useState(Boolean(initialThread));
+  const roomVisible=!compact||showRoom;
+  const roomVisibleRef=useRef(roomVisible);
+  useEffect(()=>{roomVisibleRef.current=roomVisible},[roomVisible]);
   const [message,setMessage]=useState("");
   const [file,setFile]=useState<File|null>(null);
   const [busy,setBusy]=useState(false);
   const [chatError,setChatError]=useState("");
   const [threadQuery,setThreadQuery]=useState("");
   const endRef=useRef<HTMLDivElement|null>(null);
-  const loadChat=async(threadId=selected,quiet=false)=>{try{if(!quiet)setChatError("");const response=await fetch(`/api/chat${threadId?`?threadId=${threadId}`:""}`);const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setSelected(body.selectedThreadId);onUnread(Number(body.totalUnread||0));await fetch("/api/chat",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({threadId:body.selectedThreadId})});}catch(e){if(!quiet)setChatError(e instanceof Error?e.message:"Çat açıla bilmədi.")}};
-  useEffect(()=>{void loadChat(0)},[]);
+  const loadChat=async(threadId=selected,quiet=false)=>{try{if(!quiet)setChatError("");const response=await fetch(`/api/chat${threadId?`?threadId=${threadId}`:""}`);const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setSelected(body.selectedThreadId);onThread?.(body.selectedThreadId);onUnread(Number(body.totalUnread||0));if(roomVisibleRef.current)await fetch("/api/chat",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({threadId:body.selectedThreadId})});}catch(e){if(!quiet)setChatError(e instanceof Error?e.message:"Çat açıla bilmədi.")}};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(()=>{void loadChat(initialThread)},[]);
   useEffect(()=>{const timer=setInterval(()=>void loadChat(selected,true),5000);return()=>clearInterval(timer)},[selected]);
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"})},[chat?.messages.length,selected]);
-  const choose=async(id:number)=>{setSelected(id);await loadChat(id)};
-  const startDirect=async(userId:number)=>{setBusy(true);setChatError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"direct",userId})});const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setSelected(body.selectedThreadId);onUnread(Number(body.totalUnread||0))}catch(e){setChatError(e instanceof Error?e.message:"Söhbət yaradıla bilmədi.")}finally{setBusy(false)}};
+  const choose=async(id:number)=>{setSelected(id);setShowRoom(true);roomVisibleRef.current=true;await loadChat(id)};
+  const startDirect=async(userId:number)=>{setBusy(true);setChatError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"direct",userId})});const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setSelected(body.selectedThreadId);onThread?.(body.selectedThreadId);setShowRoom(true);onUnread(Number(body.totalUnread||0))}catch(e){setChatError(e instanceof Error?e.message:"Söhbət yaradıla bilmədi.")}finally{setBusy(false)}};
   const send=async()=>{if((!message.trim()&&!file)||busy)return;setBusy(true);setChatError("");try{let attachment:Record<string,unknown>={};if(file){if(file.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");const form=new FormData();form.append("file",file);const uploaded=await fetch("/api/file",{method:"POST",body:form});const result=await uploaded.json();if(!uploaded.ok)throw new Error(result.error);attachment={attachmentKey:result.key,attachmentName:result.name,attachmentSize:result.size,attachmentType:result.type}}const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"send",threadId:selected,message,...attachment})});const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setMessage("");setFile(null);onUnread(Number(body.totalUnread||0))}catch(e){setChatError(e instanceof Error?e.message:"Mesaj göndərilmədi.")}finally{setBusy(false)}};
   const active=chat?.threads.find(t=>t.id===selected);
   const filteredThreads=(chat?.threads||[]).filter(t=>t.name.toLocaleLowerCase("az-AZ").includes(threadQuery.toLocaleLowerCase("az-AZ")));
@@ -391,14 +402,13 @@ function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:nu
     const ticks:"sent"|"read"|null=mine&&active?.type==="direct"?(m.id<=Number(chat?.readUpTo||0)?"read":"sent"):null;
     timeline.push({kind:"msg",message:m,grouped,showName,mine,ticks});
   });
-  return <section className={chatLayout.className} style={chatLayout.style}>
-    {chatLayout.handles}
-    <aside className="chatlist"><div className="chatlisthead" {...chatLayout.mover}><div><span className="sectioneyebrow">DAXİLİ YAZIŞMA</span><h2>Söhbətlər</h2></div><MessageCircle/></div>
+  return <section className={`panel chatpanel${compact?" compact":""}${compact&&showRoom?" showroom":""}`}>
+    <aside className="chatlist"><div className="chatlisthead"><div><span className="sectioneyebrow">DAXİLİ YAZIŞMA</span><h2>Söhbətlər</h2></div><MessageCircle/></div>
       <div className="chatsearch"><input placeholder="Axtarış..." value={threadQuery} onChange={e=>setThreadQuery(e.target.value)}/></div>
       <div className="threadlist">{filteredThreads.map(t=><button key={t.id} className={t.id===selected?"active":""} onClick={()=>void choose(t.id)}><i className={t.type!=="group"&&t.avatar_key?"hasphoto":""}>{t.type==="group"?<Users/>:avatarNode(t.avatar_key,t.name)}</i><span><b>{t.name}</b><small>{t.last_message||"Hələ mesaj yoxdur"}</small></span><span className="threadside">{t.last_message_at&&<time>{threadTime(t.last_message_at)}</time>}{Number(t.unread)>0&&<em>{t.unread}</em>}</span></button>)}</div>
       <div className="newchat"><strong>Yeni şəxsi söhbət</strong>{chat?.users.map(u=><button disabled={busy} key={u.id} onClick={()=>void startDirect(u.id)}><i className={u.avatar_key?"hasphoto":""}>{avatarNode(u.avatar_key,u.name)}</i><span>{u.name}<small>{u.email}</small></span><Plus/></button>)}</div>
     </aside>
-    <div className="chatroom"><header className="chatroomhead" {...chatLayout.mover}><i className={active&&active.type!=="group"&&active.avatar_key?"hasphoto":""}>{active?.type==="group"?<Users/>:active?avatarNode(active.avatar_key,active.name):<MessageCircle/>}</i><div><h2>{active?.name||"Çat yüklənir..."}</h2><p>{active?.type==="group"?"Bütün aktiv istifadəçilər":"Şəxsi yazışma"}</p></div></header>
+    <div className="chatroom"><header className="chatroomhead">{compact&&<button className="chatback" title="Söhbətlər" onClick={()=>setShowRoom(false)}><ChevronLeft/></button>}<i className={active&&active.type!=="group"&&active.avatar_key?"hasphoto":""}>{active?.type==="group"?<Users/>:active?avatarNode(active.avatar_key,active.name):<MessageCircle/>}</i><div><h2>{active?.name||"Çat yüklənir..."}</h2><p>{active?.type==="group"?"Bütün aktiv istifadəçilər":"Şəxsi yazışma"}</p></div></header>
       {chatError&&<div className="chaterror">{chatError}</div>}
       <div className="messages">{timeline.length?timeline.map(item=>item.kind==="date"?<div className="datedivider" key={item.key}><span>{item.label}</span></div>:<article key={item.message.id} className={`${item.mine?"mine":""}${item.grouped?" grouped":""}`}><div className="messagebubble">{item.showName&&<span className="msgsender"><i className={item.message.sender_avatar_key?"hasphoto":""}>{avatarNode(item.message.sender_avatar_key,item.message.sender_name)}</i><b>{item.message.sender_name}</b></span>}{item.message.body&&<p>{item.message.body}</p>}{item.message.attachment_key&&<a href={`/api/file?key=${encodeURIComponent(item.message.attachment_key)}`}><FileText/><span>{item.message.attachment_name||"Fayl"}<small>{chatFileSize(item.message.attachment_size||0)}</small></span><Download/></a>}<time>{new Intl.DateTimeFormat("az-AZ",{hour:"2-digit",minute:"2-digit"}).format(new Date(item.message.created_at))}{item.ticks&&<span className={`ticks ${item.ticks}`}>{item.ticks==="read"?"✓✓":"✓"}</span>}</time></div></article>):<div className="chatempty"><MessageCircle/><h3>İlk mesajı yazın</h3><p>Bu söhbətdə hələ mesaj yoxdur.</p></div>}<div ref={endRef}/></div>
       <div className="composer">{file&&<div className="selectedfile"><Paperclip/><span>{file.name}<small>{chatFileSize(file.size)}</small></span><button onClick={()=>setFile(null)}><X/></button></div>}<div><label title="Fayl əlavə et"><Paperclip/><input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><Textarea placeholder="Mesajınızı yazın..." value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}}/><Button title={busy?"Göndərilir...":"Göndər"} disabled={busy||(!message.trim()&&!file)} onClick={()=>void send()}><Send/></Button></div></div>
