@@ -769,3 +769,7 @@ body.chatresizing{user-select:none;cursor:grabbing}
   .chatpanel.sized{margin-top:var(--chat-y,0px)}
   .chatpanel.sized .chatlisthead,.chatpanel.sized .chatroomhead{cursor:grab}
 }
+/* Versiya 2.69: "← Geri" to the parent section, next to the page title. */
+.headrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.backbtn{display:inline-flex;align-items:center;gap:3px;height:30px;padding:0 11px 0 6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0C8599;font-size:12px;font-weight:800;cursor:pointer;flex:none}
+.backbtn:hover{background:#ecfeff;border-color:#0C8599}.backbtn svg{width:16px;height:16px}
