@@ -186,7 +186,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.67</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.68</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>İstifadəçilər</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -268,10 +268,10 @@ function UsersPage(){
 }
 
 // Chat panel size (Versiya 2.66): its left/right edges, bottom edge and bottom corners resize it (it stays centred), and the line
-// between the conversation list and the conversation moves. Since 2.67 a narrowed panel also slides left and right by its top bars
-// (CSS keeps it inside the work area). Remembered per browser; a double click on a handle or a top bar restores the default.
-type ChatLayout={width:number|null;height:number|null;list:number;x:number};
-const CHAT_LAYOUT_DEFAULT:ChatLayout={width:null,height:null,list:320,x:0};
+// between the conversation list and the conversation moves. A smaller panel is moved by its top bars: left/right (2.67, CSS keeps
+// it inside the work area) and up/down (2.68, never above the page title nor below the bottom of the window). Remembered per browser; a double click on a handle or a top bar restores the default.
+type ChatLayout={width:number|null;height:number|null;list:number;x:number;y:number};
+const CHAT_LAYOUT_DEFAULT:ChatLayout={width:null,height:null,list:320,x:0,y:0};
 type ChatHandle="l"|"r"|"b"|"bl"|"br"|"list"|"move";
 function useChatLayout(){
   const [layout,setLayout]=useState<ChatLayout>(CHAT_LAYOUT_DEFAULT);
@@ -285,12 +285,15 @@ function useChatLayout(){
     e.preventDefault();
     const rect=panel.getBoundingClientRect();
     const room=panel.parentElement?.clientWidth||rect.width;
-    const start={x:e.clientX,y:e.clientY,w:rect.width,h:rect.height,list:layout.list,offset:layout.x};
+    const start={x:e.clientX,y:e.clientY,w:rect.width,h:rect.height,list:layout.list,offset:layout.x,offsetY:layout.y,top:rect.top-layout.y};
     let latest=layout;
     const move=(ev:PointerEvent)=>{
       const dx=ev.clientX-start.x,dy=ev.clientY-start.y;
       const next={...latest};
-      if(kind==="move"){const free=Math.max(0,(room-start.w)/2);next.x=clamp(start.offset+dx,-free,free)}
+      if(kind==="move"){
+        const free=Math.max(0,(room-start.w)/2);next.x=clamp(start.offset+dx,-free,free);
+        next.y=clamp(start.offsetY+dy,0,window.innerHeight-start.top-start.h-12);
+      }
       else if(kind==="list")next.list=clamp(start.list+dx,200,start.w-360);
       else{
         // The panel is centred, so a side edge moves by the cursor while the width changes on both sides.
@@ -304,10 +307,10 @@ function useChatLayout(){
     document.body.classList.add("chatresizing");
     window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);
   };
-  const reset=(kind:ChatHandle)=>()=>save(kind==="move"?{...layout,x:0}:kind==="list"?{...layout,list:CHAT_LAYOUT_DEFAULT.list}:{...layout,width:null,height:null,x:0});
-  const style={"--chat-list":`${layout.list}px`,"--chat-x":`${layout.x}px`,...(layout.width?{"--chat-w":`${layout.width}px`}:{}),...(layout.height?{"--chat-h":`${layout.height}px`}:{})} as React.CSSProperties;
+  const reset=(kind:ChatHandle)=>()=>save(kind==="move"?{...layout,x:0,y:0}:kind==="list"?{...layout,list:CHAT_LAYOUT_DEFAULT.list}:{...layout,width:null,height:null,x:0,y:0});
+  const style={"--chat-list":`${layout.list}px`,"--chat-x":`${layout.x}px`,"--chat-y":`${layout.y}px`,...(layout.width?{"--chat-w":`${layout.width}px`}:{}),...(layout.height?{"--chat-h":`${layout.height}px`}:{})} as React.CSSProperties;
   const handles=(["l","r","b","bl","br","list"] as const).map(kind=><span key={kind} className={`chathandle chathandle-${kind}`} title={kind==="list"?"Sürüşdürün — siyahının eni (ikiqat klik: ilkin)":"Sürüşdürün — çatın ölçüsü (ikiqat klik: ilkin)"} onPointerDown={startDrag(kind)} onDoubleClick={reset(kind)}/>);
-  const mover={onPointerDown:startDrag("move"),onDoubleClick:reset("move"),title:"Sürüşdürün — çatı sağa-sola aparın (ikiqat klik: ortaya)"};
+  const mover={onPointerDown:startDrag("move"),onDoubleClick:reset("move"),title:"Sürüşdürün — çatı sağa-sola, yuxarı-aşağı aparın (ikiqat klik: ilkin yerinə)"};
   return {style,handles,mover,className:`panel chatpanel${layout.width||layout.height?" sized":""}${layout.width?" haswidth":""}`};
 }
 function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:number)=>void}){

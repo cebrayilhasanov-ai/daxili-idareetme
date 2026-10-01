@@ -764,3 +764,8 @@ body.chatresizing{user-select:none;cursor:grabbing}
   .chatpanel.haswidth .chatlisthead,.chatpanel.haswidth .chatroomhead{cursor:grab}
   .chatresizing .chatpanel .chatlisthead,.chatresizing .chatpanel .chatroomhead{cursor:grabbing}
 }
+/* Versiya 2.68: a smaller chat panel also moves up and down by its top bars. */
+@media(min-width:801px){
+  .chatpanel.sized{margin-top:var(--chat-y,0px)}
+  .chatpanel.sized .chatlisthead,.chatpanel.sized .chatroomhead{cursor:grab}
+}
