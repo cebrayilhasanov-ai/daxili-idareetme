@@ -44,7 +44,19 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
     WHERE m.user_id=? ORDER BY CASE WHEN t.id=? THEN 0 ELSE 1 END,last_message_at DESC,t.id DESC`)
     .bind(user.id, user.id, user.id, generalId).all();
   const totalUnread = threads.results.reduce((sum, item: any) => sum + Number(item.unread || 0), 0);
-  if (summaryOnly) return { totalUnread };
+  if (summaryOnly) {
+    // The newest message waiting for this user (Versiya 2.73): the page shows a notification and plays a sound for it.
+    const latest = totalUnread ? await env.DB.prepare(`SELECT msg.id, msg.thread_id, msg.body, msg.attachment_key, u.name AS sender_name, COALESCE(e.avatar_key,u.avatar_key) AS sender_avatar_key
+      FROM chat_messages msg JOIN chat_members m ON m.thread_id = msg.thread_id AND m.user_id = ?
+      JOIN app_users u ON u.id = msg.sender_user_id LEFT JOIN employees e ON e.id = u.employee_id
+      WHERE msg.id > m.last_read_message_id AND msg.sender_user_id != ? ORDER BY msg.id DESC LIMIT 1`).bind(user.id, user.id).first<Record<string, unknown>>() : null;
+    const thread = latest ? (threads.results as Array<{ id: number; name: string; type: string; unread: number }>).find((t) => Number(t.id) === Number(latest.thread_id)) : null;
+    return { totalUnread, latest: latest && thread ? {
+      id: Number(latest.id), threadId: Number(latest.thread_id), threadName: String(thread.name || ""), threadType: String(thread.type || ""),
+      senderName: String(latest.sender_name || ""), senderAvatar: (latest.sender_avatar_key as string | null) ?? null,
+      text: latest.body ? String(latest.body).slice(0, 140) : latest.attachment_key ? "📎 Fayl" : "", unread: Number(thread.unread || 0),
+    } : null };
+  }
   const users = await env.DB.prepare(`SELECT u.id,u.name,u.email,COALESCE(e.avatar_key,u.avatar_key) AS avatar_key FROM app_users u
     LEFT JOIN employees e ON e.id=u.employee_id
     WHERE u.active=1 AND u.id!=? ORDER BY u.name`).bind(user.id).all();
