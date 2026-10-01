@@ -131,10 +131,14 @@ async function ensureSchema() {
   // "İmzalı nüsxə geri qaytarılır": whether the other side must send one signed copy back (contract, act) or not (a letter).
   // Existing templates start as "Bəli", so nothing that is awaited today silently stops being awaited.
   if (!documentColumns.results.some((column) => column.name === "signed_copy_returns")) await db().prepare("ALTER TABLE document_templates ADD COLUMN signed_copy_returns INTEGER NOT NULL DEFAULT 1").run();
+  // Versiya 2.75: how many (calendar) days the other side has to send the signed copy back.
+  if (!documentColumns.results.some((column) => column.name === "signed_copy_days")) await db().prepare("ALTER TABLE document_templates ADD COLUMN signed_copy_days INTEGER").run();
   // On a document, signed_copy_returns overrides its template for that one document (NULL = follow the template).
+  // Versiya 2.75: return_due_date — by when the signed copy must be back (sending date + the template's days, editable);
+  // responsible_employee_id — the person who takes the document out and answers for its return (delivered_by keeps the name).
   // related_departments: JSON list of the departments the document concerns; the first is its main one (sending_department, {Şöbə}).
   // approval_flow 1: registered from Versiya 2.61 on, so it goes through the two-level approval (older documents do not).
-  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER"]) {
+  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER", "return_due_date TEXT", "responsible_employee_id INTEGER"]) {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
   await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
@@ -1349,13 +1353,14 @@ async function signedCopyOverride(documentType: unknown, requested: unknown, cur
 }
 
 const templateGroup = (value: unknown) => (value === "other_order" ? "other_order" : null);
+const returnDays = (value: unknown) => { const n = Math.round(Number(value)); return Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : null; };
 
 export async function getDocumentTemplates() {
   await ensureSchema();
   return (await db().prepare("SELECT * FROM document_templates ORDER BY name").all()).results;
 }
 
-export async function createDocumentTemplate(input: { templateGroup?: string; name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
+export async function createDocumentTemplate(input: { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Sənədin adını yazın.");
@@ -1363,10 +1368,10 @@ export async function createDocumentTemplate(input: { templateGroup?: string; na
     (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, signed_copy_returns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, input.incomingFolderPath?.trim() || null, input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
-  await db().prepare("UPDATE document_templates SET template_group = ? WHERE id = ?").bind(templateGroup(input.templateGroup), Number(inserted.meta.last_row_id)).run();
+  await db().prepare("UPDATE document_templates SET template_group = ?, signed_copy_days = ? WHERE id = ?").bind(templateGroup(input.templateGroup), yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), Number(inserted.meta.last_row_id)).run();
 }
 
-export async function updateDocumentTemplate(input: { templateGroup?: string; id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
+export async function updateDocumentTemplate(input: { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
@@ -1394,6 +1399,16 @@ export async function updateDocumentTemplate(input: { templateGroup?: string; id
       input.id,
     ).run();
   if (input.templateGroup !== undefined) await db().prepare("UPDATE document_templates SET template_group = ? WHERE id = ?").bind(templateGroup(input.templateGroup), input.id).run();
+  if (input.signedCopyDays !== undefined || yesNo(input.signedCopyReturns) === 0) {
+    await db().prepare("UPDATE document_templates SET signed_copy_days = ? WHERE id = ?").bind(yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), input.id).run();
+  }
+  // A wrongly chosen template file can be taken off (Versiya 2.75) — the slot empties and the stored copy goes too.
+  for (const slot of [1, 2, 3] as const) {
+    if (!input[`template${slot}Remove`] || input[`template${slot}Key`]) continue;
+    await db().prepare(`UPDATE document_templates SET template${slot}_key = NULL, template${slot}_name = NULL, template${slot}_size = NULL, template${slot}_type = NULL WHERE id = ?`).bind(input.id).run();
+    const key = current[`template${slot}_key`];
+    if (key && env.FILES) await env.FILES.delete(String(key));
+  }
 }
 
 export async function deleteDocumentTemplate(id: number) {
@@ -1446,7 +1461,7 @@ async function outgoingAccess(user: SessionUser): Promise<IncomingAccess> {
 export async function getOutgoingDocuments(user: SessionUser) {
   await ensureSchema();
   const access = await outgoingAccess(user);
-  const rows = (await db().prepare(`SELECT d.*, c.name AS company_name,
+  const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name,
     (SELECT signed_copy_returns FROM document_templates t WHERE lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
     FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
   const flag = (value: unknown) => (value === null || value === undefined ? null : Number(value) ? 1 : 0);
@@ -1481,7 +1496,7 @@ export async function canRegisterOutgoing(user: SessionUser) {
 }
 const hasOutgoingFile = (row: Record<string, unknown>, kind: "draft" | "final") => Boolean(row[`${kind}_name`] || row[`${kind}_path`] || row[`${kind}_key`]);
 
-type OutgoingInput = { relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
+type OutgoingInput = { responsibleEmployeeId?: unknown; returnDueDate?: string | null; relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
 
 export async function createOutgoingDocument(user: SessionUser, input: OutgoingInput) {
   await ensureSchema();
@@ -1508,7 +1523,11 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
     (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
     .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, formatPhone(input.phone) || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
-  return { id: Number(result.meta.last_row_id), outgoingNo };
+  const id = Number(result.meta.last_row_id);
+  // Versiya 2.75: who takes the document out (answers for the signed copy) and by when that copy must be back.
+  const due = await returnDueFor(docType, await signedCopyOverride(docType, input.signedCopyReturns, null), input.outgoingDate);
+  await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ?, return_due_date = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), due, id).run();
+  return { id, outgoingNo };
 }
 
 export async function updateOutgoingDocument(user: SessionUser, input: OutgoingInput & { id: number }) {
@@ -1549,6 +1568,30 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
       await signedCopyOverride(input.documentType ?? current.document_type, input.signedCopyReturns, current.signed_copy_returns),
       input.id,
     ).run();
+  if (input.responsibleEmployeeId !== undefined) await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), input.id).run();
+  // The registrar may set the return date by hand (a contract with its own term); an empty value clears it.
+  if (input.returnDueDate !== undefined) {
+    const value = input.returnDueDate ? String(input.returnDueDate) : "";
+    if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Qaytarılma tarixi düzgün deyil.");
+    await db().prepare("UPDATE outgoing_documents SET return_due_date = ? WHERE id = ?").bind(value || null, input.id).run();
+  }
+}
+
+const employeeIdOrNull = (value: unknown) => (Number(value) > 0 ? Number(value) : null);
+
+// By when a signed copy must be back: the sending date (or today) plus the template's days — none when the type has no days
+// or no copy comes back for this document (override: the document's own choice, null = follow the template).
+async function returnDueFor(documentType: unknown, override: unknown, sendDate: unknown) {
+  const type = String(documentType || "").trim();
+  if (!type) return null;
+  const row = await db().prepare("SELECT signed_copy_returns, signed_copy_days FROM document_templates WHERE lower(trim(name)) = lower(trim(?)) LIMIT 1").bind(type).first<{ signed_copy_returns: number | null; signed_copy_days: number | null }>();
+  if (!row?.signed_copy_days) return null;
+  const returns = override === null || override === undefined ? Number(row.signed_copy_returns) !== 0 : Number(override) === 1;
+  if (!returns) return null;
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(sendDate || "")) ? String(sendDate) : bakuDateIso();
+  const due = new Date(`${base}T00:00:00Z`);
+  due.setUTCDate(due.getUTCDate() + Number(row.signed_copy_days));
+  return due.toISOString().slice(0, 10);
 }
 
 export async function deleteOutgoingDocument(user: SessionUser, id: number) {

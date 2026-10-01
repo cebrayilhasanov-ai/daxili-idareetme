@@ -790,3 +790,30 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .actions .bellbtn{width:42px;height:42px;border:1px solid #e2e8f0;background:#fff;border-radius:11px;display:grid;place-items:center;color:inherit;cursor:pointer}
 .actions .bellbtn:hover{border-color:#0C8599}
 .actions .chatbtn.on{color:#0C8599;border-color:#0C8599;background:#ecfeff}
+/* Versiya 2.75: Çat page buttons (—, ⤢, ✕), the small Çat bar in the corner, the full-screen chat. */
+.chatpagectl{margin-left:auto;display:flex;gap:4px;flex:none}
+.chatpagectl button{width:32px;height:32px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;display:grid;place-items:center;cursor:pointer}
+.chatpagectl button:hover{border-color:#0C8599;color:#0C8599}.chatpagectl svg{width:16px;height:16px}
+.chatpanel.fullscreen{position:fixed!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;min-height:0!important;margin:0!important;z-index:60;border-radius:0!important}
+.chatmini{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;background:#12262B;color:#fff;border-radius:999px;box-shadow:0 12px 30px #0f172a40;overflow:hidden}
+.chatminiopen{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:#fff;padding:11px 6px 11px 16px;font-size:13px;cursor:pointer}
+.chatminiopen svg{width:17px;height:17px}
+.chatminiopen em{font-style:normal;background:#ef4444;color:#fff;border-radius:10px;padding:2px 6px;font-size:10px;font-weight:800}
+.chatminiclose{border:0;background:transparent;color:#9fb0c7;padding:11px 12px;display:grid;place-items:center;cursor:pointer}
+.chatminiclose:hover{color:#fff}.chatminiclose svg{width:15px;height:15px}
+.chattoast.abovemini{bottom:78px}
+/* Versiya 2.75: return date of signed copies, "Yubanan sənədlər" card, removing a template file. */
+.returncell{display:grid;gap:3px;justify-items:start}.returncell small{font-size:10px;color:#64748b}
+.returnchip{display:inline-block;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:800;white-space:nowrap}
+.returnchip.done{background:#e8f8ee;color:#15803d}.returnchip.wait{background:#ecfeff;color:#0e7490}.returnchip.late{background:#fee2e2;color:#b91c1c}
+.overduefilters{display:flex;gap:8px;flex-wrap:wrap;padding:0 22px 12px}
+.overviewcard.wide{grid-column:span 2}
+@media(max-width:700px){.overviewcard.wide{grid-column:auto}}
+.overviewgroups{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;width:100%;margin-top:4px}
+.overviewgroup{display:grid;gap:4px;align-content:start}
+.overviewgroup>small{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em}
+.overviewgroup button{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #fde2e2;background:#fff7f7;border-radius:8px;padding:6px 10px;font-size:12px;color:#334155;cursor:pointer;text-align:left}
+.overviewgroup button:hover{border-color:#ef4444}.overviewgroup button strong{color:#b91c1c}
+.templateremove{margin-left:6px;border:0;background:transparent;color:#dc2626;font-size:11px;font-weight:800;cursor:pointer;padding:0}
+.templateremoved{text-decoration:line-through;color:#94a3b8}.templateremoved .templateremove{text-decoration:none;color:#0C8599}
+.templateremovenote{color:#b45309;font-weight:700}

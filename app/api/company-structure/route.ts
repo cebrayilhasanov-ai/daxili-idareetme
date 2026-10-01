@@ -1,5 +1,6 @@
 import { createStructurePosition, deleteStructurePosition, getCompanyStructure, updateStructurePosition } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
+import { companyDepartments } from "@/db/requests";
 import { logAudit } from "@/lib/audit";
 
 function authError(error: unknown) {
@@ -14,6 +15,12 @@ export async function GET(request: Request) {
     await requireUser(request);
     const companyId = Number(new URL(request.url).searchParams.get("companyId"));
     if (!companyId) return Response.json({ error: "Firma seçilməyib." }, { status: 400 });
+    // ?members=1 (Versiya 2.75): the people of each department too — e.g. to pick who takes an outgoing document out.
+    if (new URL(request.url).searchParams.get("members")) {
+      const [items, structure] = await Promise.all([getCompanyStructure(companyId), companyDepartments()]);
+      const members = structure.departmentsOf(companyId).flatMap((d) => structure.membersOf(companyId, d.name).map((m) => ({ id: m.id, name: m.name, department: d.name })));
+      return Response.json({ items, members });
+    }
     return Response.json({ items: await getCompanyStructure(companyId) });
   } catch (error) { return authError(error) || Response.json({ error: "Struktur açıla bilmədi." }, { status: 500 }); }
 }
