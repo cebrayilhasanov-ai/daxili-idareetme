@@ -186,7 +186,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.66</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.67</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>isAdmin||id==="dashboard"||id==="tasks"||id==="documents"||id==="hr"||id==="chat").filter(([id])=>!viewAs||id==="dashboard"||id==="tasks").filter(([id])=>id==="documents"?Boolean(firstDocumentTab):id==="hr"?Boolean(firstHrTab):id==="chat"?can("chat"):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}} onDoubleClick={()=>setDashboardMenuOpen(v=>!v)}><Icon/>{label}</button>{dashboardMenuOpen&&<div className="navchildren">{isAdmin&&!viewAs&&<button className={page==="companies"?"on":""} onClick={()=>{setPage("companies");setMenu(false)}}>Firmalar</button>}{!viewAs&&can("dashboard.customers")&&<button className={page==="customers"?"on":""} onClick={()=>{setPage("customers");setMenu(false)}}>Müştəri siyahısı</button>}{isAdmin&&!viewAs&&<button className={page==="employees"?"on":""} onClick={()=>{setPage("employees");setMenu(false)}}>İstifadəçilər</button>}{isAdmin&&!viewAs&&<button className={page==="audit"?"on":""} onClick={()=>{setPage("audit");setMenu(false)}}>Tarixçə</button>}<button onClick={()=>{setForm({});setDialog("password");setMenu(false)}}>Şifrəni dəyiş</button><button onClick={()=>{setBackgroundFile(null);setDialog("background");setMenu(false)}}>Fon şəkli</button><button onClick={()=>{setOwnAvatarFile(null);setDialog("avatar");setMenu(false)}}>Profil şəkli</button></div>}</Fragment>;
@@ -268,27 +268,30 @@ function UsersPage(){
 }
 
 // Chat panel size (Versiya 2.66): its left/right edges, bottom edge and bottom corners resize it (it stays centred), and the line
-// between the conversation list and the conversation moves. Remembered per browser; a double click on a handle restores the default.
-type ChatLayout={width:number|null;height:number|null;list:number};
-const CHAT_LAYOUT_DEFAULT:ChatLayout={width:null,height:null,list:320};
-type ChatHandle="l"|"r"|"b"|"bl"|"br"|"list";
+// between the conversation list and the conversation moves. Since 2.67 a narrowed panel also slides left and right by its top bars
+// (CSS keeps it inside the work area). Remembered per browser; a double click on a handle or a top bar restores the default.
+type ChatLayout={width:number|null;height:number|null;list:number;x:number};
+const CHAT_LAYOUT_DEFAULT:ChatLayout={width:null,height:null,list:320,x:0};
+type ChatHandle="l"|"r"|"b"|"bl"|"br"|"list"|"move";
 function useChatLayout(){
   const [layout,setLayout]=useState<ChatLayout>(CHAT_LAYOUT_DEFAULT);
   useEffect(()=>{try{const raw=window.localStorage.getItem("chat:layout");if(raw)setLayout({...CHAT_LAYOUT_DEFAULT,...JSON.parse(raw)})}catch{}},[]);
   const save=(next:ChatLayout)=>{setLayout(next);try{window.localStorage.setItem("chat:layout",JSON.stringify(next))}catch{}};
   const clamp=(value:number,min:number,max:number)=>Math.min(Math.max(value,min),Math.max(min,max));
   const startDrag=(kind:ChatHandle)=>(e:React.PointerEvent)=>{
-    // Each handle sits directly inside the chat panel.
-    const panel=(e.currentTarget as HTMLElement).parentElement;if(!panel||e.button!==0)return;
+    // Each handle sits directly inside the chat panel; a top bar is found from inside it (its buttons and fields keep working).
+    if(kind==="move"&&(e.target as HTMLElement).closest("button,input,textarea,select,a"))return;
+    const panel=kind==="move"?(e.currentTarget as HTMLElement).closest<HTMLElement>(".chatpanel"):(e.currentTarget as HTMLElement).parentElement;if(!panel||e.button!==0)return;
     e.preventDefault();
     const rect=panel.getBoundingClientRect();
     const room=panel.parentElement?.clientWidth||rect.width;
-    const start={x:e.clientX,y:e.clientY,w:rect.width,h:rect.height,list:layout.list};
+    const start={x:e.clientX,y:e.clientY,w:rect.width,h:rect.height,list:layout.list,offset:layout.x};
     let latest=layout;
     const move=(ev:PointerEvent)=>{
       const dx=ev.clientX-start.x,dy=ev.clientY-start.y;
       const next={...latest};
-      if(kind==="list")next.list=clamp(start.list+dx,200,start.w-360);
+      if(kind==="move"){const free=Math.max(0,(room-start.w)/2);next.x=clamp(start.offset+dx,-free,free)}
+      else if(kind==="list")next.list=clamp(start.list+dx,200,start.w-360);
       else{
         // The panel is centred, so a side edge moves by the cursor while the width changes on both sides.
         if(kind==="l"||kind==="bl")next.width=clamp(start.w-2*dx,560,room);
@@ -301,10 +304,11 @@ function useChatLayout(){
     document.body.classList.add("chatresizing");
     window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);
   };
-  const reset=(kind:ChatHandle)=>()=>save(kind==="list"?{...layout,list:CHAT_LAYOUT_DEFAULT.list}:{...layout,width:null,height:null});
-  const style={"--chat-list":`${layout.list}px`,...(layout.width?{"--chat-w":`${layout.width}px`}:{}),...(layout.height?{"--chat-h":`${layout.height}px`}:{})} as React.CSSProperties;
-  const handles=(["l","r","b","bl","br","list"] as ChatHandle[]).map(kind=><span key={kind} className={`chathandle chathandle-${kind}`} title={kind==="list"?"Sürüşdürün — siyahının eni (ikiqat klik: ilkin)":"Sürüşdürün — çatın ölçüsü (ikiqat klik: ilkin)"} onPointerDown={startDrag(kind)} onDoubleClick={reset(kind)}/>);
-  return {style,handles,sized:Boolean(layout.width||layout.height)};
+  const reset=(kind:ChatHandle)=>()=>save(kind==="move"?{...layout,x:0}:kind==="list"?{...layout,list:CHAT_LAYOUT_DEFAULT.list}:{...layout,width:null,height:null,x:0});
+  const style={"--chat-list":`${layout.list}px`,"--chat-x":`${layout.x}px`,...(layout.width?{"--chat-w":`${layout.width}px`}:{}),...(layout.height?{"--chat-h":`${layout.height}px`}:{})} as React.CSSProperties;
+  const handles=(["l","r","b","bl","br","list"] as const).map(kind=><span key={kind} className={`chathandle chathandle-${kind}`} title={kind==="list"?"Sürüşdürün — siyahının eni (ikiqat klik: ilkin)":"Sürüşdürün — çatın ölçüsü (ikiqat klik: ilkin)"} onPointerDown={startDrag(kind)} onDoubleClick={reset(kind)}/>);
+  const mover={onPointerDown:startDrag("move"),onDoubleClick:reset("move"),title:"Sürüşdürün — çatı sağa-sola aparın (ikiqat klik: ortaya)"};
+  return {style,handles,mover,className:`panel chatpanel${layout.width||layout.height?" sized":""}${layout.width?" haswidth":""}`};
 }
 function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:number)=>void}){
   const chatLayout=useChatLayout();
@@ -337,14 +341,14 @@ function ChatPage({currentUser,onUnread}:{currentUser:AppUser;onUnread:(value:nu
     const ticks:"sent"|"read"|null=mine&&active?.type==="direct"?(m.id<=Number(chat?.readUpTo||0)?"read":"sent"):null;
     timeline.push({kind:"msg",message:m,grouped,showName,mine,ticks});
   });
-  return <section className={chatLayout.sized?"panel chatpanel sized":"panel chatpanel"} style={chatLayout.style}>
+  return <section className={chatLayout.className} style={chatLayout.style}>
     {chatLayout.handles}
-    <aside className="chatlist"><div className="chatlisthead"><div><span className="sectioneyebrow">DAXİLİ YAZIŞMA</span><h2>Söhbətlər</h2></div><MessageCircle/></div>
+    <aside className="chatlist"><div className="chatlisthead" {...chatLayout.mover}><div><span className="sectioneyebrow">DAXİLİ YAZIŞMA</span><h2>Söhbətlər</h2></div><MessageCircle/></div>
       <div className="chatsearch"><input placeholder="Axtarış..." value={threadQuery} onChange={e=>setThreadQuery(e.target.value)}/></div>
       <div className="threadlist">{filteredThreads.map(t=><button key={t.id} className={t.id===selected?"active":""} onClick={()=>void choose(t.id)}><i className={t.type!=="group"&&t.avatar_key?"hasphoto":""}>{t.type==="group"?<Users/>:avatarNode(t.avatar_key,t.name)}</i><span><b>{t.name}</b><small>{t.last_message||"Hələ mesaj yoxdur"}</small></span><span className="threadside">{t.last_message_at&&<time>{threadTime(t.last_message_at)}</time>}{Number(t.unread)>0&&<em>{t.unread}</em>}</span></button>)}</div>
       <div className="newchat"><strong>Yeni şəxsi söhbət</strong>{chat?.users.map(u=><button disabled={busy} key={u.id} onClick={()=>void startDirect(u.id)}><i className={u.avatar_key?"hasphoto":""}>{avatarNode(u.avatar_key,u.name)}</i><span>{u.name}<small>{u.email}</small></span><Plus/></button>)}</div>
     </aside>
-    <div className="chatroom"><header className="chatroomhead"><i className={active&&active.type!=="group"&&active.avatar_key?"hasphoto":""}>{active?.type==="group"?<Users/>:active?avatarNode(active.avatar_key,active.name):<MessageCircle/>}</i><div><h2>{active?.name||"Çat yüklənir..."}</h2><p>{active?.type==="group"?"Bütün aktiv istifadəçilər":"Şəxsi yazışma"}</p></div></header>
+    <div className="chatroom"><header className="chatroomhead" {...chatLayout.mover}><i className={active&&active.type!=="group"&&active.avatar_key?"hasphoto":""}>{active?.type==="group"?<Users/>:active?avatarNode(active.avatar_key,active.name):<MessageCircle/>}</i><div><h2>{active?.name||"Çat yüklənir..."}</h2><p>{active?.type==="group"?"Bütün aktiv istifadəçilər":"Şəxsi yazışma"}</p></div></header>
       {chatError&&<div className="chaterror">{chatError}</div>}
       <div className="messages">{timeline.length?timeline.map(item=>item.kind==="date"?<div className="datedivider" key={item.key}><span>{item.label}</span></div>:<article key={item.message.id} className={`${item.mine?"mine":""}${item.grouped?" grouped":""}`}><div className="messagebubble">{item.showName&&<span className="msgsender"><i className={item.message.sender_avatar_key?"hasphoto":""}>{avatarNode(item.message.sender_avatar_key,item.message.sender_name)}</i><b>{item.message.sender_name}</b></span>}{item.message.body&&<p>{item.message.body}</p>}{item.message.attachment_key&&<a href={`/api/file?key=${encodeURIComponent(item.message.attachment_key)}`}><FileText/><span>{item.message.attachment_name||"Fayl"}<small>{chatFileSize(item.message.attachment_size||0)}</small></span><Download/></a>}<time>{new Intl.DateTimeFormat("az-AZ",{hour:"2-digit",minute:"2-digit"}).format(new Date(item.message.created_at))}{item.ticks&&<span className={`ticks ${item.ticks}`}>{item.ticks==="read"?"✓✓":"✓"}</span>}</time></div></article>):<div className="chatempty"><MessageCircle/><h3>İlk mesajı yazın</h3><p>Bu söhbətdə hələ mesaj yoxdur.</p></div>}<div ref={endRef}/></div>
       <div className="composer">{file&&<div className="selectedfile"><Paperclip/><span>{file.name}<small>{chatFileSize(file.size)}</small></span><button onClick={()=>setFile(null)}><X/></button></div>}<div><label title="Fayl əlavə et"><Paperclip/><input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><Textarea placeholder="Mesajınızı yazın..." value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}}/><Button title={busy?"Göndərilir...":"Göndər"} disabled={busy||(!message.trim()&&!file)} onClick={()=>void send()}><Send/></Button></div></div>

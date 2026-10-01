@@ -758,3 +758,9 @@ main.hasbg>header{background:#ffffffb8;-webkit-backdrop-filter:blur(8px);backdro
 @media(max-width:800px){.chathandle{display:none}}
 body.chatresizing{user-select:none;cursor:grabbing}
 @media(min-width:731px){.shell.navcollapsed main.hasbg>header{margin-left:-44px;padding-left:44px}}
+/* Versiya 2.67: a narrowed chat panel slides left/right by its top bars, kept inside the work area. */
+@media(min-width:801px){
+  .chatpanel.haswidth{margin-left:clamp(0px,calc((100% - var(--chat-w)) / 2 + var(--chat-x,0px)),calc(100% - var(--chat-w)));margin-right:0}
+  .chatpanel.haswidth .chatlisthead,.chatpanel.haswidth .chatroomhead{cursor:grab}
+  .chatresizing .chatpanel .chatlisthead,.chatresizing .chatpanel .chatroomhead{cursor:grabbing}
+}
