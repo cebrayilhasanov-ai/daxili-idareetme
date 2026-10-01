@@ -2,10 +2,12 @@ import { cancelOrder, createLeaveOrder, createOtherOrder, createTerminationOrder
 import { requireUser } from "@/lib/auth";
 import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { departmentScope, requireHrEmployeeInScope, requireOrderInScope, scopeHrData } from "@/db/department-scope";
 
 // HR orders (Əmrlər): the admin and employees given the separate "Əmrlər" permission (closed by default).
 // Rights (Versiya 2.62): Əlavə et — a new order; Dəyişiklik et — correcting an order, its signed copy, the numbering settings;
 // Sil — cancelling an order (orders are never deleted, a cancelled one stays in the register).
+// Since Versiya 2.65 only the orders and workers of the departments the user oversees (db/department-scope.ts).
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -20,8 +22,8 @@ async function ordersUser(request: Request) {
 
 // Every answer carries the viewer's rights, so the page offers only what is allowed.
 async function ordersBody(user: Awaited<ReturnType<typeof requireUser>>, extra: Record<string, unknown> = {}) {
-  const [data, rights] = await Promise.all([getOrdersData(), sectionRights(user, "hr.orders")]);
-  return { ...data, rights: { add: rights.add, edit: rights.edit, delete: rights.delete }, ...extra };
+  const [data, rights, scope] = await Promise.all([getOrdersData(), sectionRights(user, "hr.orders"), departmentScope(user)]);
+  return { ...scopeHrData(data, scope), rights: { add: rights.add, edit: rights.edit, delete: rights.delete }, ...extra };
 }
 
 export async function GET(request: Request) {
@@ -29,7 +31,10 @@ export async function GET(request: Request) {
     const user = await ordersUser(request);
     // The final settlement of a worker being dismissed needs that worker's salaries (and only theirs).
     const salariesOf = Number(new URL(request.url).searchParams.get("salaries"));
-    if (salariesOf) return Response.json(await getEmployeeSalaries(salariesOf));
+    if (salariesOf) {
+      await requireHrEmployeeInScope(await departmentScope(user), salariesOf);
+      return Response.json(await getEmployeeSalaries(salariesOf));
+    }
     return Response.json(await ordersBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Əmrlər açılmadı." }, { status: 500 }); }
 }
@@ -40,6 +45,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const creating = ["leave", "termination", "other"].includes(String(body.action)) && !body.id;
     await requireAction(user, "hr.orders", creating ? "add" : body.action === "cancel" ? "delete" : "edit");
+    if (body.action !== "settings") {
+      const scope = await departmentScope(user);
+      if (body.id) await requireOrderInScope(scope, Number(body.id));
+      if (body.hrEmployeeId) await requireHrEmployeeInScope(scope, Number(body.hrEmployeeId));
+      else if (creating) throw new Error("İşçini seçin.");
+    }
     let savedId: number | undefined;
     if (body.action === "leave") {
       if (body.id) { await updateLeaveOrder(body); await logAudit(user, "HR: məzuniyyət əmri dəyişdirildi", "hr_order", await orderLabel(Number(body.id))); savedId = Number(body.id); }

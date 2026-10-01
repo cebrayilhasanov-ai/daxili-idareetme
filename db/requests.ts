@@ -101,7 +101,7 @@ async function loadStructure() {
     for (const p of positions) if (p.company_id === companyId && (byPosition.get(p.id) ?? []).some((h) => h.employee_id === employeeId)) return p.department.trim();
     return null;
   };
-  return { positions, departments, key, departmentOf };
+  return { positions, departments, key, departmentOf, byPosition };
 }
 
 type Structure = Awaited<ReturnType<typeof loadStructure>>;
@@ -136,7 +136,25 @@ export async function companyDepartments() {
   };
   // Members of a department with their positions (the director picks task recipients from them).
   const membersOf = (companyId: number, department: string) => structure.departments.get(structure.key(companyId, department))?.members ?? [];
-  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf, memberOf, membersOf };
+  // Departments the employee oversees in a firm (Versiya 2.65, HR): their own, and every department with a position under one of
+  // theirs — directly or down the line, by "reports to" in the structure. The director (top of the structure) gets the whole firm.
+  const overseenBy = (companyId: number, employeeId: number | null) => {
+    if (!employeeId) return [] as string[];
+    const firm = structure.positions.filter((p: Position) => p.company_id === companyId);
+    const superiors = (p: Position) => (p.reports_to || "").split("/").map((part) => part.trim()).filter(Boolean);
+    const names = new Set(memberOf(companyId, employeeId));
+    const seen = new Set<number>();
+    const queue = firm.filter((p: Position) => (structure.byPosition.get(p.id) ?? []).some((h) => h.employee_id === employeeId));
+    while (queue.length) {
+      const p = queue.shift()!;
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      names.add(p.department.trim());
+      queue.push(...firm.filter((c: Position) => !seen.has(c.id) && superiors(c).includes(p.title.trim())));
+    }
+    return [...names];
+  };
+  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf, memberOf, membersOf, overseenBy };
 }
 
 // Employees heading at least one department of any company (used to warn the admin before hiding Sorğular from them).

@@ -734,3 +734,7 @@ main{min-height:100vh}
   .navexpand:hover{width:30px}.navexpand svg{width:16px;height:16px}
 }
 @media(max-width:730px){.navcollapse{display:none}}
+/* Versiya 2.65: a lighter veil over the background picture (55%), the page title stays readable on it; HR Personallar head buttons on the right. */
+main.hasbg>header h1{font-weight:800;text-shadow:0 1px 3px #ffffffd9,0 0 12px #ffffffb3}
+main.hasbg>header p{color:#334155;font-weight:600;text-shadow:0 1px 2px #ffffffd9}
+.pageactions>.hrheadactions{margin-right:0;margin-left:auto}

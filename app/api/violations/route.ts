@@ -1,13 +1,12 @@
-import {
-  createViolation, deleteViolation, employeeInCompanies, listViolations, listViolationsForCompanies, listViolationsForEmployee, updateViolation,
-  violationInScope, violationScope, violationTargets,
-} from "@/db/catalog";
+import { createViolation, deleteViolation, listViolations, listViolationsForEmployee, updateViolation, violationTargets } from "@/db/catalog";
+import { departmentScope, scopeCompanyIds, userScopeTest, type DepartmentScope } from "@/db/department-scope";
 import { requireUser } from "@/lib/auth";
 import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 // Noqsanlar (Versiya 2.62): with only Baxış an employee sees the violations recorded on them; with Əlavə et, Dəyişiklik et or
-// Sil they manage the violations of their firms' employees. The admin manages all of them.
+// Sil they manage violations — since 2.65 only of the people in the departments they oversee (db/department-scope.ts).
+// The admin manages all of them.
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -17,6 +16,7 @@ function authError(error: unknown) {
 }
 
 type User = Awaited<ReturnType<typeof requireUser>>;
+type ViolationRow = { id: number; employee_id: number; company_id: number | null };
 
 async function listBody(user: User) {
   const rights = await sectionRights(user, "hr.violations");
@@ -24,16 +24,25 @@ async function listBody(user: User) {
   if (user.role === "admin") return { items: await listViolations(), can, manager: true };
   const manager = rights.add || rights.edit || rights.delete;
   if (!manager) return { items: user.employeeId ? await listViolationsForEmployee(user.employeeId) : [], can, manager: false };
-  const scope = (await violationScope(user)) ?? [];
-  return { items: await listViolationsForCompanies(scope, user.employeeId ?? null), can, manager: true, ...(await violationTargets(scope)) };
+  const scope = await departmentScope(user);
+  const covers = await userScopeTest(scope);
+  const items = ((await listViolations()) as ViolationRow[]).filter((v) => v.employee_id === user.employeeId || covers(v.employee_id, v.company_id));
+  const targets = await violationTargets(scopeCompanyIds(scope) ?? []);
+  const employees = (targets.employees as Array<{ id: number; name: string }>).filter((e) => covers(e.id, null));
+  return { items, can, manager: true, employees, companies: targets.companies };
 }
 
-// The firm on a violation must be one of the employee's own firms (the admin may pick any).
-async function checkTarget(user: User, employeeId: number | null, companyId: number | null) {
-  const scope = await violationScope(user);
-  if (!scope) return;
-  if (companyId && !scope.includes(companyId)) throw new Error("FORBIDDEN");
-  if (employeeId && !(await employeeInCompanies(employeeId, scope))) throw new Error("FORBIDDEN");
+// A violation is recorded and changed only for people the user oversees, on one of the user's firms (the admin: anyone).
+async function checkTarget(scope: DepartmentScope, employeeId: number, companyId: number | null) {
+  if (scope === null) return;
+  if (companyId && !scope.has(companyId)) throw new Error("FORBIDDEN");
+  if (!(await userScopeTest(scope))(employeeId, companyId)) throw new Error("FORBIDDEN");
+}
+async function checkExisting(scope: DepartmentScope, id: number) {
+  const row = ((await listViolations()) as ViolationRow[]).find((v) => v.id === id);
+  if (!row) throw new Error("Qeyd tapılmadı.");
+  await checkTarget(scope, row.employee_id, row.company_id);
+  return row;
 }
 
 export async function GET(request: Request) {
@@ -48,7 +57,7 @@ export async function POST(request: Request) {
     const user = await requireAction(await requireUser(request), "hr.violations", "add");
     const body = await request.json();
     const companyId = body.companyId ? Number(body.companyId) : null;
-    await checkTarget(user, Number(body.employeeId), companyId);
+    await checkTarget(await departmentScope(user), Number(body.employeeId), companyId);
     await createViolation({ employeeId: Number(body.employeeId), companyId: companyId ?? undefined, title: String(body.title || ""), note: body.note, createdByName: user.name });
     await logAudit(user, "Noqsan qeydə alındı", "employee", `#${body.employeeId}`);
     return Response.json(await listBody(user));
@@ -61,8 +70,9 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const id = Number(body.id);
     const companyId = body.companyId ? Number(body.companyId) : null;
-    await violationInScope(id, await violationScope(user));
-    await checkTarget(user, null, companyId);
+    const scope = await departmentScope(user);
+    const row = await checkExisting(scope, id);
+    await checkTarget(scope, row.employee_id, companyId);
     await updateViolation({ id, companyId, title: String(body.title || ""), note: body.note });
     await logAudit(user, "Noqsan qeydi dəyişdirildi", "employee", `#${id}`);
     return Response.json(await listBody(user));
@@ -74,7 +84,7 @@ export async function DELETE(request: Request) {
     const user = await requireAction(await requireUser(request), "hr.violations", "delete");
     const id = Number(new URL(request.url).searchParams.get("id"));
     if (!id) return Response.json({ error: "Silinəcək qeyd seçilməyib." }, { status: 400 });
-    await violationInScope(id, await violationScope(user));
+    await checkExisting(await departmentScope(user), id);
     await deleteViolation(id);
     await logAudit(user, "Noqsan qeydi silindi", "employee", `#${id}`);
     return Response.json(await listBody(user));

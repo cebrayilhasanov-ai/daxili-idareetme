@@ -2292,23 +2292,7 @@ export async function deleteViolation(id: number) {
   await db().prepare("DELETE FROM employee_violations WHERE id = ?").bind(id).run();
 }
 
-// Noqsanlar managed by an employee (Versiya 2.62: the admin may grant Əlavə et / Dəyişiklik et / Sil): they work with the
-// violations of the employees of their own firms (and their own), the admin with all of them.
-export async function violationScope(user: SessionUser) {
-  return outgoingCompanyScope(user);
-}
-export async function listViolationsForCompanies(companyIds: number[], employeeId: number | null) {
-  await ensureSchema();
-  if (!companyIds.length) return employeeId ? listViolationsForEmployee(employeeId) : [];
-  const marks = companyIds.map(() => "?").join(",");
-  return (await db().prepare(`SELECT employee_violations.*, employees.name AS employee_name, companies.name AS company_name
-    FROM employee_violations
-    JOIN employees ON employees.id = employee_violations.employee_id
-    LEFT JOIN companies ON companies.id = employee_violations.company_id
-    WHERE employee_violations.company_id IN (${marks}) OR employee_violations.employee_id = ?
-      OR (employee_violations.company_id IS NULL AND employee_violations.employee_id IN (SELECT employee_id FROM employee_companies WHERE company_id IN (${marks})))
-    ORDER BY employee_violations.created_at DESC`).bind(...companyIds, employeeId ?? 0, ...companyIds).all()).results;
-}
+// Noqsanlar managed by an employee: the people and firms they may pick from (narrowed to their departments in the route).
 export async function violationTargets(companyIds: number[]) {
   await ensureSchema();
   if (!companyIds.length) return { employees: [], companies: [] };
@@ -2319,20 +2303,6 @@ export async function violationTargets(companyIds: number[]) {
     db().prepare(`SELECT id, name FROM companies WHERE active = 1 AND id IN (${marks}) ORDER BY name`).bind(...companyIds).all(),
   ]);
   return { employees: employees.results, companies: companies.results };
-}
-// A violation an employee may change or delete: one of their firms (by the firm on it, or the person's firm when it has none).
-export async function violationInScope(id: number, companyIds: number[] | null) {
-  await ensureSchema();
-  const row = await db().prepare("SELECT employee_id, company_id FROM employee_violations WHERE id = ?").bind(id).first<{ employee_id: number; company_id: number | null }>();
-  if (!row) throw new Error("Qeyd tapılmadı.");
-  if (!companyIds) return;
-  if (row.company_id ? companyIds.includes(row.company_id) : await employeeInCompanies(row.employee_id, companyIds)) return;
-  throw new Error("FORBIDDEN");
-}
-export async function employeeInCompanies(employeeId: number, companyIds: number[]) {
-  if (!companyIds.length) return false;
-  const marks = companyIds.map(() => "?").join(",");
-  return Boolean(await db().prepare(`SELECT 1 FROM employee_companies WHERE employee_id = ? AND company_id IN (${marks})`).bind(employeeId, ...companyIds).first());
 }
 export async function updateViolation(input: { id: number; companyId?: number | null; title: string; note?: string }) {
   await ensureSchema();
