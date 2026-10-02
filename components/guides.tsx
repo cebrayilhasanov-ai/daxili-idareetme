@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -26,6 +26,110 @@ export type GuideContext = {
 const AUDIENCE_LABELS: Record<Audience, string> = { all: "Hamı üçün", registrar: "Qeydiyyatçı üçün", head: "Şöbə rəhbəri üçün", director: "Firmanın rəhbəri (direktor) üçün", admin: "Admin üçün" };
 
 const GUIDES: Guide[] = [
+  {
+    id: "tasks", group: "Tapşırıqlar", title: "Verilən tapşırıqlar", path: "Tapşırıqlar → Verilən tapşırıqlar", section: "tasks.manager",
+    intro: "Sizə verilmiş tapşırıqlar: admin tərəfindən verilənlər, rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
+    parts: [
+      { audience: "all", title: "Statuslar və icra ardıcıllığı", blocks: [
+        { steps: [
+          "Yeni — tapşırıq sizə düşüb. İşə başlayanda “İcraya al” basın → İcradadır.",
+          "İş bitəndə “Təqdim et” basın → Təqdim edilib. Tapşırıqla doldurulmalı fayl göndərilibsə, işlənmiş faylı yükləmədən təqdim etmək olmur.",
+          "Yoxlayan işi qəbul edirsə, 1–10 bal verir → Təsdiqlənib. Qəbul etmirsə, səbəbini yazıb geri qaytarır → Geri qaytarılıb; düzəldib yenidən “Təqdim et” basırsınız.",
+        ] },
+        { note: "Status yalnız bu ardıcıllıqla dəyişir; təqdim edilmiş tapşırığı geri çəkmək olmur. Son tarixi keçmiş aktiv tapşırıq gecikən sayılır və zəngdə (🔔) göstərilir." },
+      ] },
+      { audience: "all", title: "Son tarixin dəyişdirilməsi", blocks: [
+        { list: [
+          "Tapşırığı vaxtında bitirə bilməyəcəksinizsə, tapşırıqdan yeni tarix və səbəb yazaraq tarix dəyişikliyi istəyin.",
+          "Hər tapşırıq üçün bunu yalnız bir dəfə və təqdim etməzdən əvvəl etmək olar.",
+          "Admin tələbi qəbul edir (öz tarixini də yaza bilər) və ya rədd edir. İlkin tarix tapşırıqda “ilkin tarix” kimi qalır.",
+        ] },
+      ] },
+      { audience: "all", title: "İş addımları və həvalə", blocks: [
+        { list: [
+          "Tapşırığın içində iş addımları yazıb hər birini ✓ edə, addıma fayl əlavə edə bilərsiniz.",
+          "Rəhbərsinizsə, addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basa bilərsiniz (həvalə) — o addım həmin əməkdaşa ayrıca tapşırıq kimi düşür (addımın faylı ilə). Kimə həvalə etmək olar — firmanın strukturu göstərir; boş vəzifə atlanır və onun tabeliyindəkilər təklif olunur.",
+          "Həvalə üçün tapşırığın firması təyin olunmalıdır.",
+          "Həvalə edilmiş addımın ✓-u əl ilə qoyulmur — əməkdaşın tapşırığı təsdiqlənəndə avtomatik qoyulur. Əsas sütunda həvalə zənciri (kim kimə verib) görünür.",
+        ] },
+      ] },
+      { audience: "all", title: "Sorğudan yaranan tapşırıq", blocks: [
+        { p: "Şöbə rəhbəri gələn sorğunu sizə verəndə o, burada “Sorğu əsasında” tapşırıq kimi görünür. Təqdim edərkən yazdığınız cavab mətni və fayl sorğunu göndərənə gedir. Belə tapşırığı sorğunu göndərən cavabı təsdiqləyəndən sonra şöbə rəhbəri Sorğular bölməsində qiymətləndirir." },
+      ] },
+      { audience: "admin", title: "Tapşırıq vermək və yoxlamaq", blocks: [
+        { list: [
+          "Yeni tapşırığı admin verir: icraçı, firma (icraçının firmalarından), adı, açıqlaması, son tarixi, istəyə görə doldurulacaq fayl.",
+          "Təqdim edilmiş tapşırığı “Qiymətləndir” ilə 1–10 balla təsdiqləyin və ya səbəb yazıb geri qaytarın.",
+          "Tarix dəyişikliyi tələblərini qəbul və ya rədd edin.",
+          "Yalnız “Yeni” statuslu tapşırıq silinir. Sorğudan yaranan tapşırıq silinmir — onu Sorğular bölməsindən (icraçını dəyişmək, imtina) idarə edin.",
+        ] },
+      ] },
+    ],
+  },
+  {
+    id: "personal", group: "Tapşırıqlar", title: "Şəxsi işlərim", path: "Tapşırıqlar → Şəxsi işlərim", section: "tasks.mine",
+    intro: "Özünüz üçün yazdığınız işlər və onların iş axını (addımlar). Addımı tabeliyinizdəki əməkdaşa həvalə edə və ya başqa şöbəyə sorğu kimi göndərə bilərsiniz. İşləri yalnız siz (və admin) görürsünüz.",
+    parts: [
+      { audience: "all", title: "İşin gedişi", blocks: [
+        { steps: [
+          "“Əlavə et”: işin adı, açıqlaması, firması, son tarixi (istəyə bağlı), fayl.",
+          "İş axınına addımlar əlavə edin.",
+          "İşə başlayanda “İcraya al” → İcradadır. Addımlar yalnız icradakı işdə ✓ edilir.",
+          "Bütün addımlar ✓ olanda iş avtomatik “Tamamlanıb” olur. Addımı olmayan işi “Tamamla” ilə bitirirsiniz.",
+        ] },
+        { list: [
+          "Yalnız “Yeni” statuslu iş silinir; tamamlanmış iş redaktə olunmur və ona addım əlavə olunmur.",
+          "“Aç” pəncərəsində işin tarixçəsi var: yaradılma, addımlar, həvalələr, sorğular, təsdiqlər.",
+        ] },
+      ] },
+      { audience: "all", title: "Addımı başqasına vermək", blocks: [
+        { list: [
+          "Həvalə: addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basın — addım ona tapşırıq kimi düşür (Verilən tapşırıqlar). Tapşırıq təsdiqlənəndə addımın ✓-u avtomatik qoyulur.",
+          "“Şöbəyə sorğu” — addım işin firmasının başqa şöbəsinə sorğu kimi gedir (Sorğular). İş icrada olmalı və firması seçilməlidir. Addımın faylı sorğuya da gedir.",
+          "Sorğu açıq olduğu müddətdə addımı silmək, həvalə etmək və ya yenidən göndərmək olmur. Cavabı təsdiqləyəndə addımın ✓-u avtomatik qoyulur.",
+        ] },
+      ] },
+    ],
+  },
+  {
+    id: "requests", group: "Tapşırıqlar", title: "Sorğular", path: "Tapşırıqlar → Sorğular", section: "tasks.requests",
+    intro: "Şöbələrarası iş tələbləri və məlumat sorğuları (məsələn, Təchizat → Mühasibatlıq). Tapşırıq yuxarıdan aşağı verilir, sorğu isə eyni firmanın başqa şöbəsinə gedir: o şöbənin rəhbəri qəbul edib icraçı seçir, icraçı cavablandırır, göndərən cavabı təsdiqləyir.",
+    parts: [
+      { audience: "all", title: "Statuslar", blocks: [
+        { list: [
+          "Yeni — göndərilib, şöbə rəhbəri hələ baxmayıb.",
+          "Qəbul edildi — rəhbər icraçı və razılaşdırılmış tarix təyin edib; icraçıya tapşırıq düşüb.",
+          "İcra olunur — icraçı işə başlayıb.",
+          "Cavablandı — icraçı cavab verib; göndərənin təsdiqi gözlənilir.",
+          "Qiymətləndirmə gözləyir — göndərən cavabı təsdiqləyib; şöbə rəhbəri icraçının işinə bal verməlidir.",
+          "Bağlandı / İmtina edildi.",
+        ] },
+        { p: "Tablar: “Gələnlər” (şöbənizə gələnlər və sizə verilənlər), “Göndərdiklərim”, rəhbər üçün “Şöbəmin sorğuları” (şöbənizdən başqa şöbələrə gedənlər). Sizdən əməliyyat gözləyən sorğular sayğacla göstərilir." },
+      ] },
+      { audience: "all", title: "Sorğu göndərmək və cavabı qəbul etmək", blocks: [
+        { steps: [
+          "“Yeni sorğu”: firmanı, şöbəni, mövzunu, təsviri, istədiyiniz tarixi yazın, lazım olsa fayl əlavə edin, “Göndər”.",
+          "Hələ “Yeni” ikən sorğunu silə (geri çağıra) bilərsiniz.",
+          "Cavab gələndə (Cavablandı) ya “Cavabı təsdiqlə ✓”, ya da nəyin çatışmadığını yazıb “Yenidən aç” — iş icraçıya geri qayıdır.",
+          "Sorğu bağlanana qədər hər iki tərəf şərh yaza bilər.",
+        ] },
+        { note: "İcraçıya verilən bal şöbənin daxili məsələsidir — sorğunu göndərən tərəf onu görmür." },
+      ] },
+      { audience: "all", title: "İcraçı üçün", blocks: [
+        { p: "Qəbul edilmiş sorğu sizə tapşırıq kimi düşür (Verilən tapşırıqlar, “Sorğu əsasında”). “İcraya al”, sonra “Təqdim et” — cavab mətni və faylı sorğunu göndərənə gedir. Sorğu yenidən açılarsa, tapşırıq “Geri qaytarılıb” olur." },
+      ] },
+      { audience: "head", title: "Şöbə rəhbəri üçün", blocks: [
+        { list: [
+          "Gələn sorğunu “Qəbul et”: icraçını şöbənizin əməkdaşlarından seçin və razılaşdırılmış tarixi yazın. Və ya səbəbini yazaraq “İmtina et”.",
+          "İcra gedərkən “İcraçını dəyiş” — köhnə icraçının tapşırığı götürülür, yenisinə yeni tapşırıq düşür.",
+          "Göndərən cavabı təsdiqləyəndən sonra “Qiymətləndir”: 1–10 bal və istəyə görə rəy — sorğu bağlanır, icraçının tapşırığı təsdiqlənir.",
+        ] },
+      ] },
+      { audience: "admin", title: "Admin üçün", blocks: [
+        { p: "Admin bütün sorğuları görür və istənilən mərhələdə rəhbərin əvəzinə hərəkət edə bilər. Rəhbəri təyin olunmamış şöbəyə gələn sorğular yalnız adminə düşür. Sorğular firmanın strukturundakı şöbələrə gedir — struktur boşdursa, sorğu göndərmək olmur." },
+      ] },
+    ],
+  },
   {
     id: "fixed", group: "Tapşırıqlar", title: "Sabit işlər (aylıq və həftəlik)", path: "Tapşırıqlar → Aylıq sabit işlər / Həftəlik sabit işlər", section: "tasks.fixed",
     intro: "Sabit işlər hər ay və ya hər həftə təkrarlanan, konkret işçiyə həvalə edilmiş işlərdir (məsələn, aylıq hesabat, həftəlik yoxlama). Hər dövr üçün işçi işin icrasını cədvəldə ✓ ilə qeyd edir.",
