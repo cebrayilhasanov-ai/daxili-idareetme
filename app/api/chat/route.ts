@@ -33,7 +33,7 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
   const generalId = await ensureGeneral(user);
   const threads = await env.DB.prepare(`SELECT t.id,t.type,
       CASE WHEN t.type='group' THEN t.name ELSE COALESCE(other.name,'Şəxsi söhbət') END AS name,
-      COALESCE(oe.avatar_key,other.avatar_key) AS avatar_key,
+      COALESCE(oe.avatar_key,other.avatar_key) AS avatar_key, other.id AS other_user_id,
       (SELECT body FROM chat_messages lm WHERE lm.thread_id=t.id ORDER BY lm.id DESC LIMIT 1) AS last_message,
       (SELECT created_at FROM chat_messages lm WHERE lm.thread_id=t.id ORDER BY lm.id DESC LIMIT 1) AS last_message_at,
       (SELECT COUNT(*) FROM chat_messages um WHERE um.thread_id=t.id AND um.id>m.last_read_message_id AND um.sender_user_id!=?) AS unread
