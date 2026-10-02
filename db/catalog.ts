@@ -862,6 +862,32 @@ export async function updateTask(input: { id: number; actorName?: string; status
   }
 }
 
+// Versiya 2.82: whoever gave a task approves it (or sends it back) — not only the admin. The tasks a user gives are the steps
+// they handed on ("Ver") from their own task or personal work, and, for a firm's director, the tasks of their dərkənar on
+// incoming documents. Tasks born from a request stay with Sorğular (the department head scores them there).
+export async function tasksGivenBy(user: SessionUser) {
+  await ensureSchema();
+  const ids = new Set<number>();
+  if (user.employeeId) {
+    const fromTasks = await db().prepare(`SELECT tci.delegated_task_id AS id FROM task_checklist_items tci JOIN tasks parent ON parent.id = tci.task_id
+      WHERE tci.delegated_task_id IS NOT NULL AND parent.employee_id = ?`).bind(user.employeeId).all<{ id: number }>();
+    fromTasks.results.forEach((r) => ids.add(Number(r.id)));
+    const structure = await companyDepartments();
+    const directed = await db().prepare(`SELECT a.task_id AS id, d.company_id FROM incoming_assignments a JOIN incoming_documents d ON d.id = a.incoming_id
+      WHERE a.task_id IS NOT NULL`).all<{ id: number; company_id: number }>();
+    directed.results.forEach((r) => { if (structure.directorsOf(Number(r.company_id)).has(user.employeeId!)) ids.add(Number(r.id)); });
+  }
+  const fromWorks = await db().prepare(`SELECT i.delegated_task_id AS id FROM personal_work_checklist_items i JOIN personal_works w ON w.id = i.personal_work_id
+    WHERE i.delegated_task_id IS NOT NULL AND w.user_id = ?`).bind(user.id).all<{ id: number }>();
+  fromWorks.results.forEach((r) => ids.add(Number(r.id)));
+  for (const id of [...ids]) if (await requestForTask(id)) ids.delete(id);
+  return ids;
+}
+
+export async function canApproveTask(user: SessionUser, taskId: number) {
+  return user.role === "admin" || (await tasksGivenBy(user)).has(taskId);
+}
+
 export async function deleteTask(id: number, actorName?: string) {
   const task = await db().prepare("SELECT id, status, attachment_key FROM tasks WHERE id = ?").bind(id).first<{ id: number; status: string; attachment_key: string | null }>();
   if (!task) throw new Error("Tapşırıq tapılmadı.");

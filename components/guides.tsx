@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -34,9 +34,26 @@ const GUIDES: Guide[] = [
         { steps: [
           "Yeni — tapşırıq sizə düşüb. İşə başlayanda “İcraya al” basın → İcradadır.",
           "İş bitəndə “Təqdim et” basın → Təqdim edilib. Tapşırıqla doldurulmalı fayl göndərilibsə, işlənmiş faylı yükləmədən təqdim etmək olmur.",
-          "Yoxlayan işi qəbul edirsə, 1–10 bal verir → Təsdiqlənib. Qəbul etmirsə, səbəbini yazıb geri qaytarır → Geri qaytarılıb; düzəldib yenidən “Təqdim et” basırsınız.",
+          "Tapşırığı verən şəxs işi qəbul edirsə, 1–10 bal verir → Təsdiqlənib. Qəbul etmirsə, səbəbini yazıb geri qaytarır → Geri qaytarılıb; düzəldib yenidən “Təqdim et” basırsınız.",
         ] },
         { note: "Status yalnız bu ardıcıllıqla dəyişir; təqdim edilmiş tapşırığı geri çəkmək olmur. Son tarixi keçmiş aktiv tapşırıq gecikən sayılır və zəngdə (🔔) göstərilir." },
+      ] },
+      { audience: "all", title: "Tapşırığı kim təsdiqləyir", blocks: [
+        { list: [
+          "Addımı sizə “Ver” ilə həvalə edən şəxs — onun tapşırığından və ya şəxsi işindən gələn tapşırığı o təsdiqləyir.",
+          "Daxil olan sənəd üzrə dərkənarla verilən tapşırığı — firmanın rəhbəri (direktor).",
+          "Sorğudan yaranan tapşırığı — sorğunun getdiyi şöbənin rəhbəri, Sorğular bölməsində.",
+          "Admin verdiyi tapşırıqları, eləcə də istənilən tapşırığı təsdiqləyə bilər.",
+          "Zəncir varsa, hər pillə öz verdiyini təsdiqləyir: əməkdaşın işini onu verən şöbə rəhbəri, şöbə rəhbərinin işini isə ona verən.",
+        ] },
+      ] },
+      { audience: "all", title: "Verdiyiniz tapşırıqları təsdiqləmək", blocks: [
+        { steps: [
+          "Verdiyiniz tapşırıq təqdim ediləndə Verilən tapşırıqlarda “Təsdiqimi gözləyir” tabı (sayğacla) çıxır.",
+          "Tapşırığın işlənmiş faylına və qeydinə baxın, “Qiymətləndir” basın: 1–10 bal və rəy yazıb “Təsdiqlə və qiymətləndir”, və ya səbəbini yazıb “Geri qaytar”.",
+          "Eyni şeyi tapşırığınızın (və ya şəxsi işinizin) addımlarında da edə bilərsiniz: həvalə edilmiş addımın altında “… işi təqdim edib — təsdiqinizi gözləyir” bölməsi çıxır — bal seçin, rəy yazın, “Təsdiqlə” və ya “Geri qaytar”.",
+        ] },
+        { note: "Təsdiqdən sonra həvalə etdiyiniz addımın ✓-u avtomatik qoyulur. Geri qaytaranda səbəb yazmaq məcburidir." },
       ] },
       { audience: "all", title: "Son tarixin dəyişdirilməsi", blocks: [
         { list: [
@@ -50,7 +67,7 @@ const GUIDES: Guide[] = [
           "Tapşırığın içində iş addımları yazıb hər birini ✓ edə, addıma fayl əlavə edə bilərsiniz.",
           "Rəhbərsinizsə, addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basa bilərsiniz (həvalə) — o addım həmin əməkdaşa ayrıca tapşırıq kimi düşür (addımın faylı ilə). Kimə həvalə etmək olar — firmanın strukturu göstərir; boş vəzifə atlanır və onun tabeliyindəkilər təklif olunur.",
           "Həvalə üçün tapşırığın firması təyin olunmalıdır.",
-          "Həvalə edilmiş addımın ✓-u əl ilə qoyulmur — əməkdaşın tapşırığı təsdiqlənəndə avtomatik qoyulur. Əsas sütunda həvalə zənciri (kim kimə verib) görünür.",
+          "Həvalə edilmiş addımın ✓-u əl ilə qoyulmur — əməkdaşın tapşırığını siz təsdiqləyəndə avtomatik qoyulur. Əsas sütunda həvalə zənciri (kim kimə verib) görünür.",
         ] },
       ] },
       { audience: "all", title: "Sorğudan yaranan tapşırıq", blocks: [
@@ -59,7 +76,7 @@ const GUIDES: Guide[] = [
       { audience: "admin", title: "Tapşırıq vermək və yoxlamaq", blocks: [
         { list: [
           "Yeni tapşırığı admin verir: icraçı, firma (icraçının firmalarından), adı, açıqlaması, son tarixi, istəyə görə doldurulacaq fayl.",
-          "Təqdim edilmiş tapşırığı “Qiymətləndir” ilə 1–10 balla təsdiqləyin və ya səbəb yazıb geri qaytarın.",
+          "Təqdim edilmiş tapşırığı “Qiymətləndir” ilə 1–10 balla təsdiqləyin və ya səbəb yazıb geri qaytarın. Həvalə edilmiş və dərkənar tapşırıqlarını adətən onları verən şəxs təsdiqləyir, amma admin də edə bilər.",
           "Tarix dəyişikliyi tələblərini qəbul və ya rədd edin.",
           "Yalnız “Yeni” statuslu tapşırıq silinir. Sorğudan yaranan tapşırıq silinmir — onu Sorğular bölməsindən (icraçını dəyişmək, imtina) idarə edin.",
         ] },
@@ -84,7 +101,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Addımı başqasına vermək", blocks: [
         { list: [
-          "Həvalə: addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basın — addım ona tapşırıq kimi düşür (Verilən tapşırıqlar). Tapşırıq təsdiqlənəndə addımın ✓-u avtomatik qoyulur.",
+          "Həvalə: addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basın — addım ona tapşırıq kimi düşür (Verilən tapşırıqlar). Əməkdaş təqdim edəndə onu siz təsdiqləyirsiniz (addımın altında və ya “Təsdiqimi gözləyir” tabında) — bundan sonra addımın ✓-u avtomatik qoyulur.",
           "“Şöbəyə sorğu” — addım işin firmasının başqa şöbəsinə sorğu kimi gedir (Sorğular). İş icrada olmalı və firması seçilməlidir. Addımın faylı sorğuya da gedir.",
           "Sorğu açıq olduğu müddətdə addımı silmək, həvalə etmək və ya yenidən göndərmək olmur. Cavabı təsdiqləyəndə addımın ✓-u avtomatik qoyulur.",
         ] },
@@ -217,6 +234,7 @@ const GUIDES: Guide[] = [
           "Tapşırıq lazım deyilsə, “Tanış oldum” basın (qeyd istəyə bağlıdır).",
           "Tapşırıq lazımdırsa, “Tapşırıq ver”: şöbə(lər)i və/və ya birbaşa işçi(lər)i seçin, icra müddətini və dərkənarı (göstərişi) yazın. Şöbəyə verilən tapşırıq şöbənin rəisinə gedir — rəisi təyin edilməyən şöbə seçilə bilməz.",
           "Heç kim icraya başlamayıbsa, “Tapşırıqları dəyiş” ilə alıcıları dəyişmək olar.",
+          "Alıcılar tapşırığı təqdim edəndə onu siz təsdiqləyirsiniz: Verilən tapşırıqlar → “Təsdiqimi gözləyir” (bal və rəy, və ya səbəbini yazıb geri qaytarmaq).",
         ] },
       ] },
       { audience: "head", title: "Şöbədə icra", blocks: [

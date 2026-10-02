@@ -830,3 +830,5 @@ body.chatresizing{user-select:none;cursor:grabbing}
 @media(max-width:820px){.guideslayout{grid-template-columns:1fr;padding:0 12px 16px}.guidesnav{position:static}.guidearticle{padding:16px}}
 @media print{body:has(.guidespage) .side,body:has(.guidespage) header,body:has(.guidespage) .guidesnav,body:has(.guidespage) .guideprint,body:has(.guidespage) .directoryhead,body:has(.guidespage) .chatmini,body:has(.guidespage) .viewasbar{display:none!important}body:has(.guidespage) main{margin:0;padding:0;background:none!important}.guideslayout{display:block;padding:0}.guidearticle{border:0;padding:0}.guidespage{box-shadow:none;border:0}}
 .threadlist>.chatnoresult{display:block;padding:12px 10px;white-space:normal}
+/* Versiya 2.82: approving a handed-on step right under it */
+.stepreview .steprequestactions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.stepreview .steprequestactions select{height:32px;border:1px solid #dbe3ee;border-radius:8px;padding:0 6px}.stepreview .steprequestactions input{flex:1;min-width:160px;height:32px}
