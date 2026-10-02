@@ -28,7 +28,7 @@ function makeStatement(sql: string, args: unknown[] = []) {
     bind: (...newArgs: unknown[]) => makeStatement(sql, newArgs),
     run: async () => {
       const info = sqlite.prepare(sql).run(...(args as never[]));
-      return { meta: { last_row_id: Number(info.lastInsertRowid) }, success: true };
+      return { meta: { last_row_id: Number(info.lastInsertRowid), changes: Number(info.changes) }, success: true };
     },
     first: async <T>(): Promise<T | null> => {
       const row = sqlite.prepare(sql).get(...(args as never[]));

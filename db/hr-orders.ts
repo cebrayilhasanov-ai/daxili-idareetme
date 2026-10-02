@@ -95,9 +95,9 @@ export async function getOrdersData() {
     getLegal(),
     getTerminationLegal(),
   ]);
-  // "Digər əmrlər" templates (Şablonlar, group "Digər əmr"); getDocumentTemplates also makes sure that table exists.
-  const templates = ((await getDocumentTemplates()) as { id: number; name: string; template_group: string | null; template1_key: string | null; template1_name: string | null }[])
-    .filter((t) => t.template_group === "other_order").map((t) => ({ id: t.id, name: t.name, template1_key: t.template1_key, template1_name: t.template1_name }));
+  // "Digər əmrlər" templates (Şablonlar, group "Kadrlar"), each of one firm; getDocumentTemplates also makes sure that table exists.
+  const templates = ((await getDocumentTemplates()) as { id: number; company_id: number | null; name: string; template_group: string | null; template1_key: string | null; template1_name: string | null }[])
+    .filter((t) => t.template_group === "other_order").map((t) => ({ id: t.id, company_id: t.company_id, name: t.name, template1_key: t.template1_key, template1_name: t.template1_name }));
   return { templates, terminationLegal, orders: orders.results, employees: employees.results, leaves: leaves.results, calendar: calendar.results, children: children.results, companies: companies.results, numbering: numbering.results, params, legal };
 }
 
@@ -333,10 +333,12 @@ async function buildOtherOrder(input: Record<string, unknown>) {
   const emp = await db().prepare(`SELECT ${EMPLOYEE_COLUMNS} FROM hr_employees WHERE id = ?`).bind(employeeId).first<OrderEmployee>();
   if (!emp) throw new Error("İşçi tapılmadı.");
   if (!emp.company_id) throw new Error("İşçinin kartında firma seçilməyib — əmr firmanın adından verilir.");
-  const templateId = Number(input.templateId) || null;
+  let templateId = Number(input.templateId) || null;
   if (templateId) {
-    const template = await db().prepare("SELECT template_group FROM document_templates WHERE id = ?").bind(templateId).first<{ template_group: string | null }>();
-    if (!template || template.template_group !== "other_order") throw new Error("Seçilmiş şablon “Digər əmr” qrupunda deyil.");
+    const template = await db().prepare("SELECT template_group, company_id FROM document_templates WHERE id = ?").bind(templateId).first<{ template_group: string | null; company_id: number | null }>();
+    if (!template || template.template_group !== "other_order") throw new Error("Seçilmiş şablon “Kadrlar” qrupunda deyil.");
+    // The picker offers only the worker's firm's templates; an older order still pointing at another firm's one just loses the link.
+    if (Number(template.company_id) !== Number(emp.company_id)) templateId = null;
   }
   const title = text(input.title);
   if (!title) throw new Error("Əmrin adını yazın (məs. “Mükafatlandırma haqqında”).");

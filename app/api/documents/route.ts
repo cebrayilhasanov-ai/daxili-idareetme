@@ -1,4 +1,4 @@
-import { createDocumentTemplate, deleteDocumentTemplate, getDocumentStorage, getDocumentTemplates, setDocumentRoot, updateDocumentTemplate } from "@/db/catalog";
+import { copyDocumentTemplate, createDocumentTemplate, deleteDocumentTemplate, getDocumentStorage, getDocumentTemplates, setDocumentRoot, updateDocumentTemplate } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -13,9 +13,10 @@ function authError(error: unknown) {
 export async function GET(request: Request) {
   try {
     const user = await requireUser(request);
-    // Şablonlar is admin-only; employees read the list only through Çıxan sənədlər (to download a template while writing).
+    // Şablonlar is admin-only; employees read the list only through Çıxan sənədlər (to download a template while writing),
+    // and only the templates of the firms they work in.
     if (user.role !== "admin") await requireSection(user, "documents.outgoing");
-    return Response.json({ items: await getDocumentTemplates(), storage: user.role === "admin" ? await getDocumentStorage() : undefined });
+    return Response.json({ items: await getDocumentTemplates(user), storage: user.role === "admin" ? await getDocumentStorage() : undefined });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
@@ -37,6 +38,11 @@ export async function PATCH(request: Request) {
       await setDocumentRoot(String(body.root || ""));
       await logAudit(user, "Sənədlərin kök papkası dəyişdirildi", "document", String(body.root || "—"));
       return Response.json({ items: await getDocumentTemplates(), storage: await getDocumentStorage() });
+    }
+    if (body.action === "copy") {
+      const id = await copyDocumentTemplate({ id: Number(body.id), companyId: body.companyId, templateGroup: body.templateGroup, name: body.name });
+      await logAudit(user, "Sənəd şablonu kopyalandı", "document", `#${body.id} → #${id}`);
+      return Response.json({ items: await getDocumentTemplates(), copiedId: id });
     }
     await updateDocumentTemplate({ ...body, id: Number(body.id) });
     await logAudit(user, "Sənəd şablonu yeniləndi", "document", body.name || `#${body.id}`);

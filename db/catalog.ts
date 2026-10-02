@@ -133,6 +133,10 @@ async function ensureSchema() {
   if (!documentColumns.results.some((column) => column.name === "signed_copy_returns")) await db().prepare("ALTER TABLE document_templates ADD COLUMN signed_copy_returns INTEGER NOT NULL DEFAULT 1").run();
   // Versiya 2.75: how many (calendar) days the other side has to send the signed copy back.
   if (!documentColumns.results.some((column) => column.name === "signed_copy_days")) await db().prepare("ALTER TABLE document_templates ADD COLUMN signed_copy_days INTEGER").run();
+  // Versiya 2.76: every template belongs to one firm (company_id) and one group — 'outgoing' (Çıxan sənəd), 'incoming'
+  // (Daxil olan sənəd) or 'other_order' (Kadrlar → Digər əmrlər). The earlier shared templates are copied to every active firm once.
+  if (!documentColumns.results.some((column) => column.name === "company_id")) await db().prepare("ALTER TABLE document_templates ADD COLUMN company_id INTEGER REFERENCES companies(id)").run();
+  await splitSharedTemplates();
   // On a document, signed_copy_returns overrides its template for that one document (NULL = follow the template).
   // Versiya 2.75: return_due_date — by when the signed copy must be back (sending date + the template's days, editable);
   // responsible_employee_id — the person who takes the document out and answers for its return (delivered_by keeps the name).
@@ -1336,48 +1340,119 @@ function yesNo(value: unknown): 1 | 0 | null {
   return null;
 }
 
-// Whether a signed copy of this type must come back, from its template; a type with no template keeps the old rule (it is awaited).
-async function templateReturnsSignedCopy(documentType: unknown): Promise<1 | 0> {
+export type TemplateGroup = "outgoing" | "incoming" | "other_order";
+const TEMPLATE_GROUPS: TemplateGroup[] = ["outgoing", "incoming", "other_order"];
+const TEMPLATE_GROUP_LABELS: Record<TemplateGroup, string> = { outgoing: "Çıxan sənəd", incoming: "Daxil olan sənəd", other_order: "Kadrlar" };
+const templateGroup = (value: unknown): TemplateGroup => (TEMPLATE_GROUPS.includes(value as TemplateGroup) ? (value as TemplateGroup) : "outgoing");
+
+// The template of a document's type: the one of the document's firm and register with that name (Versiya 2.76).
+async function findTemplate<T = Record<string, unknown>>(companyId: unknown, group: TemplateGroup, documentType: unknown) {
   const type = String(documentType || "").trim();
-  if (!type) return 1;
-  const row = await db().prepare("SELECT signed_copy_returns FROM document_templates WHERE lower(trim(name)) = lower(trim(?)) LIMIT 1").bind(type).first<{ signed_copy_returns: number | null }>();
+  if (!type || !Number(companyId)) return null;
+  return db().prepare("SELECT * FROM document_templates WHERE company_id = ? AND template_group = ? AND lower(trim(name)) = lower(trim(?)) LIMIT 1")
+    .bind(Number(companyId), group, type).first<T>();
+}
+
+// Versiya 2.76, once: each template that was shared by all firms becomes one template per active firm — an outgoing one, plus an
+// incoming one where it had a folder or naming rule for incoming documents; "Digər əmr" ones go to Kadrlar. The row itself is kept
+// for the first firm (so its id stays valid), the others are copies; HR "Digər əmrlər" orders are pointed at their firm's copy.
+async function splitSharedTemplates() {
+  const legacy = (await db().prepare("SELECT * FROM document_templates WHERE company_id IS NULL ORDER BY id").all<Record<string, unknown>>()).results;
+  if (!legacy.length) return;
+  const firms = (await db().prepare("SELECT id FROM companies WHERE active = 1 ORDER BY id").all<{ id: number }>()).results.map((row) => row.id);
+  if (!firms.length) return;
+  const hrOrders = await db().prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'hr_orders'").first();
+  for (const template of legacy) {
+    const hr = template.template_group === "other_order";
+    const groups: TemplateGroup[] = hr ? ["other_order"] : ["outgoing", ...(template.incoming_folder_path || template.incoming_name_pattern ? ["incoming" as const] : [])];
+    // Claimed first, so two requests starting at the same moment do not both copy it.
+    const claimed = await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ? WHERE id = ? AND company_id IS NULL").bind(firms[0], groups[0], template.id).run();
+    if (claimed.meta.changes === 0) continue;
+    for (const companyId of firms) {
+      for (const group of groups) {
+        if (companyId === firms[0] && group === groups[0]) continue;
+        const id = await insertTemplateCopy(template, companyId, group, String(template.name));
+        if (hr && hrOrders) await db().prepare("UPDATE hr_orders SET kind = ? WHERE grp = 'other' AND company_id = ? AND kind = ?").bind(String(id), companyId, String(template.id)).run();
+      }
+    }
+  }
+}
+
+// A copy of a template row (files, folders, rules) under another firm, group or name. The stored files are shared, not duplicated.
+async function insertTemplateCopy(source: Record<string, unknown>, companyId: number, group: TemplateGroup, name: string) {
+  const columns = (await db().prepare("PRAGMA table_info(document_templates)").all<{ name: string }>()).results.map((c) => c.name).filter((c) => c !== "id");
+  const values = columns.map((c) => (c === "company_id" ? companyId : c === "template_group" ? group : c === "name" ? name : c === "created_at" ? new Date().toISOString() : (source[c] ?? null)));
+  const inserted = await db().prepare(`INSERT INTO document_templates (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).bind(...values).run();
+  return Number(inserted.meta.last_row_id);
+}
+
+// A name is unique within one firm and group (the same name may serve another firm, or the other register of the same firm).
+async function assertTemplateNameFree(companyId: number, group: TemplateGroup, name: string, exceptId?: number) {
+  const clash = await db().prepare("SELECT id FROM document_templates WHERE company_id = ? AND template_group = ? AND lower(trim(name)) = lower(trim(?)) AND id != ? LIMIT 1")
+    .bind(companyId, group, name, exceptId ?? 0).first();
+  if (clash) {
+    const firm = await db().prepare("SELECT name FROM companies WHERE id = ?").bind(companyId).first<{ name: string }>();
+    throw new Error(`“${name}” adlı şablon ${firm?.name || "bu firmada"} · ${TEMPLATE_GROUP_LABELS[group]} qrupunda artıq var.`);
+  }
+}
+
+async function templateCompany(value: unknown) {
+  const companyId = Number(value);
+  if (!companyId) throw new Error("Firmanı seçin.");
+  if (!(await db().prepare("SELECT id FROM companies WHERE id = ?").bind(companyId).first())) throw new Error("Firma tapılmadı.");
+  return companyId;
+}
+
+// Whether a signed copy of this type must come back, from its template; a type with no template keeps the old rule (it is awaited).
+async function templateReturnsSignedCopy(companyId: unknown, documentType: unknown): Promise<1 | 0> {
+  const row = await findTemplate<{ signed_copy_returns: number | null }>(companyId, "outgoing", documentType);
   return row && !Number(row.signed_copy_returns) ? 0 : 1;
 }
 
 // A document stores its own choice only where it differs from its template, so a later change of the template still reaches it.
 // Not given keeps what the document had; an empty value ("") drops the document's own choice.
-async function signedCopyOverride(documentType: unknown, requested: unknown, current: unknown) {
+async function signedCopyOverride(companyId: unknown, documentType: unknown, requested: unknown, current: unknown) {
   const wanted = yesNo(requested);
   if (wanted === null) return requested === "" ? null : (current ?? null);
-  return wanted === (await templateReturnsSignedCopy(documentType)) ? null : wanted;
+  return wanted === (await templateReturnsSignedCopy(companyId, documentType)) ? null : wanted;
 }
 
-const templateGroup = (value: unknown) => (value === "other_order" ? "other_order" : null);
 const returnDays = (value: unknown) => { const n = Math.round(Number(value)); return Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : null; };
 
-export async function getDocumentTemplates() {
+// The admin sees every firm's templates; anyone else only those of the firms they work in.
+export async function getDocumentTemplates(user?: SessionUser) {
   await ensureSchema();
-  return (await db().prepare("SELECT * FROM document_templates ORDER BY name").all()).results;
+  const rows = (await db().prepare("SELECT t.*, c.name AS company_name FROM document_templates t LEFT JOIN companies c ON c.id = t.company_id ORDER BY t.name").all<Record<string, unknown>>()).results;
+  const scope = user ? await outgoingCompanyScope(user) : null;
+  return scope ? rows.filter((row) => scope.includes(Number(row.company_id))) : rows;
 }
 
-export async function createDocumentTemplate(input: { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; name: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
+type TemplateInput = { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; companyId?: unknown; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown };
+
+export async function createDocumentTemplate(input: TemplateInput) {
   await ensureSchema();
   const name = input.name?.trim();
   if (!name) throw new Error("Sənədin adını yazın.");
+  const companyId = await templateCompany(input.companyId);
+  const group = templateGroup(input.templateGroup);
+  await assertTemplateNameFree(companyId, group, name);
   const inserted = await db().prepare(`INSERT INTO document_templates
     (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, signed_copy_returns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, input.incomingFolderPath?.trim() || null, input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
-  await db().prepare("UPDATE document_templates SET template_group = ?, signed_copy_days = ? WHERE id = ?").bind(templateGroup(input.templateGroup), yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), Number(inserted.meta.last_row_id)).run();
+  await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ?, signed_copy_days = ? WHERE id = ?").bind(companyId, group, yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), Number(inserted.meta.last_row_id)).run();
 }
 
-export async function updateDocumentTemplate(input: { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; id: number; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown }) {
+// The firm and group of a template stay as they are; "Kopyala" puts it under another firm or group.
+export async function updateDocumentTemplate(input: TemplateInput & { id: number }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
+  const name = input.name?.trim() || String(current.name);
+  await assertTemplateNameFree(Number(current.company_id), templateGroup(current.template_group), name, input.id);
   await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ?, file_name_pattern = ?, incoming_folder_path = ?, incoming_name_pattern = ?, signed_copy_returns = ? WHERE id = ?`)
     .bind(
-      input.name?.trim() || current.name,
+      name,
       input.template1Key ?? current.template1_key,
       input.template1Name ?? current.template1_name,
       input.template1Size ?? current.template1_size,
@@ -1398,17 +1473,31 @@ export async function updateDocumentTemplate(input: { signedCopyDays?: unknown; 
       yesNo(input.signedCopyReturns) ?? current.signed_copy_returns ?? 1,
       input.id,
     ).run();
-  if (input.templateGroup !== undefined) await db().prepare("UPDATE document_templates SET template_group = ? WHERE id = ?").bind(templateGroup(input.templateGroup), input.id).run();
   if (input.signedCopyDays !== undefined || yesNo(input.signedCopyReturns) === 0) {
     await db().prepare("UPDATE document_templates SET signed_copy_days = ? WHERE id = ?").bind(yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), input.id).run();
   }
-  // A wrongly chosen template file can be taken off (Versiya 2.75) — the slot empties and the stored copy goes too.
+  // A wrongly chosen template file can be taken off (Versiya 2.75) — the slot empties, and the stored copy goes too unless
+  // another template (a copy for another firm or group) still uses it.
   for (const slot of [1, 2, 3] as const) {
     if (!input[`template${slot}Remove`] || input[`template${slot}Key`]) continue;
     await db().prepare(`UPDATE document_templates SET template${slot}_key = NULL, template${slot}_name = NULL, template${slot}_size = NULL, template${slot}_type = NULL WHERE id = ?`).bind(input.id).run();
     const key = current[`template${slot}_key`];
-    if (key && env.FILES) await env.FILES.delete(String(key));
+    if (!key || !env.FILES) continue;
+    const used = await db().prepare("SELECT id FROM document_templates WHERE template1_key = ? OR template2_key = ? OR template3_key = ? LIMIT 1").bind(key, key, key).first();
+    if (!used) await env.FILES.delete(String(key));
   }
+}
+
+// "Kopyala": the template with its files, folders and rules, under another firm and/or group (and, if wanted, another name).
+export async function copyDocumentTemplate(input: { id: number; companyId?: unknown; templateGroup?: unknown; name?: unknown }) {
+  await ensureSchema();
+  const source = await db().prepare("SELECT * FROM document_templates WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!source) throw new Error("Sənəd tapılmadı.");
+  const companyId = await templateCompany(input.companyId);
+  const group = templateGroup(input.templateGroup);
+  const name = String(input.name || "").trim() || String(source.name);
+  await assertTemplateNameFree(companyId, group, name);
+  return insertTemplateCopy(source, companyId, group, name);
 }
 
 export async function deleteDocumentTemplate(id: number) {
@@ -1462,7 +1551,7 @@ export async function getOutgoingDocuments(user: SessionUser) {
   await ensureSchema();
   const access = await outgoingAccess(user);
   const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name,
-    (SELECT signed_copy_returns FROM document_templates t WHERE lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
+    (SELECT signed_copy_returns FROM document_templates t WHERE t.company_id = d.company_id AND t.template_group = 'outgoing' AND lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
     FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
   const flag = (value: unknown) => (value === null || value === undefined ? null : Number(value) ? 1 : 0);
   const approvals = await approvalRows("outgoing");
@@ -1522,10 +1611,10 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const result = await db().prepare(`INSERT INTO outgoing_documents
     (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
-    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, formatPhone(input.phone) || null, input.note || null, await signedCopyOverride(docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, formatPhone(input.phone) || null, input.note || null, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
   const id = Number(result.meta.last_row_id);
   // Versiya 2.75: who takes the document out (answers for the signed copy) and by when that copy must be back.
-  const due = await returnDueFor(docType, await signedCopyOverride(docType, input.signedCopyReturns, null), input.outgoingDate);
+  const due = await returnDueFor(companyId, docType, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), input.outgoingDate);
   await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ?, return_due_date = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), due, id).run();
   return { id, outgoingNo };
 }
@@ -1565,7 +1654,7 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
       input.organizationName ?? current.organization_name,
       input.phone === undefined ? current.phone : formatPhone(input.phone) || null,
       input.note ?? current.note,
-      await signedCopyOverride(input.documentType ?? current.document_type, input.signedCopyReturns, current.signed_copy_returns),
+      await signedCopyOverride(companyId, input.documentType ?? current.document_type, input.signedCopyReturns, current.signed_copy_returns),
       input.id,
     ).run();
   if (input.responsibleEmployeeId !== undefined) await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), input.id).run();
@@ -1581,10 +1670,8 @@ const employeeIdOrNull = (value: unknown) => (Number(value) > 0 ? Number(value) 
 
 // By when a signed copy must be back: the sending date (or today) plus the template's days — none when the type has no days
 // or no copy comes back for this document (override: the document's own choice, null = follow the template).
-async function returnDueFor(documentType: unknown, override: unknown, sendDate: unknown) {
-  const type = String(documentType || "").trim();
-  if (!type) return null;
-  const row = await db().prepare("SELECT signed_copy_returns, signed_copy_days FROM document_templates WHERE lower(trim(name)) = lower(trim(?)) LIMIT 1").bind(type).first<{ signed_copy_returns: number | null; signed_copy_days: number | null }>();
+async function returnDueFor(companyId: unknown, documentType: unknown, override: unknown, sendDate: unknown) {
+  const row = await findTemplate<{ signed_copy_returns: number | null; signed_copy_days: number | null }>(companyId, "outgoing", documentType);
   if (!row?.signed_copy_days) return null;
   const returns = override === null || override === undefined ? Number(row.signed_copy_returns) !== 0 : Number(override) === 1;
   if (!returns) return null;
@@ -1726,7 +1813,7 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
   }
   const values = documentValues(record);
   const template = record.document_type
-    ? await db().prepare("SELECT * FROM document_templates WHERE lower(trim(name)) = lower(trim(?))").bind(String(record.document_type)).first<Record<string, unknown>>()
+    ? await findTemplate(record.company_id, "outgoing", record.document_type)
     : null;
   // The name is worked out once, on the first upload, and reused for the signed copy — so the Word file and the signed file always match.
   const baseName = String(record.file_base_name || "") || tidyName(fillPattern(String(template?.file_name_pattern || DEFAULT_FILE_NAME_PATTERN), values, false)) || `Sənəd-${values.ÇıxışNo}`;
@@ -1740,7 +1827,7 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
   // Daxil olma No of the signed copy: Çıxan sənədlər' own sequence per firm, separate from Daxil olan sənədlər. Only a document whose
   // signed copy comes back gets one — for a letter the file is just a copy of what we sent, and nothing "came in".
   const own = record.signed_copy_returns;
-  const comesBack = own !== null && own !== undefined ? Boolean(Number(own)) : Boolean(await templateReturnsSignedCopy(record.document_type));
+  const comesBack = own !== null && own !== undefined ? Boolean(Number(own)) : Boolean(await templateReturnsSignedCopy(record.company_id, record.document_type));
   const registersReturn = kind === "final" && comesBack;
   const incomingNo = registersReturn && !record.incoming_no ? await nextOutgoingNumber("incoming_no", Number(record.company_id)) : record.incoming_no;
   const incomingDate = registersReturn && !record.incoming_date ? bakuDateIso() : record.incoming_date;
@@ -1989,8 +2076,9 @@ export async function getIncomingDocuments(user: SessionUser) {
   const directorOf = activeFirms.filter((companyId) => access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId)));
   const firms = new Set<number>([...items.map((i: Record<string, unknown>) => Number(i.company_id)), ...directorOf, ...(access.registrarFirms ?? (access.admin ? activeFirms : []))]);
   const departments = [...firms].flatMap((companyId) => access.structure.departmentsOf(companyId).map((d) => ({ company_id: companyId, ...d, members: access.structure.membersOf(companyId, d.name).map((m) => ({ id: m.id, name: m.name, position_title: m.position_title })) })));
-  // Document types from Şablonlar, with where a scan of that type is filed.
-  const types = (await db().prepare("SELECT name, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group IS NULL OR template_group != 'other_order' ORDER BY name").all<{ name: string; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
+  // Document types from Şablonlar (each firm's “Daxil olan sənəd” templates), with where a scan of that type is filed.
+  const allTypes = (await db().prepare("SELECT company_id, name, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group = 'incoming' ORDER BY name").all<{ company_id: number; name: string; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
+  const types = allTypes.filter((t) => firms.has(Number(t.company_id)));
   return { items, departments, directorOf, types, canRegister: access.may.add };
 }
 
@@ -2177,7 +2265,7 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
   const values = incomingValues(record);
   // The folder and naming rule come from the template of the document's type (Şablonlar), like for outgoing documents.
   const template = record.document_type
-    ? await db().prepare("SELECT incoming_folder_path, incoming_name_pattern FROM document_templates WHERE lower(trim(name)) = lower(trim(?))").bind(String(record.document_type)).first<{ incoming_folder_path: string | null; incoming_name_pattern: string | null }>()
+    ? await findTemplate<{ incoming_folder_path: string | null; incoming_name_pattern: string | null }>(record.company_id, "incoming", record.document_type)
     : null;
   const baseName = String(record.file_base_name || "") || tidyName(fillPattern(template?.incoming_name_pattern || DEFAULT_INCOMING_NAME, values, false)) || `Daxil-olan-${values.DaxilOlmaNo}`;
   const saved = await storeDocumentFile({

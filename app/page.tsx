@@ -47,7 +47,7 @@ type ChecklistLikeItem = StepRequest & { id:number; title:string; done:number; d
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
-type DocumentTemplate = { id:number; name:string; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
+type DocumentTemplate = { id:number; name:string; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
 type OutgoingDocument = { return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
 type WorkRequest = { id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { canAdd?:boolean; items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
@@ -247,7 +247,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.75</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.76</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -308,7 +308,7 @@ export default function Home(){
         {page==="audit"&&<AuditPage/>}
         {pageAllowed&&page==="documents"&&<>
         {documentSubTab==="overview"&&<DocumentsOverview showCustomers={can("dashboard.customers")} onOpenCustomers={()=>setPage("customers")} openOverdue={filter=>{setOutgoingPreset(p=>({...filter,nonce:(p?.nonce??0)+1}));setDocumentSubTab("outgoing")}} showTemplates={canTemplates} showOutgoing={canDocument("outgoing")} showIncoming={canDocument("incoming")} activeCompanyId={companyScopeActive?activeCompanyId:null} open={tab=>setDocumentSubTab(tab)}/>}
-        {documentSubTab==="templates"&&canTemplates&&<DocumentsPage isAdmin={isAdmin}/>}
+        {documentSubTab==="templates"&&canTemplates&&<DocumentsPage isAdmin={isAdmin} companies={data.companies.filter(c=>Boolean(c.active))}/>}
         {documentSubTab==="outgoing"&&<OutgoingDocumentsPage preset={outgoingPreset} onPresetUsed={()=>setOutgoingPreset(null)} isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null}/>}
         {documentSubTab==="incoming"&&<IncomingDocumentsPage onPending={n=>{if(!viewAs)setIncomingPending(n)}} isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null}/>}</>}
         {pageAllowed&&page==="hr"&&hrSubTab==="overview"&&<HrOverview showViolations={can("hr.violations")} showPersonnel={can("hr.personnel")} showOrders={can("hr.orders")} activeCompanyId={companyScopeActive?activeCompanyId:null} open={tab=>setHrSubTab(tab)}/>}
@@ -1307,8 +1307,26 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun qeyd tapılmadı.":"Hələ qeyd yoxdur."}/>}</div>}
   </section>;
 }
-function DocumentsPage({isAdmin}:{isAdmin:boolean}){
+// Versiya 2.76: every template belongs to one firm and one group; the page shows one firm and one group at a time.
+type TemplateGroupKey="outgoing"|"incoming"|"other_order";
+const TEMPLATE_GROUP_TABS:Array<{key:TemplateGroupKey;label:string}>=[{key:"outgoing",label:"Çıxan sənəd"},{key:"incoming",label:"Daxil olan sənəd"},{key:"other_order",label:"Kadrlar"}];
+const templateGroupOf=(t:DocumentTemplate):TemplateGroupKey=>t.template_group==="incoming"||t.template_group==="other_order"?t.template_group:"outgoing";
+const templateGroupLabel=(key:string)=>TEMPLATE_GROUP_TABS.find(g=>g.key===key)?.label||key;
+function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}){
   const [items,setItems]=useState<DocumentTemplate[]>([]);
+  const [notice,setNotice]=useState("");
+  // The firm and group being looked at (remembered in this browser).
+  const [companyId,setCompanyIdState]=useState<number>(()=>{try{return Number(window.localStorage.getItem("templates:company"))||0}catch{return 0}});
+  const [group,setGroupState]=useState<TemplateGroupKey>(()=>{try{const v=window.localStorage.getItem("templates:group");return v==="incoming"||v==="other_order"?v:"outgoing"}catch{return "outgoing"}});
+  const firmId=companies.some(c=>c.id===companyId)?companyId:(companies[0]?.id||0);
+  const firmName=(id:number|null|undefined)=>companies.find(c=>c.id===id)?.name||"—";
+  const setCompanyId=(id:number)=>{setCompanyIdState(id);setEditingId(null);setCopyingId(null);try{window.localStorage.setItem("templates:company",String(id))}catch{}};
+  const setGroup=(key:TemplateGroupKey)=>{setGroupState(key);setEditingId(null);setCopyingId(null);setCreating(false);try{window.localStorage.setItem("templates:group",key)}catch{}};
+  const shownItems=items.filter(t=>Number(t.company_id)===firmId&&templateGroupOf(t)===group);
+  // "Kopyala": the template, with its files, folders and rules, into another firm and/or group.
+  const [copyingId,setCopyingId]=useState<number|null>(null);
+  const [copyForm,setCopyForm]=useState<{companyId:string;group:TemplateGroupKey;name:string}>({companyId:"",group:"outgoing",name:""});
+  const [copyBusy,setCopyBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [creating,setCreating]=useState(false);
@@ -1326,7 +1344,6 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [signedDays,setSignedDays]=useState("");
   const [editSignedDays,setEditSignedDays]=useState("");
   const [editRemove,setEditRemove]=useState<Record<number,boolean>>({});
-  const [templateGroup,setTemplateGroup]=useState("outgoing");
   const [storage,setStorage]=useState<{root:string;folderSaving:boolean}|null>(null);
   const [rootDraft,setRootDraft]=useState("");
   const [rootBusy,setRootBusy]=useState(false);
@@ -1342,7 +1359,6 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const [editIncomingFolderPath,setEditIncomingFolderPath]=useState("");
   const [editIncomingNamePattern,setEditIncomingNamePattern]=useState("");
   const [editSignedReturn,setEditSignedReturn]=useState("1");
-  const [editTemplateGroup,setEditTemplateGroup]=useState("outgoing");
   const [editBusy,setEditBusy]=useState(false);
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[]);setStorage(body.storage||null);setRootDraft(body.storage?.root||"")}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
@@ -1358,23 +1374,23 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     if(!name.trim())return;
     setBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={name,templateGroup,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern,signedCopyReturns:signedReturn,signedCopyDays:signedReturn==="1"?signedDays:""};
+      const body:Record<string,unknown>={name,companyId:firmId,templateGroup:group,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern,signedCopyReturns:signedReturn,signedCopyDays:signedReturn==="1"?signedDays:""};
       if(file1){const uploaded=await uploadFile(file1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(file2){const uploaded=await uploadFile(file2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(file3){const uploaded=await uploadFile(file3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
       const response=await fetch("/api/documents",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
-      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setSignedReturn("1");setSignedDays("");setTemplateGroup("outgoing");setCreating(false);
+      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setSignedReturn("1");setSignedDays("");setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setEditName(item.name);setEditTemplateGroup(item.template_group==="other_order"?"other_order":"outgoing");setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"");setEditSignedReturn(item.signed_copy_returns===0?"0":"1");setEditSignedDays(item.signed_copy_days?String(item.signed_copy_days):"");setEditRemove({})};
+  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setCopyingId(null);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"");setEditSignedReturn(item.signed_copy_returns===0?"0":"1");setEditSignedDays(item.signed_copy_days?String(item.signed_copy_days):"");setEditRemove({})};
   const cancelEdit=()=>{setEditingId(null);setEditFile1(null);setEditFile2(null);setEditFile3(null)};
   const saveEdit=async(item:DocumentTemplate)=>{
     setEditBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={id:item.id,name:editName,templateGroup:editTemplateGroup,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern,signedCopyReturns:editSignedReturn,signedCopyDays:editSignedReturn==="1"?editSignedDays:"",template1Remove:Boolean(editRemove[1]),template2Remove:Boolean(editRemove[2]),template3Remove:Boolean(editRemove[3])};
+      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern,signedCopyReturns:editSignedReturn,signedCopyDays:editSignedReturn==="1"?editSignedDays:"",template1Remove:Boolean(editRemove[1]),template2Remove:Boolean(editRemove[2]),template3Remove:Boolean(editRemove[3])};
       if(editFile1){const uploaded=await uploadFile(editFile1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(editFile2){const uploaded=await uploadFile(editFile2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(editFile3){const uploaded=await uploadFile(editFile3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
@@ -1395,6 +1411,18 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
       setItems(result.items||[]);
     }catch(e){setError(e instanceof Error?e.message:"Sənəd silinmədi.")}
   };
+  const startCopy=(item:DocumentTemplate)=>{setCopyingId(item.id);setEditingId(null);setNotice("");setCopyForm({companyId:String(companies.find(c=>c.id!==firmId)?.id||firmId),group:templateGroupOf(item),name:item.name})};
+  const copy=async(item:DocumentTemplate)=>{
+    setCopyBusy(true);setError("");setNotice("");
+    try{
+      const response=await fetch("/api/documents",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"copy",id:item.id,companyId:Number(copyForm.companyId),templateGroup:copyForm.group,name:copyForm.name})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error);
+      setItems(result.items||[]);setCopyingId(null);
+      setNotice(`“${item.name}” kopyalandı → ${firmName(Number(copyForm.companyId))} · ${templateGroupLabel(copyForm.group)}${copyForm.name.trim()&&copyForm.name.trim()!==item.name?` (“${copyForm.name.trim()}”)`:""}.`);
+    }catch(e){setError(e instanceof Error?e.message:"Şablon kopyalanmadı.")}
+    finally{setCopyBusy(false)}
+  };
   const saveRoot=async()=>{
     setRootBusy(true);setError("");
     try{
@@ -1409,7 +1437,6 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   const templateLabel=(n:number)=><span className="templatelabel">Sənədin şablonu<br/>{n}</span>;
   const documentColumns:Array<{key:string;label:string;width:number;search:(item:DocumentTemplate)=>string;render:(item:DocumentTemplate)=>React.ReactNode}>=[
     {key:"name",label:"Sənədin adı",width:240,search:item=>item.name,render:item=><b>{item.name}</b>},
-    {key:"group",label:"Qrup",width:130,search:item=>item.template_group==="other_order"?"Digər əmr":"Çıxan sənəd",render:item=>item.template_group==="other_order"?<span className="templategroup order">Digər əmr</span>:<span className="templategroup">Çıxan sənəd</span>},
     {key:"signedReturn",label:"İmzalı nüsxə geri qaytarılır",width:140,search:item=>item.signed_copy_returns===0?"Xeyr":item.signed_copy_days?`Bəli ${item.signed_copy_days} gün`:"Bəli",render:item=>item.signed_copy_returns===0?<span className="signedreturn no">Xeyr</span>:<span className="signedreturn yes">Bəli{item.signed_copy_days?` · ${item.signed_copy_days} gün`:""}</span>},
     {key:"fileNamePattern",label:"Çıxan sənəd üçün adlanma qaydası",width:230,search:item=>item.file_name_pattern||DEFAULT_FILE_NAME_PATTERN,render:item=>item.file_name_pattern?<span className="folderpath">{item.file_name_pattern}</span>:<span className="nodocument" title="Qayda yazılmayıb — standart qayda işlədilir">{DEFAULT_FILE_NAME_PATTERN}</span>},
     {key:"template1",label:"Sənədin şablonu 1",width:220,search:item=>item.template1_name||"Yoxdur",render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
@@ -1420,18 +1447,23 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     {key:"incomingFolder",label:"Daxil olan sənəd üçün hazır sənəd papkası",width:230,search:item=>item.incoming_folder_path||"Qeyd edilməyib",render:item=>item.incoming_folder_path?<span className="folderpath" title={item.incoming_folder_path}>{item.incoming_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
     {key:"incomingNamePattern",label:"Daxil olan sənəd üçün adlanma qaydası",width:230,search:item=>item.incoming_name_pattern||DEFAULT_INCOMING_NAME,render:item=>item.incoming_name_pattern?<span className="folderpath">{item.incoming_name_pattern}</span>:<span className="nodocument" title="Qayda yazılmayıb — standart qayda işlədilir">{DEFAULT_INCOMING_NAME}</span>},
   ];
-  const {order,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
+  // Only the columns (and form fields) of the group being looked at.
+  const ALL_GROUPS:TemplateGroupKey[]=["outgoing","incoming","other_order"];
+  const columnGroups:Record<string,TemplateGroupKey[]>={name:ALL_GROUPS,signedReturn:["outgoing"],fileNamePattern:["outgoing"],template1:["outgoing","other_order"],template2:["outgoing"],template3:["outgoing"],draftFolder:["outgoing"],finalFolder:["outgoing"],incomingFolder:["incoming"],incomingNamePattern:["incoming"]};
+  const shownColumns=documentColumns.filter(c=>columnGroups[c.key]?.includes(group));
+  const shownKeys=new Set(shownColumns.map(c=>c.key));
+  const {order:allOrder,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
+  const order=allOrder.filter(key=>shownKeys.has(key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
   const columnsByKey=Object.fromEntries(documentColumns.map(c=>[c.key,c]));
   const defaultWidths=Object.fromEntries(documentColumns.map(c=>[c.key,c.width]));
-  const excel=useExcelFilters("templates",documentColumns,items);
+  const excel=useExcelFilters("templates",shownColumns,shownItems);
   const createFieldRenderers:Record<string,()=>React.ReactNode>={
     name:()=><Field key="name" label="Sənədin adı" value={name} set={setName}/>,
-    group:()=><label className="field" key="group">Qrup<select value={templateGroup} onChange={e=>setTemplateGroup(e.target.value)}><option value="outgoing">Çıxan sənəd</option><option value="other_order">Digər əmr (Kadrlar → Əmrlər)</option></select>{templateGroup==="other_order"&&<small>Əmrin mətni “Sənədin şablonu 1” faylından (.docx) oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
     signedReturn:()=><Fragment key="signedReturn"><label className="field">İmzalı nüsxə geri qaytarılır<select value={signedReturn} onChange={e=>setSignedReturn(e.target.value)}><option value="1">Bəli — qarşı tərəf bir nüsxəni imzalayıb qaytarır</option><option value="0">Xeyr — geri qaytarılmır (məs. məktub)</option></select></label>{signedReturn==="1"&&<label className="field">Qaytarılma müddəti (təqvim günü)<Input type="number" min={1} placeholder="Məs. 10" value={signedDays} onChange={e=>setSignedDays(e.target.value)}/><small>Bu müddət keçəndə imzalı nüsxəsi qayıtmayan sənəd “Yubanır” olur. Boş qoysanız, müddət izlənmir.</small></label>}</Fragment>,
     fileNamePattern:()=><label className="field" key="fileNamePattern">Çıxan sənəd üçün adlanma qaydası<Input value={fileNamePattern} placeholder={DEFAULT_FILE_NAME_PATTERN} onChange={e=>setFileNamePattern(e.target.value)}/></label>,
-    template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}</label>,
+    template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}{group==="other_order"&&<small>Əmrin mətni bu Word (.docx) faylından oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label>,
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label>,
     draftFolder:()=><Field key="draftFolder" label="Çıxan sənəd üçün ilkin sənəd papkası" value={draftFolderPath} set={setDraftFolderPath}/>,
@@ -1441,10 +1473,9 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
   };
   const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
     name:()=><Field key="name" label="Sənədin adı" value={editName} set={setEditName}/>,
-    group:()=><label className="field" key="group">Qrup<select value={editTemplateGroup} onChange={e=>setEditTemplateGroup(e.target.value)}><option value="outgoing">Çıxan sənəd</option><option value="other_order">Digər əmr (Kadrlar → Əmrlər)</option></select>{editTemplateGroup==="other_order"&&<small>Əmrin mətni “Sənədin şablonu 1” faylından (.docx) oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
     signedReturn:()=><Fragment key="signedReturn"><label className="field">İmzalı nüsxə geri qaytarılır<select value={editSignedReturn} onChange={e=>setEditSignedReturn(e.target.value)}><option value="1">Bəli — qarşı tərəf bir nüsxəni imzalayıb qaytarır</option><option value="0">Xeyr — geri qaytarılmır (məs. məktub)</option></select></label>{editSignedReturn==="1"&&<label className="field">Qaytarılma müddəti (təqvim günü)<Input type="number" min={1} placeholder="Məs. 10" value={editSignedDays} onChange={e=>setEditSignedDays(e.target.value)}/><small>Bu müddət keçəndə imzalı nüsxəsi qayıtmayan sənəd “Yubanır” olur. Boş qoysanız, müddət izlənmir.</small><small>Dəyişiklik yalnız bundan sonra qeydə alınan sənədlərə aiddir.</small></label>}</Fragment>,
     fileNamePattern:()=><label className="field" key="fileNamePattern">Çıxan sənəd üçün adlanma qaydası<Input value={editFileNamePattern} placeholder={DEFAULT_FILE_NAME_PATTERN} onChange={e=>setEditFileNamePattern(e.target.value)}/></label>,
-    template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small className={editRemove[1]?"templateremoved":undefined}>Hazırkı: {item.template1_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,1:!r[1]}))}}>{editRemove[1]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[1]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}</label>,
+    template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small className={editRemove[1]?"templateremoved":undefined}>Hazırkı: {item.template1_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,1:!r[1]}))}}>{editRemove[1]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[1]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}{group==="other_order"&&<small>Əmrin mətni bu Word (.docx) faylından oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small className={editRemove[2]?"templateremoved":undefined}>Hazırkı: {item.template2_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,2:!r[2]}))}}>{editRemove[2]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[2]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label>,
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small className={editRemove[3]?"templateremoved":undefined}>Hazırkı: {item.template3_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,3:!r[3]}))}}>{editRemove[3]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[3]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label>,
     draftFolder:()=><Field key="draftFolder" label="Çıxan sənəd üçün ilkin sənəd papkası" value={editDraftFolderPath} set={setEditDraftFolderPath}/>,
@@ -1453,18 +1484,27 @@ function DocumentsPage({isAdmin}:{isAdmin:boolean}){
     incomingNamePattern:()=><label className="field" key="incomingNamePattern">Daxil olan sənəd üçün adlanma qaydası<Input value={editIncomingNamePattern} placeholder={DEFAULT_INCOMING_NAME} onChange={e=>setEditIncomingNamePattern(e.target.value)}/></label>,
   });
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları (3 versiyada)</p></div>{isAdmin&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları — hər firmanın öz şablonları</p></div>{isAdmin&&firmId>0&&<Button onClick={()=>{setCreating(v=>!v);setNotice("")}}><Plus/>Yeni sənəd</Button>}</div>
     {isAdmin&&storage&&<div className="docstoragebar">
       <div className="docstoragerow"><label className="field">İcazə verilən kök papka (qorunma)<Input value={rootDraft} placeholder={storage.folderSaving?"Məsələn: D:\\Sənədlər":"Yalnız öz serverdə işləyəndə"} disabled={!storage.folderSaving} onChange={e=>setRootDraft(e.target.value)}/></label>{storage.folderSaving&&<Button disabled={rootBusy||rootDraft.trim()===storage.root} onClick={()=>void saveRoot()}>{rootBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button>}</div>
       <p>{!storage.folderSaving?"Proqram hazırda buludda işləyir — sənədlər qaydaya uyğun adla sistemdə saxlanılır. Papkaya yazmaq proqram öz serverdə işləyəndə aktiv olur.":storage.root?`Şablonlarda papkanın tam yolunu yazın (məs. ${storage.root}\\{Firma}\\{İl}\\İlkin). Sistem yalnız bu kök papkanın içinə yazır — yol ondan kənara çıxarsa, fayl yazılmır və xəbərdarlıq verilir.`:"Kök papka təyin edilməyib — proqramın yaza biləcəyi sahəni göstərin (məs. D:\\Sənədlər). Təyin edilənə qədər sənədlər sistemdə saxlanılır."}</p>
       <p className="doctokens">Qayda dəyişənləri: {DOCUMENT_TOKENS.map(t=><code key={t}>{"{"+t+"}"}</code>)}</p>
     </div>}
-    {creating&&<div className="inlinetaskrow documentrow">{order.map(key=>createFieldRenderers[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
+    {companies.length>0&&<div className="templatescope"><label className="field">Firma<select value={firmId||""} onChange={e=>setCompanyId(Number(e.target.value))}>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div className="fixedsubtabs">{TEMPLATE_GROUP_TABS.map(g=>{const n=items.filter(t=>Number(t.company_id)===firmId&&templateGroupOf(t)===g.key).length;return <button key={g.key} className={group===g.key?"on":""} onClick={()=>setGroup(g.key)}>{g.label} ({n})</button>})}</div></div>}
+    {!companies.length&&!loading&&<div className="errorbox">Aktiv firma yoxdur — şablon firmaya aid olur, əvvəlcə Tənzimləmələr → Firmalar bölməsində firma əlavə edin.</div>}
+    {creating&&firmId>0&&<div className="inlinetaskrow documentrow"><small className="templatecreatefor">Yeni şablon: <b>{firmName(firmId)}</b> · <b>{templateGroupLabel(group)}</b></small>{order.map(key=>createFieldRenderers[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!name.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable templatetable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{excel.rows.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow">{order.map(key=>editFieldRenderers(item)[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<tr key={item.id}>
+    {notice&&<div className="hrok">{notice}</div>}
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable templatetable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={isAdmin?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{isAdmin&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{excel.rows.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow documenteditrow">{order.map(key=>editFieldRenderers(item)[key]())}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!editName.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
-      {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
-    </tr>)}</tbody></table>{!items.length&&<Empty text="Hələ sənəd əlavə edilməyib."/>}</div>}
+      {isAdmin&&<td data-label="Əməliyyat"><div className="tableactions"><button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button><button className="editcompanybtn" onClick={()=>copyingId===item.id?setCopyingId(null):startCopy(item)}>Kopyala</button><button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button></div></td>}
+    </tr>{copyingId===item.id&&<tr><td colSpan={order.length+(isAdmin?1:0)}><div className="inlinetaskrow documentrow templatecopyrow">
+      <small className="templatecreatefor">“{item.name}” şablonunu faylları, papkaları və qaydaları ilə kopyala:</small>
+      <label className="field">Hansı firmaya<select value={copyForm.companyId} onChange={e=>setCopyForm(f=>({...f,companyId:e.target.value}))}>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label className="field">Hansı qrupa<select value={copyForm.group} onChange={e=>setCopyForm(f=>({...f,group:e.target.value as TemplateGroupKey}))}>{TEMPLATE_GROUP_TABS.map(g=><option key={g.key} value={g.key}>{g.label}</option>)}</select></label>
+      <Field label="Adı" value={copyForm.name} set={v=>setCopyForm(f=>({...f,name:v}))}/>
+      <div className="inlineactions"><button className="inlinecancel" disabled={copyBusy} onClick={()=>setCopyingId(null)}>Ləğv et</button><Button disabled={copyBusy||!copyForm.name.trim()||!Number(copyForm.companyId)} onClick={()=>void copy(item)}>{copyBusy?"Kopyalanır...":"Kopyala"}</Button></div>
+    </div></td></tr>}</Fragment>)}</tbody></table>{!shownItems.length&&<Empty text={items.length?`${firmName(firmId)} · ${templateGroupLabel(group)} qrupunda şablon yoxdur. “Yeni sənəd” ilə əlavə edin və ya başqa firmadan “Kopyala” edin.`:"Hələ sənəd əlavə edilməyib."}/>}</div>}
   </section>;
 }
 const DEFAULT_FILE_NAME_PATTERN="{ÇıxışNo}_{SənədTipi}_{Təşkilat}_{Tarix}";
@@ -1509,7 +1549,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   // Used once: coming back to Çıxan sənədlər from the menu later shows all documents again.
   useEffect(()=>{if(preset)onPresetUsed?.()},[preset,onPresetUsed]);
   const [members,setMembers]=useState<Record<number,Array<{id:number;name:string;department:string}>>>({});
-  const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse,customerResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents"),fetch("/api/customers")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);setCanRegister(Boolean(outgoingBody.canRegister));const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates((templateBody.items||[]).filter((t:DocumentTemplate)=>t.template_group!=="other_order"));const customerBody=await customerResponse.json();if(customerResponse.ok)setCustomers(customerBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
+  const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse,customerResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents"),fetch("/api/customers")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);setCanRegister(Boolean(outgoingBody.canRegister));const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates((templateBody.items||[]).filter((t:DocumentTemplate)=>templateGroupOf(t)==="outgoing"));const customerBody=await customerResponse.json();if(customerResponse.ok)setCustomers(customerBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   const reloadItems=async()=>{const response=await fetch("/api/documents/outgoing");const body=await response.json();if(response.ok)setItems(body.items||[])};
   useEffect(()=>{void load()},[]);
   // An employee files documents for the firm picked in the sidebar; the admin (who sees every firm) picks it in the form.
@@ -1589,7 +1629,9 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   };
   const sendingMethodOptions=["Kağız-Əldən","Adoc-Vergidən"];
   const copiesOptions=["1","2","3","4","5"];
-  const templateFor=(typeName:string)=>templates.find(t=>t.name.trim().toLocaleLowerCase("az-AZ")===typeName.trim().toLocaleLowerCase("az-AZ"));
+  // Versiya 2.76: the document types are the Çıxan sənəd templates of the document's own firm.
+  const firmTemplates=(companyId:number)=>templates.filter(t=>Number(t.company_id)===companyId);
+  const templateFor=(values:Record<string,string>)=>{const typeName=(values.documentType||"").trim().toLocaleLowerCase("az-AZ");return typeName?firmTemplates(companyOf(values)).find(t=>t.name.trim().toLocaleLowerCase("az-AZ")===typeName):undefined};
   const companyName=(id:number)=>companies.find(c=>c.id===id)?.name||"—";
   // Fields the system fills itself — the numbers at creation, Daxil olma No / tarixi when the signed document is uploaded — are left out of the new-document form.
   const autoFilled=new Set(["incomingNo","incomingDate","documentNumber","outgoingNo","draft","final","returnDue"]);
@@ -1602,7 +1644,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     incomingDate:(values,set)=><Field key="incomingDate" label="Daxil olma tarixi" type="date" value={values.incomingDate||""} set={v=>set({...values,incomingDate:v})}/>,
     // Related departments: the first one is the main department — the {Şöbə} of the folder and file-name rules.
     sendingDepartment:(values,set)=>{const chosen=companyOf(values);const options=chosen?departments[chosen]||[]:[];const picked=parseList(values.relatedDepartments);const put=(list:string[])=>set({...values,relatedDepartments:JSON.stringify(list)});return <div className="field incomingdepartments outgoingrelated" key="sendingDepartment"><span>Əlaqəli şöbə(lər) * <small>birinci seçilən — əsas şöbə (papka və fayl adındakı {"{Şöbə}"})</small></span><div>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:options.length?options.map(o=>{const at=picked.indexOf(o);return <label key={o}><input type="checkbox" checked={at>=0} onChange={e=>put(e.target.checked?[...picked,o]:picked.filter(d=>d!==o))}/><b>{o}</b>{at===0&&<em className="incomingrelatedtag">əsas</em>}{at>0&&<button type="button" className="hrlink hrlinkok" onClick={ev=>{ev.preventDefault();put([o,...picked.filter(d=>d!==o)])}}>əsas et</button>}</label>}):<small>Firmanın strukturunda şöbə yoxdur (Firmalar → Struktur).</small>}</div></div>},
-    documentType:(values,set)=><label className="field" key="documentType">Sənədin tipi<Input list="documentTypeOptions" value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/></label>,
+    documentType:(values,set)=>{const chosen=companyOf(values);const list=chosen?firmTemplates(chosen):[];return <label className="field" key="documentType">Sənədin tipi<Input list={`documentTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`documentTypeOptions-${chosen}`}>{list.map(t=><option key={t.id} value={t.name}/>)}</datalist>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:!list.length&&<small>Bu firmanın “Çıxan sənəd” şablonu yoxdur (Sənədlər → Şablonlar).</small>}</label>},
     sendingMethod:(values,set)=><label className="field" key="sendingMethod">Göndərilmə Şəkli<select value={values.sendingMethod||""} onChange={e=>set({...values,sendingMethod:e.target.value})}><option value="">Seçin</option>{sendingMethodOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     // Versiya 2.75: the person who takes the document out answers for the signed copy coming back — picked from the people
     // of the document's departments. An older document keeps its typed name until someone is picked.
@@ -1618,18 +1660,18 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   };
   const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void,isNew:boolean)=><>{order.filter(key=>fieldRenderers[key]&&!(isNew&&autoFilled.has(key))).map(key=>fieldRenderers[key](values,set))}</>;
   // "İmzalı nüsxə geri qaytarılır" comes from the document type's template; one document may differ ("" = follow the template).
-  const templateReturns=(values:Record<string,string>)=>{const type=(values.documentType||"").trim();if(!type)return true;const t=templateFor(type);return !t||t.signed_copy_returns!==0};
+  const templateReturns=(values:Record<string,string>)=>{const type=(values.documentType||"").trim();if(!type)return true;const t=templateFor(values);return !t||t.signed_copy_returns!==0};
   const returnsSignedCopy=(values:Record<string,string>)=>values.signedCopyReturns==="1"||values.signedCopyReturns==="0"?values.signedCopyReturns==="1":templateReturns(values);
   const signedReturnBlock=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
     const returns=returnsSignedCopy(values);
     const own=values.signedCopyReturns==="1"||values.signedCopyReturns==="0";
     return <div className="signedreturnfield"><label><input type="checkbox" checked={returns} onChange={e=>{const next=e.target.checked;set({...values,signedCopyReturns:next===templateReturns(values)?"":next?"1":"0"})}}/>İmzalı nüsxə geri qaytarılır</label>
-      <small>{own?`Bu sənəd üçün ayrıca seçilib (şablona görə: ${templateReturns(values)?"Bəli":"Xeyr"}).`:values.documentType?.trim()&&templateFor(values.documentType)?"Şablona görə.":"Şablon yoxdur — standart olaraq imzalı nüsxə gözlənilir."}</small>
+      <small>{own?`Bu sənəd üçün ayrıca seçilib (şablona görə: ${templateReturns(values)?"Bəli":"Xeyr"}).`:templateFor(values)?"Şablona görə.":"Şablon yoxdur — standart olaraq imzalı nüsxə gözlənilir."}</small>
       {returns&&values.copies==="1"&&<small className="signedreturnwarn">⚠ Sənəd 1 nüsxədə göndərilir — imzalı nüsxənin geri qaytarılması gözlənilirsə, nüsxə sayını yoxlayın.</small>}
     </div>;
   };
   const templateBlock=(values:Record<string,string>)=>{
-    const matched=values.documentType?templateFor(values.documentType):undefined;
+    const matched=templateFor(values);
     const templateSlots=matched?[{n:1,key:matched.template1_key,name:matched.template1_name},{n:2,key:matched.template2_key,name:matched.template2_name},{n:3,key:matched.template3_key,name:matched.template3_name}]:[];
     return matched&&<div className="templateusepanel"><b>Şablondan istifadə et</b><p>Şablonu yükləyib doldurun, sonra yazdığınız sənədi yükləyin — sistem onu “{matched.file_name_pattern||DEFAULT_FILE_NAME_PATTERN}” qaydası ilə adlandırıb papkaya yazacaq.</p><div className="templateuseslots">{templateSlots.map(t=><div className="templateuseslot" key={t.n}><span className="templatelabel">Sənədin şablonu<br/>{t.n}</span>{t.key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(t.key)}`} target="_blank" rel="noreferrer">{t.name}</a>:<span className="nodocument">Yoxdur</span>}</div>)}</div></div>;
   };
@@ -1691,7 +1733,6 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   const canCreate=canRegister&&(isAdmin||companies.length>0);
   const showActions=filteredOutgoing.some(item=>item.can?.edit||item.can?.remove||approvalActionable(item.approval));
   return <section className="panel pagepanel directorypanel">
-    <datalist id="documentTypeOptions">{templates.map(t=><option key={t.id} value={t.name}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan sənədlər</h2><p>{!canRegister?"Şöbənizə aid çıxan sənədlər":activeCompanyId?`${companyName(activeCompanyId)} — göndərilən sənədlərin qeydiyyatı`:"Təşkilatdan göndərilən sənədlərin qeydiyyatı"}</p></div>{canCreate&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields({relatedDepartments:"[]",...form},setForm,true)}{signedReturnBlock(form,setForm)}{templateBlock(form)}<label className="field filefield">Yazılmış sənəd (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
@@ -1743,7 +1784,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const [departments,setDepartments]=useState<IncomingDepartment[]>([]);
   const [directorOf,setDirectorOf]=useState<number[]>([]);
   const [canRegister,setCanRegister]=useState(false);
-  const [types,setTypes]=useState<Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
+  const [types,setTypes]=useState<Array<{company_id:number;name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -1761,7 +1802,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   // Sender lookup by VÖEN: "found" fills the name from the customer list, "missing" opens the new-customer card.
   const [voenState,setVoenState]=useState<Record<string,"found"|"missing"|"">>({});
   const [customerForm,setCustomerForm]=useState<Record<string,string>>({});
-  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;types?:Array<{name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
+  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;types?:Array<{company_id:number;name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
     const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);setCanRegister(Boolean(body.canRegister));
     onPending(list.filter(i=>waitsForDirector(i)&&(body.directorOf||[]).includes(i.company_id)).length);
     if(body.types)setTypes(body.types);
@@ -1895,7 +1936,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     <label className="field">Göndərən təşkilat<Input value={values.senderName||""} readOnly={fromList||voenState[key]==="missing"} placeholder={voenState[key]==="missing"?"Müştəri kartını yaradın":(values.senderVoen||"").trim()?"VÖEN yoxlanılır...":"VÖEN yoxdursa, adı yazın"} onChange={e=>set({...values,senderName:e.target.value})}/></label>
     <Field label="Sənədin nömrəsi (göndərənin)" value={values.senderDocNo||""} set={v=>set({...values,senderDocNo:v})}/>
     <Field label="Sənədin tarixi (göndərənin)" type="date" value={values.senderDocDate||""} set={v=>set({...values,senderDocDate:v})}/>
-    <label className="field">Sənədin tipi<Input list="incomingTypeOptions" value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/>{(()=>{const t=types.find(x=>x.name.trim().toLocaleLowerCase("az-AZ")===(values.documentType||"").trim().toLocaleLowerCase("az-AZ"));return (values.documentType||"").trim()?<small className="incomingtypehint">{t?.incoming_folder_path?`Skan “${t.incoming_name_pattern||DEFAULT_INCOMING_NAME}” adı ilə ${t.incoming_folder_path} papkasına yazılacaq`:t?"Şablonda daxil olan sənəd papkası yoxdur — skan sistemdə saxlanılacaq":"Bu tip üçün şablon yoxdur — skan sistemdə saxlanılacaq"}</small>:null})()}</label>
+    <label className="field">Sənədin tipi<Input list={`incomingTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`incomingTypeOptions-${chosen}`}>{[...new Set([...types.filter(t=>t.company_id===chosen).map(t=>t.name),...INCOMING_TYPES])].map(t=><option key={t} value={t}/>)}</datalist>{(()=>{const t=types.find(x=>x.company_id===chosen&&x.name.trim().toLocaleLowerCase("az-AZ")===(values.documentType||"").trim().toLocaleLowerCase("az-AZ"));return (values.documentType||"").trim()?<small className="incomingtypehint">{t?.incoming_folder_path?`Skan “${t.incoming_name_pattern||DEFAULT_INCOMING_NAME}” adı ilə ${t.incoming_folder_path} papkasına yazılacaq`:t?"Şablonda daxil olan sənəd papkası yoxdur — skan sistemdə saxlanılacaq":"Bu tip üçün şablon yoxdur — skan sistemdə saxlanılacaq"}</small>:null})()}</label>
     <label className="field">Daxil olma yolu<select value={values.receiveMethod||""} onChange={e=>set({...values,receiveMethod:e.target.value})}><option value="">Seçin</option>{RECEIVE_METHODS.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
     <Field label="Qısa məzmun" value={values.summary||""} set={v=>set({...values,summary:v})}/>
     <Field label="Vərəq sayı" value={values.pages||""} set={v=>set({...values,pages:v})}/>
@@ -1958,7 +1999,6 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const act=async(item:IncomingDocument,payload:Record<string,unknown>,message:string)=>{setBusy(true);setError("");setNotice("");try{await send("PATCH",{...payload,id:item.id});setNotice(`Sənəd №${item.incoming_no}: ${message}`)}catch(e){setError(e instanceof Error?e.message:"Təsdiq qeyd olunmadı.")}finally{setBusy(false)}};
   const colSpan=order.length+1;
   return <section className="panel pagepanel directorypanel">
-    <datalist id="incomingTypeOptions">{[...new Set([...types.map(t=>t.name),...INCOMING_TYPES])].map(t=><option key={t} value={t}/>)}</datalist>
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Daxil olan sənədlər</h2><p>{canRegister?(activeCompanyId?`${companyName(activeCompanyId)} — daxil olan sənədlərin qeydiyyatı`:"Qeydiyyat: Ümumi şöbə · baxış və tapşırıq: rəhbər · icra: aidiyyatı şöbələr"):"Şöbənizə aid və sizə tapşırılan daxil olan sənədlər"}</p></div>{canRegister&&<Button onClick={()=>{setCreating(v=>!v);setVoenState(s=>({...s,new:""}));setForm({relatedDepartments:"[]"})}}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{formFields("new",form,setForm,true)}<label className="field filefield">Sənədin skanı (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Qeydə alınır...":"Qeydə al"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}

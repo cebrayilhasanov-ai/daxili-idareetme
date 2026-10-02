@@ -18,7 +18,7 @@ import { docxParagraphs } from "@/lib/docx-text";
 
 // Kadrlar → Əmrlər: leave, termination and other orders are written here (never on the card), printed from the system and take
 // effect once their signed copy is uploaded — a leave then goes on the card, a termination fills the card's "İşdən çıxma".
-// Other orders take their text from a "Digər əmr" template's Word file.
+// Other orders take their text from a Kadrlar template's Word file (a template of the worker's firm).
 
 type Order = {
   id: number; company_id: number; company_name: string | null; grp: OrderGroup; year: number; seq: number; order_no: string; order_date: string; hr_employee_id: number;
@@ -31,7 +31,7 @@ type OrdersData = {
   orders: Order[]; employees: Employee[]; leaves: (HrLeaveCalc & { hr_employee_id: number; order_id: number | null })[]; calendar: CalendarDay[];
   children: { hr_employee_id: number; relation: string; birth_date: string | null }[]; companies: { id: number; name: string; manager: string | null }[];
   numbering: { company_id: number; grp: string; pattern: string }[]; params: HrParams; legal: LeaveLegal; terminationLegal: TerminationLegal;
-  templates: { id: number; name: string; template1_key: string | null; template1_name: string | null }[];
+  templates: { id: number; company_id: number | null; name: string; template1_key: string | null; template1_name: string | null }[];
   // The viewer's rights in Əmrlər (Versiya 2.62): Sil is cancelling an order.
   rights?: { add: boolean; edit: boolean; delete: boolean };
 };
@@ -395,9 +395,11 @@ function OtherOrders({ data, send }: { data: OrdersData; send: Send }) {
   const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId));
   const emp = data.employees.find((e) => String(e.id) === form.hrEmployeeId) || null;
   const nextNo = !form.id && emp ? nextNumber(data, "other", emp.company_id, form.orderDate) : "";
+  // Only the templates of the worker's firm (Şablonlar → firm → Kadrlar).
+  const firmTemplates = emp ? data.templates.filter((t) => Number(t.company_id) === Number(emp.company_id)) : [];
   // Reads the template's Word file and fills its placeholders from the chosen worker's card.
   const readTemplate = (templateId: string) => {
-    const template = data.templates.find((t) => String(t.id) === templateId);
+    const template = firmTemplates.find((t) => String(t.id) === templateId);
     if (!template) return;
     if (form.body.trim() && !window.confirm("Mətn şablondan yenidən oxunsun? Yazdığınız dəyişikliklər itəcək.")) return;
     void run("template", async () => {
@@ -440,11 +442,11 @@ function OtherOrders({ data, send }: { data: OrdersData; send: Send }) {
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
       <h4>{form.id ? "Əmri düzəlt" : "Yeni əmr"}{nextNo && <small> · nömrəsi: № {nextNo}</small>}</h4>
-      {!data.templates.length && <small className="hrhint hrwarn">⚠ “Digər əmr” qrupunda şablon yoxdur. Sənədlər → Şablonlar bölməsində şablon əlavə edib qrupunu “Digər əmr” seçin və Word (.docx) faylını “Sənədin şablonu 1” kimi yükləyin. Şablonsuz da mətni əl ilə yaza bilərsiniz.</small>}
+      {emp && !firmTemplates.length && <small className="hrhint hrwarn">⚠ {emp.company_name || "İşçinin firması"} üçün “Kadrlar” qrupunda şablon yoxdur. Sənədlər → Şablonlar bölməsində firmanı və “Kadrlar” qrupunu seçib şablon əlavə edin, Word (.docx) faylını “Sənədin şablonu 1” kimi yükləyin. Şablonsuz da mətni əl ilə yaza bilərsiniz.</small>}
       <div className="hrgrid">
         <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-        <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={set("hrEmployeeId")}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
-        <label className="field hrwide">Şablon<span className="ordertemplatepick"><select value={form.templateId} disabled={!emp || Boolean(busy)} onChange={(e) => { const v = e.target.value; if (v) readTemplate(v); else setForm((f) => ({ ...f, templateId: "" })); }}><option value="">{emp ? "— şablon seçin —" : "əvvəlcə işçini seçin"}</option>{data.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>{form.templateId && <button type="button" className="hrlink hrlinkok" disabled={Boolean(busy)} onClick={() => readTemplate(form.templateId)}>yenidən oxu</button>}</span></label>
+        <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, hrEmployeeId: v, templateId: "" })); }}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
+        <label className="field hrwide">Şablon<span className="ordertemplatepick"><select value={form.templateId} disabled={!emp || Boolean(busy)} onChange={(e) => { const v = e.target.value; if (v) readTemplate(v); else setForm((f) => ({ ...f, templateId: "" })); }}><option value="">{emp ? "— şablon seçin —" : "əvvəlcə işçini seçin"}</option>{firmTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>{form.templateId && <button type="button" className="hrlink hrlinkok" disabled={Boolean(busy)} onClick={() => readTemplate(form.templateId)}>yenidən oxu</button>}</span></label>
         <label className="field hrwide">Əmrin adı *<Input value={form.title} placeholder="məs. Mükafatlandırma haqqında" onChange={set("title")} /></label>
         <label className="field">Əmrin tarixi *<Input type="date" value={form.orderDate} onChange={set("orderDate")} /></label>
         <label className="field hrwide">Əsas<Input value={form.basis} placeholder="məs. Şöbə müdirinin təqdimatı" onChange={set("basis")} /></label>
