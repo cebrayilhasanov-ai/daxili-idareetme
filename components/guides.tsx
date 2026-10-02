@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -307,6 +307,120 @@ const GUIDES: Guide[] = [
       ] },
     ],
   },
+  {
+    id: "chat", group: "Çat", title: "Çat", path: "Yuxarıdakı 💬 düyməsi", section: "chat",
+    intro: "Proqramın istifadəçiləri arasında daxili yazışma: ümumi işçi qrupu və şəxsi söhbətlər, fayl göndərmək, yeni mesaj bildirişləri.",
+    parts: [
+      { audience: "all", title: "Çatı açmaq və pəncərə", blocks: [
+        { list: [
+          "Çat yuxarıdakı 💬 düyməsi ilə açılır; düymədə oxunmamış mesajların sayı görünür.",
+          "Başlıqdakı “—” çatı yığır: küncdə kiçik “Çat” zolağı qalır və əvvəlki bölməyə qayıdırsınız. “⤢” bütün ekran, “✕” bağlayır.",
+          "Panelin ölçüsünü, sol siyahının enini dəyişmək və paneli sürüşdürmək olar — seçim yadda qalır.",
+        ] },
+      ] },
+      { audience: "all", title: "Söhbətlər siyahısı", blocks: [
+        { list: [
+          "Yuxarıda Axtarış — ada görə süzür.",
+          "Ən yuxarıda həmişə “Ümumi işçi qrupu” (bütün aktiv istifadəçilər) durur.",
+          "Sonra yazışdığınız adamlar — son mesajın vaxtına görə, ən sonuncu birinci. Yeni mesaj gələndə və ya siz yazanda həmin adam yuxarı qalxır.",
+          "Sonda hələ yazışmadığınız istifadəçilər (əlifba ilə, “Yazışma yoxdur”) — adına basanda söhbət elə orada açılır.",
+          "Adın altında son mesajın əvvəli, sağda vaxt və oxunmamış mesajların sayı görünür.",
+        ] },
+      ] },
+      { audience: "all", title: "Mesaj yazmaq", blocks: [
+        { list: [
+          "Enter — göndərir, Shift+Enter — yeni sətir.",
+          "📎 ilə fayl əlavə olunur (ən çox 25 MB).",
+          "Şəxsi söhbətdə öz mesajınızın yanında ✓ — göndərilib, ✓✓ — qarşı tərəf oxuyub.",
+          "Söhbət yalnız ekranda açıq olanda oxunmuş sayılır.",
+        ] },
+      ] },
+      { audience: "all", title: "Bildirişlər", blocks: [
+        { list: [
+          "Yeni mesaj gələndə sağ aşağıda kart çıxır (göndərən, mesajın əvvəli; bir neçə mesajda say); karta basanda həmin söhbət açılır, 6 saniyədən sonra kart yox olur.",
+          "Qısa səs çalınır — onu “Söhbətlər” başlığındakı səs düyməsi ilə söndürüb-yandırmaq olar (yadda qalır).",
+          "Sayt önündə deyilsə, brauzerin (Windows-un) bildirişi çıxır; icazəni brauzer 💬-ə ilk basanda soruşur.",
+          "Ekranda açıq olan söhbət və öz mesajınız üçün bildiriş çıxmır.",
+        ] },
+        { note: "Çat Giriş icazələrində bağlana bilər — onda 💬 düyməsi görünmür." },
+      ] },
+    ],
+  },
+  {
+    id: "account", group: "Tənzimləmələr", title: "Şifrə, fon və profil şəkli", path: "Tənzimləmələr", section: "settings",
+    intro: "Hər istifadəçinin öz hesabı üçün tənzimləmələr.",
+    parts: [
+      { audience: "all", title: "Nə etmək olar", blocks: [
+        { list: [
+          "Şifrəni dəyiş — cari şifrəni və yeni şifrəni (ən az 8 simvol) yazın.",
+          "Fon şəkli — proqramın fonunda yalnız sizin görəcəyiniz şəkil (ən çox 8 MB).",
+          "Profil şəkli — adınızın yanında görünən şəkil: Ana səhifədə, siyahılarda və çatda (ən çox 5 MB).",
+        ] },
+        { note: "Şifrəni unutmusunuzsa, admin İstifadəçilər bölməsində “Şifrəni yenilə” ilə yeni şifrə təyin edir." },
+      ] },
+    ],
+  },
+  {
+    id: "companies", group: "Tənzimləmələr", title: "Firmalar və struktur", path: "Tənzimləmələr → Firmalar", section: "settings",
+    intro: "Firmaların reyestri və hər firmanın təşkilati strukturu (şöbələr, vəzifələr, tabeçilik). Struktur proqramın çox yerində işləyir: kimin rəhbər olduğu, kimə həvalə etmək olar, sorğuların və sənədlərin şöbələri, sənədləri kim görür.",
+    parts: [
+      { audience: "admin", title: "Firma", blocks: [
+        { list: [
+          "“Yeni firma”: adı, VÖEN-i, rəhbəri. “Məlumatları redaktə et” ilə dəyişilir.",
+          "Firmanı deaktiv etmək olar — aktiv olmayan firma seçim siyahılarında görünmür və ona yeni şablon köçürülmür.",
+        ] },
+      ] },
+      { audience: "admin", title: "Struktur", blocks: [
+        { steps: [
+          "Firmanın “Struktur” düyməsini basın.",
+          "Hər vəzifə üçün şöbəni, vəzifənin adını və “Tabe olduğu” vəzifəni yazın. Ən yuxarıdakı vəzifə üçün “Ən yuxarı (heç kimə)” seçin. Eyni vəzifə iki dəfə əlavə olunmur.",
+          "İstifadəçilər bölməsində işçini hər firma üzrə öz vəzifəsinə təyin edin.",
+        ] },
+        { list: [
+          "Firmanın rəhbəri (direktor) — heç kimə tabe olmayan vəzifənin sahibidir (məs. Baş direktor).",
+          "Şöbənin rəhbəri — şöbənin ən yuxarı vəzifəsinin (tabe olduğu vəzifə şöbədən kənarda olan) sahibidir.",
+          "Vəzifə boşdursa, onun bilavasitə tabeliyindəkilər rəhbər kimi çıxış edir; həvalə zamanı boş vəzifə atlanır.",
+          "Strukturda olmayan şöbəyə sorğu göndərmək, sənəd bağlamaq olmur — əvvəlcə strukturu doldurun.",
+        ] },
+      ] },
+    ],
+  },
+  {
+    id: "users", group: "Tənzimləmələr", title: "İstifadəçilər və Giriş icazələri", path: "Tənzimləmələr → İstifadəçilər", section: "settings",
+    intro: "Proqramın istifadəçiləri, onların firmaları və vəzifələri, giriş hesabları və hər bölmə üzrə icazələri.",
+    parts: [
+      { audience: "admin", title: "İstifadəçi", blocks: [
+        { list: [
+          "“Yeni personal”: ad və soyad, e-poçt (həm də giriş adıdır), işlədiyi firmalar və hər firmada vəzifəsi (firmanın strukturundan), əsas iş yeri, şəkil.",
+          "“Şifrəni yenilə” — istifadəçiyə yeni şifrə təyin edir.",
+          "Deaktiv edilən istifadəçi proqrama girə bilmir və seçim siyahılarında görünmür.",
+          "“İstifadəçi görünüşü” — proqramı həmin istifadəçinin gözü ilə görürsünüz (menyu, icazələr, tapşırıqlar); “Admin görünüşünə qayıt” ilə çıxırsınız.",
+          "Tapşırığı olan istifadəçi silinmir — onu deaktiv edin.",
+        ] },
+      ] },
+      { audience: "admin", title: "Giriş icazələri", blocks: [
+        { list: [
+          "İşarəsi götürülən bölmə istifadəçinin menyusunda görünmür və serverdə də bağlanır.",
+          "Bəzi bölmələrdə dörd ayrıca hüquq var: Baxış, Əlavə et, Dəyişiklik et, Sil (Sorğular, Daxil olan və Çıxan sənədlər, Müştərilər, Nöqsanlar, Personallar, Əmrlər). Əlavə et / Dəyişiklik et / Sil Baxışı da açır; Baxışı götürmək hamısını götürür.",
+          "🔒 olan bəndlər (Verilən tapşırıqlar) həmişə açıqdır.",
+          "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
+          "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini olduğu kimi köçürür; “Hamısını aç” — hamısını açır.",
+          "Daxil olan və Çıxan sənədlər icazəsi olan istifadəçi qeydiyyatçı sayılır və öz firmalarının BÜTÜN sənədlərini görür — bu icazəni yalnız qeydiyyatı aparan (Ümumi şöbə) əməkdaşlara verin.",
+          "Sabit işi olan istifadəçidə Aylıq/Həftəlik sabit işləri bağlayanda xəbərdarlıq çıxır — o, işlərinə ✓ qoya bilməyəcək.",
+          "Şablonlar, Firmalar, İstifadəçilər və Əməliyyat jurnalı yalnız adminindir.",
+        ] },
+      ] },
+    ],
+  },
+  {
+    id: "audit", group: "Tənzimləmələr", title: "Əməliyyat jurnalı", path: "Tənzimləmələr → Əməliyyat jurnalı", section: "settings",
+    intro: "Proqramda edilən əsas əməliyyatların (yaratma, dəyişmə, silmə, təsdiqlər) kim tərəfindən və nə vaxt edildiyinin xronoloji siyahısı.",
+    parts: [
+      { audience: "admin", title: "İstifadə", blocks: [
+        { p: "Jurnal yalnız oxumaq üçündür: ən yeni əməliyyat yuxarıdadır. Kimin nəyi nə vaxt dəyişdiyini və ya sildiyini yoxlamaq üçün istifadə edin." },
+      ] },
+    ],
+  },
 ];
 
 const blockText = (b: Block) => ("p" in b ? b.p : "note" in b ? b.note : "steps" in b ? b.steps.join(" ") : "list" in b ? b.list.join(" ") : b.qa.flat().join(" "));
@@ -343,7 +457,7 @@ export function GuidesPage({ ctx }: { ctx: GuideContext }) {
         {!shown.length && <small className="guideempty">Axtarışa uyğun təlimat tapılmadı.</small>}
         {groups.map((group) => <Fragment key={group}><b className="guidegroup">{group}</b>
           {shown.filter((g) => g.group === group).map((g) => <button type="button" key={g.id} className={current?.id === g.id ? "on" : ""} onClick={() => pick(g.id)}>{g.title}</button>)}</Fragment>)}
-        <small className="guidesoon">Digər bölmələrin təlimatları növbəti versiyalarda əlavə olunacaq.</small>
+        <small className="guidesoon">Kadrlar bölməsinin təlimatı sonra əlavə olunacaq.</small>
       </aside>
       {current && <article className="guidearticle">
         <h3>{current.title}</h3>
