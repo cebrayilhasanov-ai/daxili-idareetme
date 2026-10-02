@@ -137,12 +137,16 @@ async function ensureSchema() {
   // (Daxil olan sənəd) or 'other_order' (Kadrlar → Digər əmrlər). The earlier shared templates are copied to every active firm once.
   if (!documentColumns.results.some((column) => column.name === "company_id")) await db().prepare("ALTER TABLE document_templates ADD COLUMN company_id INTEGER REFERENCES companies(id)").run();
   await splitSharedTemplates();
+  // Versiya 2.77: "Aidiyyatı şöbələr" of a document type (JSON list of the firm's departments, the first is the main one); a document
+  // of that type gets them on registration instead of the registrar picking. Documents also keep "Məlumatlandırılan şöbə(lər)"
+  // (informed_departments): their heads only see the document.
+  if (!documentColumns.results.some((column) => column.name === "departments")) await db().prepare("ALTER TABLE document_templates ADD COLUMN departments TEXT").run();
   // On a document, signed_copy_returns overrides its template for that one document (NULL = follow the template).
   // Versiya 2.75: return_due_date — by when the signed copy must be back (sending date + the template's days, editable);
   // responsible_employee_id — the person who takes the document out and answers for its return (delivered_by keeps the name).
   // related_departments: JSON list of the departments the document concerns; the first is its main one (sending_department, {Şöbə}).
   // approval_flow 1: registered from Versiya 2.61 on, so it goes through the two-level approval (older documents do not).
-  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER", "return_due_date TEXT", "responsible_employee_id INTEGER"]) {
+  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER", "return_due_date TEXT", "responsible_employee_id INTEGER", "informed_departments TEXT"]) {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
   await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
@@ -181,7 +185,7 @@ async function ensureSchema() {
   )`).run();
   const incomingColumns = await db().prepare("PRAGMA table_info(incoming_documents)").all<{ name: string }>();
   // related_departments: JSON list of the departments the document concerns; flow 2: registered under the 2.59 rules (director first).
-  for (const column of ["director_pending INTEGER NOT NULL DEFAULT 0", "sent_to_director_by TEXT", "sent_to_director_at TEXT", "related_departments TEXT", "flow INTEGER", "director_seen_at TEXT", "director_seen_by TEXT"]) {
+  for (const column of ["director_pending INTEGER NOT NULL DEFAULT 0", "sent_to_director_by TEXT", "sent_to_director_at TEXT", "related_departments TEXT", "flow INTEGER", "director_seen_at TEXT", "director_seen_by TEXT", "informed_departments TEXT"]) {
     if (!incomingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE incoming_documents ADD COLUMN ${column}`).run();
   }
   // Approvals of incoming and outgoing documents (Versiya 2.61): one row per step, kept as history.
@@ -1417,6 +1421,17 @@ async function signedCopyOverride(companyId: unknown, documentType: unknown, req
   return wanted === (await templateReturnsSignedCopy(companyId, documentType)) ? null : wanted;
 }
 
+// Versiya 2.77: a template's "Aidiyyatı şöbələr" — departments of its own firm's structure (Kadrlar templates have none).
+async function templateDepartments(companyId: number, group: TemplateGroup, raw: unknown) {
+  if (group === "other_order") return null;
+  const chosen = [...new Set((Array.isArray(raw) ? raw : []).map((d) => String(d).trim()).filter(Boolean))];
+  if (!chosen.length) return null;
+  const known = new Set((await companyDepartments()).departmentsOf(companyId).map((d) => d.name));
+  const unknown = chosen.find((d) => !known.has(d));
+  if (unknown) throw new Error(`"${unknown}" bu firmanın strukturunda yoxdur.`);
+  return JSON.stringify(chosen);
+}
+
 const returnDays = (value: unknown) => { const n = Math.round(Number(value)); return Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : null; };
 
 // The admin sees every firm's templates; anyone else only those of the firms they work in.
@@ -1427,7 +1442,7 @@ export async function getDocumentTemplates(user?: SessionUser) {
   return scope ? rows.filter((row) => scope.includes(Number(row.company_id))) : rows;
 }
 
-type TemplateInput = { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; companyId?: unknown; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown };
+type TemplateInput = { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; companyId?: unknown; departments?: unknown; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown };
 
 export async function createDocumentTemplate(input: TemplateInput) {
   await ensureSchema();
@@ -1440,7 +1455,7 @@ export async function createDocumentTemplate(input: TemplateInput) {
     (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, signed_copy_returns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, input.incomingFolderPath?.trim() || null, input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
-  await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ?, signed_copy_days = ? WHERE id = ?").bind(companyId, group, yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), Number(inserted.meta.last_row_id)).run();
+  await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ?, signed_copy_days = ?, departments = ? WHERE id = ?").bind(companyId, group, yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), await templateDepartments(companyId, group, input.departments), Number(inserted.meta.last_row_id)).run();
 }
 
 // The firm and group of a template stay as they are; "Kopyala" puts it under another firm or group.
@@ -1473,6 +1488,9 @@ export async function updateDocumentTemplate(input: TemplateInput & { id: number
       yesNo(input.signedCopyReturns) ?? current.signed_copy_returns ?? 1,
       input.id,
     ).run();
+  if (input.departments !== undefined) {
+    await db().prepare("UPDATE document_templates SET departments = ? WHERE id = ?").bind(await templateDepartments(Number(current.company_id), templateGroup(current.template_group), input.departments), input.id).run();
+  }
   if (input.signedCopyDays !== undefined || yesNo(input.signedCopyReturns) === 0) {
     await db().prepare("UPDATE document_templates SET signed_copy_days = ? WHERE id = ?").bind(yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), input.id).run();
   }
@@ -1497,7 +1515,13 @@ export async function copyDocumentTemplate(input: { id: number; companyId?: unkn
   const group = templateGroup(input.templateGroup);
   const name = String(input.name || "").trim() || String(source.name);
   await assertTemplateNameFree(companyId, group, name);
-  return insertTemplateCopy(source, companyId, group, name);
+  const id = await insertTemplateCopy(source, companyId, group, name);
+  // The departments go along where the target firm has departments of the same name; the others are left out (and named).
+  const wanted = group === "other_order" ? [] : parseDepartments(source.departments);
+  const known = new Set((await companyDepartments()).departmentsOf(companyId).map((d) => d.name));
+  const kept = wanted.filter((d) => known.has(d));
+  await db().prepare("UPDATE document_templates SET departments = ? WHERE id = ?").bind(kept.length ? JSON.stringify(kept) : null, id).run();
+  return { id, droppedDepartments: wanted.filter((d) => !known.has(d)) };
 }
 
 export async function deleteDocumentTemplate(id: number) {
@@ -1529,8 +1553,9 @@ async function nextOutgoingNumber(column: "outgoing_no" | "incoming_no", company
   return String((row?.maxNo || 0) + 1).padStart(6, "0");
 }
 
-// Çıxan sənədlər visibility (Versiya 2.60), as for incoming documents: registrars (section permission) see and handle their
-// firms' documents, the firm's director sees all of the firm's, members of a related department see those read-only.
+// Çıxan sənədlər visibility (Versiya 2.77, commercial secrecy), as for incoming documents: registrars (section permission) see and
+// handle their firms' documents, the firm's director sees all of the firm's; of the related ("aidiyyatı") and informed departments
+// only their heads see a document, and the responsible person (who took it out) sees theirs. Other staff do not see it.
 function outgoingDepartments(row: Record<string, unknown>) {
   const related = parseDepartments(row.related_departments);
   return related.length ? related : row.sending_department ? [String(row.sending_department)] : [];
@@ -1539,9 +1564,11 @@ function outgoingRights(access: IncomingAccess, user: SessionUser, row: Record<s
   const companyId = Number(row.company_id);
   const registrarHere = access.admin || (access.registrar && (!access.registrarFirms || access.registrarFirms.includes(companyId)));
   const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
-  const mine = new Set(access.structure.memberOf(companyId, user.employeeId));
-  const member = outgoingDepartments(row).some((d) => mine.has(d));
-  return { registrarHere, director, member, visible: registrarHere || director || member };
+  const heads = new Set(access.structure.headedBy(companyId, user.employeeId));
+  const head = outgoingDepartments(row).some((d) => heads.has(d));
+  const informed = parseDepartments(row.informed_departments).some((d) => heads.has(d));
+  const responsible = Boolean(user.employeeId && Number(row.responsible_employee_id) === user.employeeId);
+  return { registrarHere, director, head, informed, responsible, visible: registrarHere || director || head || informed || responsible };
 }
 async function outgoingAccess(user: SessionUser): Promise<IncomingAccess> {
   return registrarAccess(user, "documents.outgoing");
@@ -1551,6 +1578,7 @@ export async function getOutgoingDocuments(user: SessionUser) {
   await ensureSchema();
   const access = await outgoingAccess(user);
   const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name,
+    (SELECT phone FROM customers cu WHERE cu.voen = d.voen AND trim(COALESCE(d.voen, '')) != '' LIMIT 1) AS card_phone,
     (SELECT signed_copy_returns FROM document_templates t WHERE t.company_id = d.company_id AND t.template_group = 'outgoing' AND lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
     FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
   const flag = (value: unknown) => (value === null || value === undefined ? null : Number(value) ? 1 : 0);
@@ -1566,6 +1594,9 @@ export async function getOutgoingDocuments(user: SessionUser) {
     return [{
       ...row, approval,
       related_departments: outgoingDepartments(row),
+      informed_departments: parseDepartments(row.informed_departments),
+      // The phone is the customer card's (Versiya 2.77); a document without a card keeps what was typed.
+      phone: row.card_phone || row.phone,
       draft_missing: Boolean(row.draft_path && folderStore && !folderStore.exists(String(row.draft_path))),
       final_missing: Boolean(row.final_path && folderStore && !folderStore.exists(String(row.final_path))),
       // What "Hazır sənəd" waits for: the other side's signed copy (1) or just a copy of what we sent (0).
@@ -1585,7 +1616,7 @@ export async function canRegisterOutgoing(user: SessionUser) {
 }
 const hasOutgoingFile = (row: Record<string, unknown>, kind: "draft" | "final") => Boolean(row[`${kind}_name`] || row[`${kind}_path`] || row[`${kind}_key`]);
 
-type OutgoingInput = { responsibleEmployeeId?: unknown; returnDueDate?: string | null; relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
+type OutgoingInput = { informedDepartments?: string[]; responsibleEmployeeId?: unknown; returnDueDate?: string | null; relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
 
 export async function createOutgoingDocument(user: SessionUser, input: OutgoingInput) {
   await ensureSchema();
@@ -1593,13 +1624,15 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   if (!companyId) throw new Error("Firma seçilməyib.");
   const scope = await outgoingCompanyScope(user);
   if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
-  const related = JSON.parse(await relatedDepartments(companyId, input.relatedDepartments)) as string[];
+  const docType = input.documentType?.trim() || "";
+  const related = JSON.parse(await documentDepartments(companyId, "outgoing", docType, input.relatedDepartments)) as string[];
   const department = related[0];
+  const informed = await informedDepartments(companyId, input.informedDepartments, related);
+  const phone = (await customerPhoneByVoen(input.voen)) || formatPhone(input.phone) || null;
   // Çıxış No: one continuous sequence per firm, regardless of type — never resets.
   const outgoingNo = await nextOutgoingNumber("outgoing_no", companyId);
   // Sənədin Nömrəsi: its own sequence per firm and document type, starting over at 1 each calendar year, shown as "N/YYYY".
   const year = new Date().getFullYear();
-  const docType = input.documentType?.trim() || "";
   const yearRows = await db().prepare("SELECT document_number FROM outgoing_documents WHERE company_id = ? AND document_number LIKE ? AND COALESCE(document_type,'') = ?").bind(companyId, `%/${year}`, docType).all<{ document_number: string | null }>();
   let maxDocNumber = 0;
   for (const row of yearRows.results) {
@@ -1611,11 +1644,11 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const result = await db().prepare(`INSERT INTO outgoing_documents
     (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
-    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, formatPhone(input.phone) || null, input.note || null, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, phone, input.note || null, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
   const id = Number(result.meta.last_row_id);
   // Versiya 2.75: who takes the document out (answers for the signed copy) and by when that copy must be back.
   const due = await returnDueFor(companyId, docType, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), input.outgoingDate);
-  await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ?, return_due_date = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), due, id).run();
+  await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ?, return_due_date = ?, informed_departments = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), due, informed, id).run();
   return { id, outgoingNo };
 }
 
@@ -1629,13 +1662,19 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
   // Only the admin moves a document to another firm or types the Daxil olma No / tarixi by hand (they come with the signed copy).
   const companyId = access.admin && input.companyId ? Number(input.companyId) : Number(current.company_id) || null;
   if (!access.admin) { input.incomingNo = undefined; input.incomingDate = undefined; }
-  // Related departments must come from the firm's structure; a document from before 2.60 may keep its hand-typed department.
+  // Related departments must come from the firm's structure (or, since 2.77, from the type's template); a document from before
+  // 2.60 may keep its hand-typed department.
   let related = current.related_departments as string | null;
   let department = current.sending_department as string | null;
-  if (input.relatedDepartments !== undefined && companyId) {
-    related = await relatedDepartments(companyId, input.relatedDepartments);
+  const docType = input.documentType ?? current.document_type;
+  const typeChanged = input.documentType !== undefined && String(input.documentType || "").trim() !== String(current.document_type || "").trim();
+  if ((input.relatedDepartments !== undefined || typeChanged) && companyId) {
+    related = await documentDepartments(companyId, "outgoing", docType, input.relatedDepartments);
     department = (JSON.parse(related) as string[])[0];
   }
+  const informed = input.informedDepartments !== undefined && companyId
+    ? await informedDepartments(companyId, input.informedDepartments, parseDepartments(related)) : current.informed_departments;
+  const cardPhone = await customerPhoneByVoen(input.voen ?? current.voen);
   // Çıxış No and Sənədin Nömrəsi are system-assigned at creation and stay fixed afterwards, so the sequence they guarantee is never broken by an edit.
   await db().prepare(`UPDATE outgoing_documents SET related_departments = ?, company_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, signed_copy_returns = ? WHERE id = ?`)
     .bind(
@@ -1652,11 +1691,12 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
       input.documentDate ?? current.document_date,
       input.voen ?? current.voen,
       input.organizationName ?? current.organization_name,
-      input.phone === undefined ? current.phone : formatPhone(input.phone) || null,
+      cardPhone || (input.phone === undefined ? current.phone : formatPhone(input.phone) || null),
       input.note ?? current.note,
       await signedCopyOverride(companyId, input.documentType ?? current.document_type, input.signedCopyReturns, current.signed_copy_returns),
       input.id,
     ).run();
+  await db().prepare("UPDATE outgoing_documents SET informed_departments = ? WHERE id = ?").bind(informed ?? null, input.id).run();
   if (input.responsibleEmployeeId !== undefined) await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), input.id).run();
   // The registrar may set the return date by hand (a contract with its own term); an empty value clears it.
   if (input.returnDueDate !== undefined) {
@@ -1923,6 +1963,9 @@ function incomingValues(record: Record<string, unknown>) {
 // - the firm's director sees every document of the firm, acknowledges it ("Tanış oldum") and gives tasks by dərkənar;
 // - members of a related department (and of a department a request on the document went to) see it read-only and may raise a
 //   request from it. The admin sees and may do everything.
+// Since Versiya 2.77 (commercial secrecy) only the HEADS of the related departments (and of a request's department) see it, plus
+// the people who got a task or a request on it (and those a head handed the task on to); heads of the informed departments only
+// see it. Other staff of those departments no longer do.
 // Since Versiya 2.62 the registrar's work is split into rights (may): Baxış shows the firm's documents, Əlavə et registers new
 // ones (and uploads a file where none is yet), Dəyişiklik et corrects them and replaces files, Sil deletes them.
 type IncomingAccess = { admin: boolean; registrar: boolean; may: { add: boolean; edit: boolean; delete: boolean }; registrarFirms: number[] | null; structure: Awaited<ReturnType<typeof companyDepartments>> };
@@ -1936,20 +1979,35 @@ async function incomingAccess(user: SessionUser): Promise<IncomingAccess> {
   return registrarAccess(user, "documents.incoming");
 }
 const parseDepartments = (raw: unknown): string[] => { try { const list = JSON.parse(String(raw || "[]")); return Array.isArray(list) ? list.map(String) : []; } catch { return []; } };
-function incomingRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>, assignments: IncomingAssignment[], requestDepartments: string[]) {
+function incomingRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>, assignments: IncomingAssignment[], requests: IncomingRequestLink[], delegates: number[]) {
   const companyId = Number(row.company_id);
   const registrarHere = access.admin || (access.registrar && (!access.registrarFirms || access.registrarFirms.includes(companyId)));
   const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
-  const mine = new Set(access.structure.memberOf(companyId, user.employeeId));
-  const member = parseDepartments(row.related_departments).some((d) => mine.has(d)) || requestDepartments.some((d) => mine.has(d))
-    || assignments.some((a) => a.head_employee_id === user.employeeId);
-  return { registrarHere, director, member, visible: registrarHere || director || member };
+  const me = user.employeeId;
+  const heads = new Set(access.structure.headedBy(companyId, me));
+  const head = parseDepartments(row.related_departments).some((d) => heads.has(d)) || requests.some((r) => heads.has(r.to_department));
+  const involved = Boolean(me && (assignments.some((a) => a.head_employee_id === me) || delegates.includes(me) || requests.some((r) => r.assignee_employee_id === me)))
+    || requests.some((r) => r.from_user_id === user.id);
+  const informed = parseDepartments(row.informed_departments).some((d) => heads.has(d));
+  // member: may raise a request from the document (the informed heads only look at it).
+  const member = head || involved;
+  return { registrarHere, director, member, visible: registrarHere || director || member || informed };
 }
-type IncomingRequestLink = { id: number; incoming_id: number; from_department: string | null; to_department: string; status: string; title: string };
+
+// Employees a department head handed the document's task on to (Həvalə et), per incoming document.
+async function incomingDelegates(incomingId?: number) {
+  const rows = (await db().prepare(`SELECT a.incoming_id, tci.delegated_employee_id AS employee_id FROM incoming_assignments a
+    JOIN task_checklist_items tci ON tci.task_id = a.task_id WHERE tci.delegated_employee_id IS NOT NULL${incomingId ? " AND a.incoming_id = ?" : ""}`)
+    .bind(...(incomingId ? [incomingId] : [])).all<{ incoming_id: number; employee_id: number }>()).results;
+  const byDocument = new Map<number, number[]>();
+  for (const r of rows) byDocument.set(r.incoming_id, [...(byDocument.get(r.incoming_id) ?? []), Number(r.employee_id)]);
+  return byDocument;
+}
+type IncomingRequestLink = { id: number; incoming_id: number; from_department: string | null; to_department: string; status: string; title: string; assignee_employee_id: number | null; from_user_id: number | null };
 async function incomingRequests(incomingId?: number): Promise<IncomingRequestLink[]> {
   await ensureRequestSchema();
-  return (await db().prepare(`SELECT id, incoming_id, from_department, to_department, status, title FROM work_requests WHERE incoming_id IS NOT NULL${incomingId ? " AND incoming_id = ?" : ""} ORDER BY id`)
-    .bind(...(incomingId ? [incomingId] : [])).all<{ id: number; incoming_id: number; from_department: string | null; to_department: string; status: string; title: string }>()).results;
+  return (await db().prepare(`SELECT id, incoming_id, from_department, to_department, status, title, assignee_employee_id, from_user_id FROM work_requests WHERE incoming_id IS NOT NULL${incomingId ? " AND incoming_id = ?" : ""} ORDER BY id`)
+    .bind(...(incomingId ? [incomingId] : [])).all<IncomingRequestLink>()).results;
 }
 
 // ---------- Təsdiq (Versiya 2.61) ----------
@@ -2046,17 +2104,20 @@ export async function getIncomingDocuments(user: SessionUser) {
   const requests = await incomingRequests();
   const requestsOf = new Map<number, typeof requests>();
   for (const r of requests) requestsOf.set(r.incoming_id, [...(requestsOf.get(r.incoming_id) ?? []), r]);
-  const items = (await db().prepare(`SELECT i.*, c.name AS company_name FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id ORDER BY i.id DESC`)
+  const delegatesOf = await incomingDelegates();
+  // The sender's phone is read from their customer card (Versiya 2.77).
+  const items = (await db().prepare(`SELECT i.*, c.name AS company_name, (SELECT phone FROM customers cu WHERE cu.voen = i.sender_voen AND trim(COALESCE(i.sender_voen, '')) != '' LIMIT 1) AS sender_phone
+    FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id ORDER BY i.id DESC`)
     .all<Record<string, unknown>>()).results.flatMap((row) => {
     const own = byDocument.get(Number(row.id)) ?? [];
     const linked = requestsOf.get(Number(row.id)) ?? [];
-    const rights = incomingRights(access, user, row, own, linked.map((r) => r.to_department));
+    const rights = incomingRights(access, user, row, own, linked, delegatesOf.get(Number(row.id)) ?? []);
     if (!rights.visible) return [];
     const locked = own.some((a) => a.task_status && a.task_status !== "Yeni");
     const approval = approvalState("incoming", row, approvalsOf.get(Number(row.id)) ?? [], access, user, incomingApprovalScope(row, own));
     const editable = access.admin || !approval.locked;
     return [{
-      ...row, status: approval.final ? "Bağlandı" : incomingStatus(row, own), related_departments: parseDepartments(row.related_departments), approval,
+      ...row, status: approval.final ? "Bağlandı" : incomingStatus(row, own), related_departments: parseDepartments(row.related_departments), informed_departments: parseDepartments(row.informed_departments), approval,
       assignments: own.map((a) => ({ department: a.department, head_name: a.head_name, task_status: a.task_status })),
       requests: linked.map((r) => ({ id: r.id, from_department: r.from_department, to_department: r.to_department, status: r.status })),
       locked,
@@ -2077,7 +2138,7 @@ export async function getIncomingDocuments(user: SessionUser) {
   const firms = new Set<number>([...items.map((i: Record<string, unknown>) => Number(i.company_id)), ...directorOf, ...(access.registrarFirms ?? (access.admin ? activeFirms : []))]);
   const departments = [...firms].flatMap((companyId) => access.structure.departmentsOf(companyId).map((d) => ({ company_id: companyId, ...d, members: access.structure.membersOf(companyId, d.name).map((m) => ({ id: m.id, name: m.name, position_title: m.position_title })) })));
   // Document types from Şablonlar (each firm's “Daxil olan sənəd” templates), with where a scan of that type is filed.
-  const allTypes = (await db().prepare("SELECT company_id, name, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group = 'incoming' ORDER BY name").all<{ company_id: number; name: string; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
+  const allTypes = (await db().prepare("SELECT company_id, name, departments, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group = 'incoming' ORDER BY name").all<{ company_id: number; name: string; departments: string | null; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
   const types = allTypes.filter((t) => firms.has(Number(t.company_id)));
   return { items, departments, directorOf, types, canRegister: access.may.add };
 }
@@ -2093,7 +2154,7 @@ export async function countIncomingForDirector(user: SessionUser) {
   return rows.filter((row) => structure.directorsOf(row.company_id).has(user.employeeId!)).length;
 }
 
-type IncomingInput = { relatedDepartments?: string[]; companyId?: number; incomingDate?: string; incomingNo?: string; senderVoen?: string; senderName?: string; senderDocNo?: string; senderDocDate?: string; documentType?: string; receiveMethod?: string; summary?: string; pages?: string; copies?: string; note?: string };
+type IncomingInput = { informedDepartments?: string[]; relatedDepartments?: string[]; companyId?: number; incomingDate?: string; incomingNo?: string; senderVoen?: string; senderName?: string; senderDocNo?: string; senderDocDate?: string; documentType?: string; receiveMethod?: string; summary?: string; pages?: string; copies?: string; note?: string };
 
 // With a VÖEN the sender must be a card in the customer list, and its name comes from there.
 async function senderFromVoen(voen: string | undefined, name: string | undefined) {
@@ -2111,7 +2172,7 @@ export async function findCustomerByVoen(voen: string) {
   await ensureSchema();
   const value = voen.trim();
   if (!value) return null;
-  return db().prepare("SELECT id, voen, name, entity_type FROM customers WHERE voen = ?").bind(value).first<{ id: number; voen: string; name: string; entity_type: string | null }>();
+  return db().prepare("SELECT id, voen, name, entity_type, phone FROM customers WHERE voen = ?").bind(value).first<{ id: number; voen: string; name: string; entity_type: string | null; phone: string | null }>();
 }
 
 // The related departments must be departments of the firm's structure; at least one is required.
@@ -2124,13 +2185,41 @@ async function relatedDepartments(companyId: number, raw: unknown) {
   return JSON.stringify(chosen);
 }
 
+// Versiya 2.77: the related departments of a document whose type's template names them come from the template (the registrar
+// cannot pick wrong ones); a type without them keeps the registrar's choice.
+async function documentDepartments(companyId: number, group: "outgoing" | "incoming", documentType: unknown, requested: unknown) {
+  const template = await findTemplate<{ departments: string | null }>(companyId, group, documentType);
+  const fixed = parseDepartments(template?.departments);
+  if (!fixed.length) return relatedDepartments(companyId, requested);
+  try { return await relatedDepartments(companyId, fixed); }
+  catch (error) { throw new Error(`Şablonun aidiyyatı şöbəsi: ${error instanceof Error ? error.message : ""} Sənədlər → Şablonlar bölməsində düzəldin.`); }
+}
+
+// "Məlumatlandırılan şöbə(lər)": optional departments whose heads only see the document (not those already related to it).
+async function informedDepartments(companyId: number, raw: unknown, related: string[]) {
+  const chosen = [...new Set((Array.isArray(raw) ? raw : []).map((d) => String(d).trim()).filter(Boolean))].filter((d) => !related.includes(d));
+  if (!chosen.length) return null;
+  const known = new Set((await companyDepartments()).departmentsOf(companyId).map((d) => d.name));
+  const unknown = chosen.find((d) => !known.has(d));
+  if (unknown) throw new Error(`"${unknown}" bu firmanın strukturunda yoxdur.`);
+  return JSON.stringify(chosen);
+}
+
+// The phone of a document's customer comes from their card (Versiya 2.77).
+async function customerPhoneByVoen(voen: unknown) {
+  const value = String(voen || "").trim();
+  if (!value) return null;
+  return (await db().prepare("SELECT phone FROM customers WHERE voen = ? LIMIT 1").bind(value).first<{ phone: string | null }>())?.phone || null;
+}
+
 async function incomingForAction(user: SessionUser, id: number) {
   const record = await db().prepare("SELECT i.*, c.name AS company_name FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id WHERE i.id = ?").bind(id).first<Record<string, unknown>>();
   if (!record) throw new Error("Sənəd tapılmadı.");
   const access = await incomingAccess(user);
   const assignments = await incomingAssignments(id);
   const requests = await incomingRequests(id);
-  return { record, access, assignments, requests, rights: incomingRights(access, user, record, assignments, requests.map((r) => r.to_department)) };
+  const delegates = (await incomingDelegates(id)).get(id) ?? [];
+  return { record, access, assignments, requests, rights: incomingRights(access, user, record, assignments, requests, delegates) };
 }
 
 export async function createIncomingDocument(user: SessionUser, input: IncomingInput) {
@@ -2140,13 +2229,14 @@ export async function createIncomingDocument(user: SessionUser, input: IncomingI
   const scope = await incomingScope(user);
   if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
   const sender = await senderFromVoen(input.senderVoen, input.senderName);
-  const related = await relatedDepartments(companyId, input.relatedDepartments);
+  const related = await documentDepartments(companyId, "incoming", input.documentType, input.relatedDepartments);
+  const informed = await informedDepartments(companyId, input.informedDepartments, parseDepartments(related));
   const incomingNo = await nextIncomingNumber(companyId);
   const result = await db().prepare(`INSERT INTO incoming_documents
-    (company_id, incoming_no, incoming_date, sender_voen, sender_name, sender_doc_no, sender_doc_date, document_type, receive_method, summary, pages, copies, note, created_by, created_by_name, created_at, related_departments, flow)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)`)
+    (company_id, incoming_no, incoming_date, sender_voen, sender_name, sender_doc_no, sender_doc_date, document_type, receive_method, summary, pages, copies, note, created_by, created_by_name, created_at, related_departments, informed_departments, flow)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)`)
     .bind(companyId, incomingNo, input.incomingDate || bakuDateIso(), sender.voen, sender.name, input.senderDocNo?.trim() || null, input.senderDocDate || null,
-      input.documentType?.trim() || null, input.receiveMethod || null, input.summary?.trim() || null, input.pages?.trim() || null, input.copies || null, input.note?.trim() || null, user.id, user.name, new Date().toISOString(), related).run();
+      input.documentType?.trim() || null, input.receiveMethod || null, input.summary?.trim() || null, input.pages?.trim() || null, input.copies || null, input.note?.trim() || null, user.id, user.name, new Date().toISOString(), related, informed).run();
   return { id: Number(result.meta.last_row_id), incomingNo };
 }
 
@@ -2160,12 +2250,16 @@ export async function updateIncomingDocument(user: SessionUser, input: IncomingI
   const sender = input.senderVoen !== undefined || input.senderName !== undefined
     ? await senderFromVoen(input.senderVoen ?? String(current.sender_voen || ""), input.senderName ?? String(current.sender_name || ""))
     : { voen: current.sender_voen, name: current.sender_name };
-  const related = input.relatedDepartments !== undefined ? await relatedDepartments(Number(current.company_id), input.relatedDepartments) : current.related_departments;
+  const typeChanged = input.documentType !== undefined && String(input.documentType || "").trim() !== String(current.document_type || "").trim();
+  const related = input.relatedDepartments !== undefined || typeChanged
+    ? await documentDepartments(Number(current.company_id), "incoming", input.documentType ?? current.document_type, input.relatedDepartments) : current.related_departments;
+  const informed = input.informedDepartments !== undefined
+    ? await informedDepartments(Number(current.company_id), input.informedDepartments, parseDepartments(related)) : current.informed_departments;
   const incomingNo = access.admin ? pick(input.incomingNo, current.incoming_no) || current.incoming_no : current.incoming_no;
-  await db().prepare(`UPDATE incoming_documents SET incoming_no = ?, incoming_date = ?, sender_voen = ?, sender_name = ?, sender_doc_no = ?, sender_doc_date = ?, document_type = ?, receive_method = ?, summary = ?, pages = ?, copies = ?, note = ?, related_departments = ? WHERE id = ?`)
+  await db().prepare(`UPDATE incoming_documents SET incoming_no = ?, incoming_date = ?, sender_voen = ?, sender_name = ?, sender_doc_no = ?, sender_doc_date = ?, document_type = ?, receive_method = ?, summary = ?, pages = ?, copies = ?, note = ?, related_departments = ?, informed_departments = ? WHERE id = ?`)
     .bind(incomingNo, pick(input.incomingDate, current.incoming_date), sender.voen, sender.name,
       pick(input.senderDocNo, current.sender_doc_no), pick(input.senderDocDate, current.sender_doc_date), pick(input.documentType, current.document_type), pick(input.receiveMethod, current.receive_method),
-      pick(input.summary, current.summary), pick(input.pages, current.pages), pick(input.copies, current.copies), pick(input.note, current.note), related, input.id).run();
+      pick(input.summary, current.summary), pick(input.pages, current.pages), pick(input.copies, current.copies), pick(input.note, current.note), related, informed ?? null, input.id).run();
 }
 
 // The registrar deletes only a document nothing has happened on; the admin also one whose tasks have not started.
@@ -2258,7 +2352,7 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
   const record = await incomingRecord(user, input.id);
   const access = await incomingAccess(user);
   if (!access.admin) {
-    if (!incomingRights(access, user, record, [], []).registrarHere) throw new Error("FORBIDDEN");
+    if (!incomingRights(access, user, record, [], [], []).registrarHere) throw new Error("FORBIDDEN");
     // Əlavə et uploads the scan of a document that has none yet; replacing it needs Dəyişiklik et.
     if (!access.may.edit && !(access.may.add && !record.file_name && !record.file_path && !record.file_key)) throw new Error("FORBIDDEN");
   }

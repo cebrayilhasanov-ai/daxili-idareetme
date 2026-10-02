@@ -40,9 +40,9 @@ export async function PATCH(request: Request) {
       return Response.json({ items: await getDocumentTemplates(), storage: await getDocumentStorage() });
     }
     if (body.action === "copy") {
-      const id = await copyDocumentTemplate({ id: Number(body.id), companyId: body.companyId, templateGroup: body.templateGroup, name: body.name });
-      await logAudit(user, "Sənəd şablonu kopyalandı", "document", `#${body.id} → #${id}`);
-      return Response.json({ items: await getDocumentTemplates(), copiedId: id });
+      const copied = await copyDocumentTemplate({ id: Number(body.id), companyId: body.companyId, templateGroup: body.templateGroup, name: body.name });
+      await logAudit(user, "Sənəd şablonu kopyalandı", "document", `#${body.id} → #${copied.id}`);
+      return Response.json({ items: await getDocumentTemplates(), copiedId: copied.id, droppedDepartments: copied.droppedDepartments });
     }
     await updateDocumentTemplate({ ...body, id: Number(body.id) });
     await logAudit(user, "Sənəd şablonu yeniləndi", "document", body.name || `#${body.id}`);

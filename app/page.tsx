@@ -47,8 +47,8 @@ type ChecklistLikeItem = StepRequest & { id:number; title:string; done:number; d
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
-type DocumentTemplate = { id:number; name:string; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
-type OutgoingDocument = { return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
+type DocumentTemplate = { id:number; name:string; departments?:string|null; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
+type OutgoingDocument = { informed_departments?:string[]; return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
 type WorkRequest = { id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { canAdd?:boolean; items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
 type ChatData = { threads:ChatThread[]; users:ChatUser[]; messages:ChatMessage[]; selectedThreadId:number; totalUnread:number; readUpTo:number };
@@ -247,7 +247,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.76</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.77</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -1327,6 +1327,22 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   const [copyingId,setCopyingId]=useState<number|null>(null);
   const [copyForm,setCopyForm]=useState<{companyId:string;group:TemplateGroupKey;name:string}>({companyId:"",group:"outgoing",name:""});
   const [copyBusy,setCopyBusy]=useState(false);
+  // Versiya 2.77: "Aidiyyatı şöbələr" of a type — picked from the firm's structure; the first is the main department.
+  const [firmDepts,setFirmDepts]=useState<Record<number,string[]>>({});
+  const [newDepartments,setNewDepartments]=useState<string[]>([]);
+  const [editDepartments,setEditDepartments]=useState<string[]>([]);
+  useEffect(()=>{
+    if(!firmId||firmDepts[firmId])return;
+    void fetch(`/api/company-structure?companyId=${firmId}`).then(r=>r.ok?r.json():{items:[]}).then(body=>{
+      const names=[...new Set(((body.items||[]) as Array<{department:string}>).map(p=>p.department).filter(Boolean))];
+      setFirmDepts(current=>({...current,[firmId]:names}));
+    });
+  },[firmId,firmDepts]);
+  const departmentPicker=(picked:string[],put:(list:string[])=>void)=>{
+    const options=firmDepts[firmId]||[];
+    const lost=picked.filter(d=>!options.includes(d));
+    return <div className="field incomingdepartments outgoingrelated" key="departments"><span>Aidiyyatı şöbələr <small>bu tipli sənəd qeydə alınanda avtomatik yazılır; birinci — əsas şöbə. Boş qalsa, qeydiyyatçı özü seçir.</small></span><div>{options.length?options.map(o=>{const at=picked.indexOf(o);return <label key={o}><input type="checkbox" checked={at>=0} onChange={e=>put(e.target.checked?[...picked,o]:picked.filter(d=>d!==o))}/><b>{o}</b>{at===0&&<em className="incomingrelatedtag">əsas</em>}{at>0&&<button type="button" className="hrlink hrlinkok" onClick={ev=>{ev.preventDefault();put([o,...picked.filter(d=>d!==o)])}}>əsas et</button>}</label>}):<small>Firmanın strukturunda şöbə yoxdur (Firmalar → Struktur).</small>}{lost.map(d=><label key={d} className="templateremoved"><b>{d}</b><small>strukturda yoxdur</small><button type="button" className="hrlink" onClick={ev=>{ev.preventDefault();put(picked.filter(x=>x!==d))}}>sil</button></label>)}</div></div>;
+  };
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [creating,setCreating]=useState(false);
@@ -1374,23 +1390,23 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
     if(!name.trim())return;
     setBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={name,companyId:firmId,templateGroup:group,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern,signedCopyReturns:signedReturn,signedCopyDays:signedReturn==="1"?signedDays:""};
+      const body:Record<string,unknown>={name,companyId:firmId,templateGroup:group,departments:group==="other_order"?[]:newDepartments,draftFolderPath,finalFolderPath,fileNamePattern,incomingFolderPath,incomingNamePattern,signedCopyReturns:signedReturn,signedCopyDays:signedReturn==="1"?signedDays:""};
       if(file1){const uploaded=await uploadFile(file1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(file2){const uploaded=await uploadFile(file2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(file3){const uploaded=await uploadFile(file3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
       const response=await fetch("/api/documents",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
-      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setSignedReturn("1");setSignedDays("");setCreating(false);
+      setItems(result.items||[]);setName("");setFile1(null);setFile2(null);setFile3(null);setDraftFolderPath("");setFinalFolderPath("");setFileNamePattern("");setIncomingFolderPath("");setIncomingNamePattern("");setSignedReturn("1");setSignedDays("");setNewDepartments([]);setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setCopyingId(null);setEditName(item.name);setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"");setEditSignedReturn(item.signed_copy_returns===0?"0":"1");setEditSignedDays(item.signed_copy_days?String(item.signed_copy_days):"");setEditRemove({})};
+  const startEdit=(item:DocumentTemplate)=>{setEditingId(item.id);setCopyingId(null);setEditName(item.name);setEditDepartments(parseList(item.departments||"[]"));setEditFile1(null);setEditFile2(null);setEditFile3(null);setEditDraftFolderPath(item.draft_folder_path||"");setEditFinalFolderPath(item.final_folder_path||"");setEditFileNamePattern(item.file_name_pattern||"");setEditIncomingFolderPath(item.incoming_folder_path||"");setEditIncomingNamePattern(item.incoming_name_pattern||"");setEditSignedReturn(item.signed_copy_returns===0?"0":"1");setEditSignedDays(item.signed_copy_days?String(item.signed_copy_days):"");setEditRemove({})};
   const cancelEdit=()=>{setEditingId(null);setEditFile1(null);setEditFile2(null);setEditFile3(null)};
   const saveEdit=async(item:DocumentTemplate)=>{
     setEditBusy(true);setError("");
     try{
-      const body:Record<string,unknown>={id:item.id,name:editName,draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern,signedCopyReturns:editSignedReturn,signedCopyDays:editSignedReturn==="1"?editSignedDays:"",template1Remove:Boolean(editRemove[1]),template2Remove:Boolean(editRemove[2]),template3Remove:Boolean(editRemove[3])};
+      const body:Record<string,unknown>={id:item.id,name:editName,...(templateGroupOf(item)==="other_order"?{}:{departments:editDepartments}),draftFolderPath:editDraftFolderPath,finalFolderPath:editFinalFolderPath,fileNamePattern:editFileNamePattern,incomingFolderPath:editIncomingFolderPath,incomingNamePattern:editIncomingNamePattern,signedCopyReturns:editSignedReturn,signedCopyDays:editSignedReturn==="1"?editSignedDays:"",template1Remove:Boolean(editRemove[1]),template2Remove:Boolean(editRemove[2]),template3Remove:Boolean(editRemove[3])};
       if(editFile1){const uploaded=await uploadFile(editFile1);body.template1Key=uploaded.key;body.template1Name=uploaded.name;body.template1Size=uploaded.size;body.template1Type=uploaded.type}
       if(editFile2){const uploaded=await uploadFile(editFile2);body.template2Key=uploaded.key;body.template2Name=uploaded.name;body.template2Size=uploaded.size;body.template2Type=uploaded.type}
       if(editFile3){const uploaded=await uploadFile(editFile3);body.template3Key=uploaded.key;body.template3Name=uploaded.name;body.template3Size=uploaded.size;body.template3Type=uploaded.type}
@@ -1419,7 +1435,8 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
       setItems(result.items||[]);setCopyingId(null);
-      setNotice(`“${item.name}” kopyalandı → ${firmName(Number(copyForm.companyId))} · ${templateGroupLabel(copyForm.group)}${copyForm.name.trim()&&copyForm.name.trim()!==item.name?` (“${copyForm.name.trim()}”)`:""}.`);
+      const dropped:string[]=result.droppedDepartments||[];
+      setNotice(`“${item.name}” kopyalandı → ${firmName(Number(copyForm.companyId))} · ${templateGroupLabel(copyForm.group)}${copyForm.name.trim()&&copyForm.name.trim()!==item.name?` (“${copyForm.name.trim()}”)`:""}.${dropped.length?` O firmanın strukturunda olmayan aidiyyatı şöbələr köçürülmədi: ${dropped.join(", ")} — kopyada yoxlayın.`:""}`);
     }catch(e){setError(e instanceof Error?e.message:"Şablon kopyalanmadı.")}
     finally{setCopyBusy(false)}
   };
@@ -1437,6 +1454,7 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   const templateLabel=(n:number)=><span className="templatelabel">Sənədin şablonu<br/>{n}</span>;
   const documentColumns:Array<{key:string;label:string;width:number;search:(item:DocumentTemplate)=>string;render:(item:DocumentTemplate)=>React.ReactNode}>=[
     {key:"name",label:"Sənədin adı",width:240,search:item=>item.name,render:item=><b>{item.name}</b>},
+    {key:"departments",label:"Aidiyyatı şöbələr",width:180,search:item=>parseList(item.departments||"[]").join(", ")||"Qeydiyyatçı seçir",render:item=>{const list=parseList(item.departments||"[]");return list.length?<>{list.map((d,n)=><div key={d} className="incomingdept"><b>{d}</b>{n===0&&list.length>1&&<small className="requestsub">əsas şöbə</small>}</div>)}</>:<span className="nodocument">Qeydiyyatçı seçir</span>}},
     {key:"signedReturn",label:"İmzalı nüsxə geri qaytarılır",width:140,search:item=>item.signed_copy_returns===0?"Xeyr":item.signed_copy_days?`Bəli ${item.signed_copy_days} gün`:"Bəli",render:item=>item.signed_copy_returns===0?<span className="signedreturn no">Xeyr</span>:<span className="signedreturn yes">Bəli{item.signed_copy_days?` · ${item.signed_copy_days} gün`:""}</span>},
     {key:"fileNamePattern",label:"Çıxan sənəd üçün adlanma qaydası",width:230,search:item=>item.file_name_pattern||DEFAULT_FILE_NAME_PATTERN,render:item=>item.file_name_pattern?<span className="folderpath">{item.file_name_pattern}</span>:<span className="nodocument" title="Qayda yazılmayıb — standart qayda işlədilir">{DEFAULT_FILE_NAME_PATTERN}</span>},
     {key:"template1",label:"Sənədin şablonu 1",width:220,search:item=>item.template1_name||"Yoxdur",render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
@@ -1449,7 +1467,7 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   ];
   // Only the columns (and form fields) of the group being looked at.
   const ALL_GROUPS:TemplateGroupKey[]=["outgoing","incoming","other_order"];
-  const columnGroups:Record<string,TemplateGroupKey[]>={name:ALL_GROUPS,signedReturn:["outgoing"],fileNamePattern:["outgoing"],template1:["outgoing","other_order"],template2:["outgoing"],template3:["outgoing"],draftFolder:["outgoing"],finalFolder:["outgoing"],incomingFolder:["incoming"],incomingNamePattern:["incoming"]};
+  const columnGroups:Record<string,TemplateGroupKey[]>={name:ALL_GROUPS,departments:["outgoing","incoming"],signedReturn:["outgoing"],fileNamePattern:["outgoing"],template1:["outgoing","other_order"],template2:["outgoing"],template3:["outgoing"],draftFolder:["outgoing"],finalFolder:["outgoing"],incomingFolder:["incoming"],incomingNamePattern:["incoming"]};
   const shownColumns=documentColumns.filter(c=>columnGroups[c.key]?.includes(group));
   const shownKeys=new Set(shownColumns.map(c=>c.key));
   const {order:allOrder,widths,setWidth,moveColumn}=useTableColumns("templates2",documentColumns.map(c=>c.key));
@@ -1461,6 +1479,7 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   const excel=useExcelFilters("templates",shownColumns,shownItems);
   const createFieldRenderers:Record<string,()=>React.ReactNode>={
     name:()=><Field key="name" label="Sənədin adı" value={name} set={setName}/>,
+    departments:()=>departmentPicker(newDepartments,setNewDepartments),
     signedReturn:()=><Fragment key="signedReturn"><label className="field">İmzalı nüsxə geri qaytarılır<select value={signedReturn} onChange={e=>setSignedReturn(e.target.value)}><option value="1">Bəli — qarşı tərəf bir nüsxəni imzalayıb qaytarır</option><option value="0">Xeyr — geri qaytarılmır (məs. məktub)</option></select></label>{signedReturn==="1"&&<label className="field">Qaytarılma müddəti (təqvim günü)<Input type="number" min={1} placeholder="Məs. 10" value={signedDays} onChange={e=>setSignedDays(e.target.value)}/><small>Bu müddət keçəndə imzalı nüsxəsi qayıtmayan sənəd “Yubanır” olur. Boş qoysanız, müddət izlənmir.</small></label>}</Fragment>,
     fileNamePattern:()=><label className="field" key="fileNamePattern">Çıxan sənəd üçün adlanma qaydası<Input value={fileNamePattern} placeholder={DEFAULT_FILE_NAME_PATTERN} onChange={e=>setFileNamePattern(e.target.value)}/></label>,
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}{group==="other_order"&&<small>Əmrin mətni bu Word (.docx) faylından oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
@@ -1473,6 +1492,7 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   };
   const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
     name:()=><Field key="name" label="Sənədin adı" value={editName} set={setEditName}/>,
+    departments:()=>departmentPicker(editDepartments,setEditDepartments),
     signedReturn:()=><Fragment key="signedReturn"><label className="field">İmzalı nüsxə geri qaytarılır<select value={editSignedReturn} onChange={e=>setEditSignedReturn(e.target.value)}><option value="1">Bəli — qarşı tərəf bir nüsxəni imzalayıb qaytarır</option><option value="0">Xeyr — geri qaytarılmır (məs. məktub)</option></select></label>{editSignedReturn==="1"&&<label className="field">Qaytarılma müddəti (təqvim günü)<Input type="number" min={1} placeholder="Məs. 10" value={editSignedDays} onChange={e=>setEditSignedDays(e.target.value)}/><small>Bu müddət keçəndə imzalı nüsxəsi qayıtmayan sənəd “Yubanır” olur. Boş qoysanız, müddət izlənmir.</small><small>Dəyişiklik yalnız bundan sonra qeydə alınan sənədlərə aiddir.</small></label>}</Fragment>,
     fileNamePattern:()=><label className="field" key="fileNamePattern">Çıxan sənəd üçün adlanma qaydası<Input value={editFileNamePattern} placeholder={DEFAULT_FILE_NAME_PATTERN} onChange={e=>setEditFileNamePattern(e.target.value)}/></label>,
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small className={editRemove[1]?"templateremoved":undefined}>Hazırkı: {item.template1_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,1:!r[1]}))}}>{editRemove[1]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[1]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}{group==="other_order"&&<small>Əmrin mətni bu Word (.docx) faylından oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
@@ -1586,10 +1606,10 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     const voenValue=(form.voen||"").trim();
     if(voenValue&&!customers.some(c=>c.voen===voenValue)){setError("Bu VÖEN müştəri siyahısında tapılmadı. Zəhmət olmasa düzgün VÖEN daxil edin.");return}
     if(!createCompanyId){setError("Firmanı seçin.");return}
-    if(!parseList(form.relatedDepartments).length){setError("Əlaqəli şöbəni (və ya şöbələri) seçin.");return}
+    if(!effectiveRelated(form).length){setError("Əlaqəli şöbəni (və ya şöbələri) seçin.");return}
     setBusy(true);setError("");setNotice("");
     try{
-      const response=await fetch("/api/documents/outgoing",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...form,companyId:createCompanyId,relatedDepartments:parseList(form.relatedDepartments)})});
+      const response=await fetch("/api/documents/outgoing",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...form,companyId:createCompanyId,relatedDepartments:effectiveRelated(form),informedDepartments:parseList(form.informedDepartments)})});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
       setItems(result.items||[]);setForm({});setCreating(false);
@@ -1598,15 +1618,15 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     }catch(e){setError(e instanceof Error?e.message:"Sənəd əlavə olunmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditForm({companyId:item.company_id?String(item.company_id):"",outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",relatedDepartments:JSON.stringify(item.related_departments||[]),documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",responsibleEmployeeId:item.responsible_employee_id?String(item.responsible_employee_id):"",returnDue:item.return_due_date||"",copies:item.copies||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||"",signedCopyReturns:item.signed_copy_returns===null||item.signed_copy_returns===undefined?"":String(item.signed_copy_returns)})};
+  const startEdit=(item:OutgoingDocument)=>{setEditingId(item.id);setEditForm({companyId:item.company_id?String(item.company_id):"",outgoingDate:item.outgoing_date||"",incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",relatedDepartments:JSON.stringify(item.related_departments||[]),informedDepartments:JSON.stringify(item.informed_departments||[]),documentType:item.document_type||"",sendingMethod:item.sending_method||"",deliveredBy:item.delivered_by||"",responsibleEmployeeId:item.responsible_employee_id?String(item.responsible_employee_id):"",returnDue:item.return_due_date||"",copies:item.copies||"",documentDate:item.document_date||"",voen:item.voen||"",organizationName:item.organization_name||"",phone:item.phone||"",note:item.note||"",signedCopyReturns:item.signed_copy_returns===null||item.signed_copy_returns===undefined?"":String(item.signed_copy_returns)})};
   const cancelEdit=()=>{setEditingId(null);setEditForm({})};
   const saveEdit=async(id:number)=>{
     const voenValue=(editForm.voen||"").trim();
     if(voenValue&&!customers.some(c=>c.voen===voenValue)){setError("Bu VÖEN müştəri siyahısında tapılmadı. Zəhmət olmasa düzgün VÖEN daxil edin.");return}
     setEditBusy(true);setError("");setNotice("");
     try{
-      const related=parseList(editForm.relatedDepartments);
-      const payload:Record<string,unknown>={...editForm,id,relatedDepartments:related,returnDueDate:editForm.returnDue??undefined};
+      const related=effectiveRelated(editForm);
+      const payload:Record<string,unknown>={...editForm,id,relatedDepartments:related,informedDepartments:parseList(editForm.informedDepartments),returnDueDate:editForm.returnDue??undefined};
       delete payload.returnDue;
       // A document from before 2.60 whose department was typed by hand keeps it until departments are picked.
       if(!related.length)delete payload.relatedDepartments;
@@ -1631,6 +1651,9 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   const copiesOptions=["1","2","3","4","5"];
   // Versiya 2.76: the document types are the Çıxan sənəd templates of the document's own firm.
   const firmTemplates=(companyId:number)=>templates.filter(t=>Number(t.company_id)===companyId);
+  // Versiya 2.77: a type whose template names its "Aidiyyatı şöbələr" brings them; otherwise the registrar picks.
+  const templateDepts=(values:Record<string,string>)=>parseList(templateFor(values)?.departments||"[]");
+  const effectiveRelated=(values:Record<string,string>)=>{const fixed=templateDepts(values);return fixed.length?fixed:parseList(values.relatedDepartments)};
   const templateFor=(values:Record<string,string>)=>{const typeName=(values.documentType||"").trim().toLocaleLowerCase("az-AZ");return typeName?firmTemplates(companyOf(values)).find(t=>t.name.trim().toLocaleLowerCase("az-AZ")===typeName):undefined};
   const companyName=(id:number)=>companies.find(c=>c.id===id)?.name||"—";
   // Fields the system fills itself — the numbers at creation, Daxil olma No / tarixi when the signed document is uploaded — are left out of the new-document form.
@@ -1643,19 +1666,21 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     incomingNo:(values,set)=><Field key="incomingNo" label="Daxil olma No" value={values.incomingNo||""} set={v=>set({...values,incomingNo:v})}/>,
     incomingDate:(values,set)=><Field key="incomingDate" label="Daxil olma tarixi" type="date" value={values.incomingDate||""} set={v=>set({...values,incomingDate:v})}/>,
     // Related departments: the first one is the main department — the {Şöbə} of the folder and file-name rules.
-    sendingDepartment:(values,set)=>{const chosen=companyOf(values);const options=chosen?departments[chosen]||[]:[];const picked=parseList(values.relatedDepartments);const put=(list:string[])=>set({...values,relatedDepartments:JSON.stringify(list)});return <div className="field incomingdepartments outgoingrelated" key="sendingDepartment"><span>Əlaqəli şöbə(lər) * <small>birinci seçilən — əsas şöbə (papka və fayl adındakı {"{Şöbə}"})</small></span><div>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:options.length?options.map(o=>{const at=picked.indexOf(o);return <label key={o}><input type="checkbox" checked={at>=0} onChange={e=>put(e.target.checked?[...picked,o]:picked.filter(d=>d!==o))}/><b>{o}</b>{at===0&&<em className="incomingrelatedtag">əsas</em>}{at>0&&<button type="button" className="hrlink hrlinkok" onClick={ev=>{ev.preventDefault();put([o,...picked.filter(d=>d!==o)])}}>əsas et</button>}</label>}):<small>Firmanın strukturunda şöbə yoxdur (Firmalar → Struktur).</small>}</div></div>},
+    sendingDepartment:(values,set)=>{const fixed=templateDepts(values);if(fixed.length)return <div className="field incomingdepartments outgoingrelated" key="sendingDepartment"><span>Əlaqəli şöbə(lər) <small>sənədin tipinə görə — şablondan</small></span><div>{fixed.map((d,n)=><label key={d}><b>{d}</b>{n===0&&<em className="incomingrelatedtag">əsas</em>}</label>)}</div></div>;const chosen=companyOf(values);const options=chosen?departments[chosen]||[]:[];const picked=parseList(values.relatedDepartments);const put=(list:string[])=>set({...values,relatedDepartments:JSON.stringify(list)});return <div className="field incomingdepartments outgoingrelated" key="sendingDepartment"><span>Əlaqəli şöbə(lər) * <small>birinci seçilən — əsas şöbə (papka və fayl adındakı {"{Şöbə}"})</small></span><div>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:options.length?options.map(o=>{const at=picked.indexOf(o);return <label key={o}><input type="checkbox" checked={at>=0} onChange={e=>put(e.target.checked?[...picked,o]:picked.filter(d=>d!==o))}/><b>{o}</b>{at===0&&<em className="incomingrelatedtag">əsas</em>}{at>0&&<button type="button" className="hrlink hrlinkok" onClick={ev=>{ev.preventDefault();put([o,...picked.filter(d=>d!==o)])}}>əsas et</button>}</label>}):<small>Firmanın strukturunda şöbə yoxdur (Firmalar → Struktur).</small>}</div></div>},
     documentType:(values,set)=>{const chosen=companyOf(values);const list=chosen?firmTemplates(chosen):[];return <label className="field" key="documentType">Sənədin tipi<Input list={`documentTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`documentTypeOptions-${chosen}`}>{list.map(t=><option key={t.id} value={t.name}/>)}</datalist>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:!list.length&&<small>Bu firmanın “Çıxan sənəd” şablonu yoxdur (Sənədlər → Şablonlar).</small>}</label>},
     sendingMethod:(values,set)=><label className="field" key="sendingMethod">Göndərilmə Şəkli<select value={values.sendingMethod||""} onChange={e=>set({...values,sendingMethod:e.target.value})}><option value="">Seçin</option>{sendingMethodOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     // Versiya 2.75: the person who takes the document out answers for the signed copy coming back — picked from the people
     // of the document's departments. An older document keeps its typed name until someone is picked.
-    deliveredBy:(values,set)=>{const chosen=companyOf(values);const picked=parseList(values.relatedDepartments);const people=(chosen?members[chosen]||[]:[]).filter(m=>!picked.length||picked.includes(m.department));const unique=people.filter((m,i)=>people.findIndex(x=>x.id===m.id)===i);const current=values.responsibleEmployeeId||"";
+    informedDepartments:(values,set)=>{const chosen=companyOf(values);const related=effectiveRelated(values);const options=(chosen?departments[chosen]||[]:[]).filter(d=>!related.includes(d));const picked=parseList(values.informedDepartments).filter(d=>!related.includes(d));return <div className="field incomingdepartments" key="informedDepartments"><span>Məlumatlandırılan şöbə(lər) <small>istəyə bağlı — sənədi yalnız şöbə rəhbəri görür</small></span><div>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:options.length?options.map(o=><label key={o}><input type="checkbox" checked={picked.includes(o)} onChange={e=>set({...values,informedDepartments:JSON.stringify(e.target.checked?[...picked,o]:picked.filter(d=>d!==o))})}/><b>{o}</b></label>):<small>Başqa şöbə yoxdur.</small>}</div></div>},
+    deliveredBy:(values,set)=>{const chosen=companyOf(values);const picked=effectiveRelated(values);const people=(chosen?members[chosen]||[]:[]).filter(m=>!picked.length||picked.includes(m.department));const unique=people.filter((m,i)=>people.findIndex(x=>x.id===m.id)===i);const current=values.responsibleEmployeeId||"";
       return <label className="field" key="deliveredBy">Sənədi götürən şəxs (məsul)<select value={current} onChange={e=>{const person=unique.find(m=>String(m.id)===e.target.value);set({...values,responsibleEmployeeId:e.target.value,deliveredBy:person?person.name:""})}}><option value="">{!current&&values.deliveredBy?`${values.deliveredBy} (köhnə qeyd)`:"Seçin"}</option>{unique.map(m=><option key={m.id} value={m.id}>{m.name} — {m.department}</option>)}</select>{!picked.length&&<small>Əvvəlcə əlaqəli şöbəni seçin.</small>}</label>},
     returnDue:(values,set)=><label className="field" key="returnDue">İmzalı nüsxənin qaytarılma tarixi<Input type="date" value={values.returnDue||""} onChange={e=>set({...values,returnDue:e.target.value})}/><small>Şablondakı müddətlə avtomatik yazılır; lazım olsa dəyişin.</small></label>,
     copies:(values,set)=><label className="field" key="copies">Sənədin nüsxəsi<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{copiesOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     documentDate:(values,set)=><Field key="documentDate" label="Sənədin tarixi" type="date" value={values.documentDate||""} set={v=>set({...values,documentDate:v})}/>,
-    voen:(values,set)=><label className="field" key="voen">Voeni<Input value={values.voen||""} onChange={e=>set({...values,voen:e.target.value})} onBlur={e=>{const trimmed=e.target.value.trim();const match=customers.find(c=>c.voen===trimmed);set({...values,voen:trimmed,organizationName:match?match.name:""})}}/></label>,
+    voen:(values,set)=><label className="field" key="voen">Voeni<Input value={values.voen||""} onChange={e=>set({...values,voen:e.target.value})} onBlur={e=>{const trimmed=e.target.value.trim();const match=customers.find(c=>c.voen===trimmed);set({...values,voen:trimmed,organizationName:match?match.name:"",phone:match?match.phone||"":values.phone||""})}}/></label>,
     organizationName:(values)=><label className="field" key="organizationName">Təşkilatın adı<Input value={values.organizationName||""} readOnly placeholder="Əvvəlcə VÖEN daxil edin"/></label>,
-    phone:(values,set)=><Field key="phone" label="Müştərinin Telefonu" value={values.phone||""} set={v=>set({...values,phone:v})}/>,
+    // Versiya 2.77: the phone is the customer card's; it is typed only for a document without a VÖEN (no card).
+    phone:(values,set)=>{const card=customers.find(c=>c.voen===(values.voen||"").trim()&&(values.voen||"").trim());return card?<label className="field" key="phone">Müştərinin Telefonu<Input value={formatPhone(card.phone)||""} readOnly placeholder="Müştəri kartında telefon yoxdur"/><small>Müştəri kartından</small></label>:<Field key="phone" label="Müştərinin Telefonu" value={values.phone||""} set={v=>set({...values,phone:v})}/>},
     note:(values,set)=><Field key="note" label="Əlavə Qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>,
   };
   const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void,isNew:boolean)=><>{order.filter(key=>fieldRenderers[key]&&!(isNew&&autoFilled.has(key))).map(key=>fieldRenderers[key](values,set))}</>;
@@ -1691,6 +1716,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     {key:"incomingNo",label:"Daxil olma No",width:130,search:item=>item.incoming_no||"",render:item=><>{item.incoming_no||"—"}</>},
     {key:"incomingDate",label:"Daxil olma tarixi",width:130,search:item=>formatDateOnly(item.incoming_date),render:item=><>{formatDateOnly(item.incoming_date)}</>},
     {key:"sendingDepartment",label:"Əlaqəli şöbələr",width:170,search:item=>(item.related_departments||[]).join(", "),render:item=>(item.related_departments||[]).length?<>{(item.related_departments||[]).map((d,n)=><div key={d} className="incomingdept"><b>{d}</b>{n===0&&(item.related_departments||[]).length>1&&<small className="requestsub">əsas şöbə</small>}</div>)}</>:<span className="nodocument">—</span>},
+    {key:"informedDepartments",label:"Məlumatlandırılan şöbələr",width:160,search:item=>(item.informed_departments||[]).join(", "),render:item=>(item.informed_departments||[]).length?<>{(item.informed_departments||[]).map(d=><div key={d} className="incomingdept">{d}</div>)}</>:<span className="nodocument">—</span>},
     {key:"documentType",label:"Sənədin tipi",width:130,search:item=>item.document_type||"",render:item=><>{item.document_type||"—"}</>},
     {key:"sendingMethod",label:"Göndərilmə Şəkli",width:140,search:item=>item.sending_method||"",render:item=><>{item.sending_method||"—"}</>},
     {key:"deliveredBy",label:"Sənədi götürən şəxs (məsul)",width:170,search:item=>item.responsible_name||item.delivered_by||"",render:item=><>{item.responsible_name||item.delivered_by||"—"}</>},
@@ -1733,7 +1759,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   const canCreate=canRegister&&(isAdmin||companies.length>0);
   const showActions=filteredOutgoing.some(item=>item.can?.edit||item.can?.remove||approvalActionable(item.approval));
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan sənədlər</h2><p>{!canRegister?"Şöbənizə aid çıxan sənədlər":activeCompanyId?`${companyName(activeCompanyId)} — göndərilən sənədlərin qeydiyyatı`:"Təşkilatdan göndərilən sənədlərin qeydiyyatı"}</p></div>{canCreate&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan sənədlər</h2><p>{!canRegister?"Rəhbəri olduğunuz şöbələrə aid və məsul olduğunuz çıxan sənədlər":activeCompanyId?`${companyName(activeCompanyId)} — göndərilən sənədlərin qeydiyyatı`:"Təşkilatdan göndərilən sənədlərin qeydiyyatı"}</p></div>{canCreate&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{fields({relatedDepartments:"[]",...form},setForm,true)}{signedReturnBlock(form,setForm)}{templateBlock(form)}<label className="field filefield">Yazılmış sənəd (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {notice&&<div className="docnotice">{notice}</div>}
@@ -1745,7 +1771,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     </tr>)}</tbody></table>{!filteredOutgoing.length&&<Empty text={scopedItems.length?"Axtarışa uyğun sənəd tapılmadı.":canRegister?"Hələ çıxan sənəd qeydə alınmayıb.":"Şöbənizə aid çıxan sənəd yoxdur."}/>}</div>}
   </section>;
 }
-type IncomingDocument = { approval?:DocumentApproval; id:number; company_id:number; company_name:string|null; incoming_no:string; incoming_date:string|null; sender_voen:string|null; sender_name:string|null; sender_doc_no:string|null; sender_doc_date:string|null; document_type:string|null; receive_method:string|null; summary:string|null; pages?:string|null; copies?:string|null; note?:string|null; file_name:string|null; file_size:number|null; file_path:string|null; file_missing:boolean; status:string; info_only?:number; director_pending?:number; sent_to_director_by?:string|null; resolution?:string|null; due_date?:string|null; assigned_by_name?:string|null; created_by_name?:string|null; director_seen_at?:string|null; director_seen_by?:string|null; flow?:number|null; locked:boolean; related_departments:string[]; assignments:Array<{department:string;head_name:string|null;task_status:string|null}>; requests:Array<{id:number;from_department:string|null;to_department:string;status:string}>; can:{edit:boolean;remove:boolean;upload:boolean;direct:boolean;review:boolean;request:boolean} };
+type IncomingDocument = { informed_departments?:string[]; sender_phone?:string|null; approval?:DocumentApproval; id:number; company_id:number; company_name:string|null; incoming_no:string; incoming_date:string|null; sender_voen:string|null; sender_name:string|null; sender_doc_no:string|null; sender_doc_date:string|null; document_type:string|null; receive_method:string|null; summary:string|null; pages?:string|null; copies?:string|null; note?:string|null; file_name:string|null; file_size:number|null; file_path:string|null; file_missing:boolean; status:string; info_only?:number; director_pending?:number; sent_to_director_by?:string|null; resolution?:string|null; due_date?:string|null; assigned_by_name?:string|null; created_by_name?:string|null; director_seen_at?:string|null; director_seen_by?:string|null; flow?:number|null; locked:boolean; related_departments:string[]; assignments:Array<{department:string;head_name:string|null;task_status:string|null}>; requests:Array<{id:number;from_department:string|null;to_department:string;status:string}>; can:{edit:boolean;remove:boolean;upload:boolean;direct:boolean;review:boolean;request:boolean} };
 type IncomingDepartment = { company_id:number; name:string; heads:Array<{id:number;name:string}>; members:Array<{id:number;name:string;position_title:string}> };
 const INCOMING_TYPES=["Məktub","Müqavilə","Akt","Hesab-faktura","Qaimə","Məhkəmə sənədi","Sorğu","Bildiriş","Digər"];
 const RECEIVE_METHODS=["Kağız-Əldən","Poçt","E-poçt","Adoc-Vergidən"];
@@ -1784,7 +1810,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const [departments,setDepartments]=useState<IncomingDepartment[]>([]);
   const [directorOf,setDirectorOf]=useState<number[]>([]);
   const [canRegister,setCanRegister]=useState(false);
-  const [types,setTypes]=useState<Array<{company_id:number;name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
+  const [types,setTypes]=useState<Array<{company_id:number;name:string;departments?:string|null;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -1802,7 +1828,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   // Sender lookup by VÖEN: "found" fills the name from the customer list, "missing" opens the new-customer card.
   const [voenState,setVoenState]=useState<Record<string,"found"|"missing"|"">>({});
   const [customerForm,setCustomerForm]=useState<Record<string,string>>({});
-  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;types?:Array<{company_id:number;name:string;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
+  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;types?:Array<{company_id:number;name:string;departments?:string|null;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
     const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);setCanRegister(Boolean(body.canRegister));
     onPending(list.filter(i=>waitsForDirector(i)&&(body.directorOf||[]).includes(i.company_id)).length);
     if(body.types)setTypes(body.types);
@@ -1829,8 +1855,8 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
       const response=await fetch(`/api/documents/incoming?voen=${encodeURIComponent(voen)}`);
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
-      if(body.customer){set({...values,senderVoen:voen,senderName:body.customer.name});setVoenState(s=>({...s,[key]:"found"}))}
-      else{set({...values,senderVoen:voen,senderName:""});setVoenState(s=>({...s,[key]:"missing"}));setCustomerForm({entityType:"Hüquqi şəxs",name:"",legalAddress:"",manager:"",phone:""})}
+      if(body.customer){set({...values,senderVoen:voen,senderName:body.customer.name,senderPhone:body.customer.phone||""});setVoenState(s=>({...s,[key]:"found"}))}
+      else{set({...values,senderVoen:voen,senderName:"",senderPhone:""});setVoenState(s=>({...s,[key]:"missing"}));setCustomerForm({entityType:"Hüquqi şəxs",name:"",legalAddress:"",manager:"",phone:""})}
     }catch(e){setError(e instanceof Error?e.message:"VÖEN yoxlanılmadı.")}
   };
   const createCustomer=async(key:string,values:Record<string,string>,set:(next:Record<string,string>)=>void)=>{
@@ -1862,26 +1888,26 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     if(!companyId){setError("Firmanı seçin.");return}
     if(voenState.new==="missing"){setError("Bu VÖEN müştəri siyahısında yoxdur — əvvəlcə müştəri kartını yaradın.");return}
     if(!(form.senderName||"").trim()){setError("Göndərən təşkilatı yazın.");return}
-    if(!parseList(form.relatedDepartments).length){setError("Aidiyyatı şöbəni (və ya şöbələri) seçin.");return}
+    if(!incomingRelated(form,companyId).length){setError("Aidiyyatı şöbəni (və ya şöbələri) seçin.");return}
     setBusy(true);setError("");setNotice("");
     try{
-      const body=await send("POST",{...form,companyId,relatedDepartments:parseList(form.relatedDepartments)});
+      const body=await send("POST",{...form,companyId,relatedDepartments:incomingRelated(form,companyId),informedDepartments:parseList(form.informedDepartments)});
       setForm({});setCreating(false);setVoenState(s=>({...s,new:""}));
       if(newFile&&body.id)await uploadScan({id:Number(body.id)},newFile);
       setNewFile(null);
-      setNotice("Sənəd qeydə alındı və rəhbərin baxışına düşdü; aidiyyatı şöbələr onu öz siyahılarında görür.");
+      setNotice("Sənəd qeydə alındı və rəhbərin baxışına düşdü; aidiyyatı (və məlumatlandırılan) şöbələrin rəhbərləri onu öz siyahılarında görür.");
     }catch(e){setError(e instanceof Error?e.message:"Sənəd qeydə alınmadı.")}
     finally{setBusy(false)}
   };
-  const startEdit=(item:IncomingDocument)=>{setActing(null);setEditingId(item.id);setVoenState(s=>({...s,edit:item.sender_voen?"found":""}));setEditForm({incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",senderVoen:item.sender_voen||"",senderName:item.sender_name||"",senderDocNo:item.sender_doc_no||"",senderDocDate:item.sender_doc_date||"",documentType:item.document_type||"",receiveMethod:item.receive_method||"",summary:item.summary||"",pages:item.pages||"",copies:item.copies||"",note:item.note||"",relatedDepartments:JSON.stringify(item.related_departments||[]),companyId:String(item.company_id)})};
+  const startEdit=(item:IncomingDocument)=>{setActing(null);setEditingId(item.id);setVoenState(s=>({...s,edit:item.sender_voen?"found":""}));setEditForm({incomingNo:item.incoming_no||"",incomingDate:item.incoming_date||"",senderVoen:item.sender_voen||"",senderName:item.sender_name||"",senderDocNo:item.sender_doc_no||"",senderDocDate:item.sender_doc_date||"",documentType:item.document_type||"",receiveMethod:item.receive_method||"",summary:item.summary||"",pages:item.pages||"",copies:item.copies||"",note:item.note||"",relatedDepartments:JSON.stringify(item.related_departments||[]),informedDepartments:JSON.stringify(item.informed_departments||[]),senderPhone:item.sender_phone||"",companyId:String(item.company_id)})};
   const saveEdit=async(item:IncomingDocument)=>{
     if(voenState.edit==="missing"){setError("Bu VÖEN müştəri siyahısında yoxdur — əvvəlcə müştəri kartını yaradın.");return}
-    const related=parseList(editForm.relatedDepartments);
+    const related=incomingRelated(editForm,item.company_id);
     if(item.flow===2&&!related.length){setError("Aidiyyatı şöbəni (və ya şöbələri) seçin.");return}
     setBusy(true);setError("");
     try{
-      const payload:Record<string,unknown>={...editForm,id:item.id,relatedDepartments:related};
-      delete payload.companyId;
+      const payload:Record<string,unknown>={...editForm,id:item.id,relatedDepartments:related,informedDepartments:parseList(editForm.informedDepartments)};
+      delete payload.companyId;delete payload.senderPhone;
       // Documents registered before 2.59 may have no related departments; they are left as they are unless some are picked.
       if(!related.length&&item.flow!==2)delete payload.relatedDepartments;
       await send("PATCH",payload);setEditingId(null)
@@ -1920,7 +1946,18 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     </div>
     <div className="inlineactions"><Button disabled={busy||!(customerForm.name||"").trim()||!(customerForm.phone||"").trim()} onClick={()=>void createCustomer(key,values,set)}>{busy?"Yaradılır...":"Müştəri siyahısına əlavə et"}</Button></div>
   </div>;
+  // Versiya 2.77: a type whose template (Daxil olan sənəd) names its departments brings them; otherwise the registrar picks.
+  const incomingTemplateDepts=(values:Record<string,string>,companyId:number)=>{const type=(values.documentType||"").trim().toLocaleLowerCase("az-AZ");const t=type?types.find(x=>x.company_id===companyId&&x.name.trim().toLocaleLowerCase("az-AZ")===type):undefined;return parseList(t?.departments||"[]")};
+  const incomingRelated=(values:Record<string,string>,companyId:number)=>{const fixed=incomingTemplateDepts(values,companyId);return fixed.length?fixed:parseList(values.relatedDepartments)};
+  const informedPicker=(values:Record<string,string>,set:(next:Record<string,string>)=>void,companyId:number)=>{
+    const related=incomingRelated(values,companyId);
+    const picked=parseList(values.informedDepartments).filter(d=>!related.includes(d));
+    const list=firmDepartments(companyId).filter(d=>!related.includes(d.name));
+    return <div className="field incomingdepartments"><span>Məlumatlandırılan şöbə(lər) <small>istəyə bağlı — sənədi yalnız şöbə rəhbəri görür</small></span><div>{!companyId?<small>Əvvəlcə firmanı seçin.</small>:list.length?list.map(d=><label key={d.name}><input type="checkbox" checked={picked.includes(d.name)} onChange={e=>set({...values,informedDepartments:JSON.stringify(e.target.checked?[...picked,d.name]:picked.filter(x=>x!==d.name))})}/><b>{d.name}</b></label>):<small>Başqa şöbə yoxdur.</small>}</div></div>;
+  };
   const relatedPicker=(values:Record<string,string>,set:(next:Record<string,string>)=>void,companyId:number)=>{
+    const fixed=incomingTemplateDepts(values,companyId);
+    if(fixed.length)return <div className="field incomingdepartments incomingrelated"><span>Aidiyyatı şöbə(lər) <small>sənədin tipinə görə — şablondan</small></span><div>{fixed.map(d=><label key={d}><b>{d}</b></label>)}</div></div>;
     const chosen=parseList(values.relatedDepartments);
     const toggle=(name:string,on:boolean)=>set({...values,relatedDepartments:JSON.stringify(on?[...chosen,name]:chosen.filter(d=>d!==name))});
     const list=firmDepartments(companyId);
@@ -1934,6 +1971,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     <Field label="Daxil olma tarixi" type="date" value={values.incomingDate||(isNew?todayInput():"")} set={v=>set({...values,incomingDate:v})}/>
     <label className="field">Göndərənin VÖEN-i<Input value={values.senderVoen||""} placeholder="Dövlət qurumu üçün boş qala bilər" onChange={e=>{set({...values,senderVoen:e.target.value});setVoenState(s=>({...s,[key]:""}))}} onBlur={()=>void lookupVoen(key,values,set)}/></label>
     <label className="field">Göndərən təşkilat<Input value={values.senderName||""} readOnly={fromList||voenState[key]==="missing"} placeholder={voenState[key]==="missing"?"Müştəri kartını yaradın":(values.senderVoen||"").trim()?"VÖEN yoxlanılır...":"VÖEN yoxdursa, adı yazın"} onChange={e=>set({...values,senderName:e.target.value})}/></label>
+    {fromList&&<label className="field">Göndərənin telefonu<Input value={formatPhone(values.senderPhone)||""} readOnly placeholder="Müştəri kartında telefon yoxdur"/><small>Müştəri kartından</small></label>}
     <Field label="Sənədin nömrəsi (göndərənin)" value={values.senderDocNo||""} set={v=>set({...values,senderDocNo:v})}/>
     <Field label="Sənədin tarixi (göndərənin)" type="date" value={values.senderDocDate||""} set={v=>set({...values,senderDocDate:v})}/>
     <label className="field">Sənədin tipi<Input list={`incomingTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`incomingTypeOptions-${chosen}`}>{[...new Set([...types.filter(t=>t.company_id===chosen).map(t=>t.name),...INCOMING_TYPES])].map(t=><option key={t} value={t}/>)}</datalist>{(()=>{const t=types.find(x=>x.company_id===chosen&&x.name.trim().toLocaleLowerCase("az-AZ")===(values.documentType||"").trim().toLocaleLowerCase("az-AZ"));return (values.documentType||"").trim()?<small className="incomingtypehint">{t?.incoming_folder_path?`Skan “${t.incoming_name_pattern||DEFAULT_INCOMING_NAME}” adı ilə ${t.incoming_folder_path} papkasına yazılacaq`:t?"Şablonda daxil olan sənəd papkası yoxdur — skan sistemdə saxlanılacaq":"Bu tip üçün şablon yoxdur — skan sistemdə saxlanılacaq"}</small>:null})()}</label>
@@ -1943,6 +1981,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     <label className="field">Nüsxə<select value={values.copies||""} onChange={e=>set({...values,copies:e.target.value})}><option value="">Seçin</option>{["1","2","3","4","5"].map(o=><option key={o} value={o}>{o}</option>)}</select></label>
     <Field label="Əlavə qeydlər" value={values.note||""} set={v=>set({...values,note:v})}/>
     {relatedPicker(values,set,chosen)}
+    {informedPicker(values,set,chosen)}
     {customerCard(key,values,set)}
   </>};
   const directRow=(item:IncomingDocument)=>{
@@ -1974,12 +2013,12 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     {key:"incomingNo",label:"Daxil olma No",width:110,search:i=>i.incoming_no,render:i=><b>{i.incoming_no}</b>},
     {key:"company",label:"Firma",width:150,search:i=>i.company_name||"",render:i=><>{i.company_name||"—"}</>},
     {key:"incomingDate",label:"Daxil olma tarixi",width:110,search:i=>formatDateOnly(i.incoming_date),render:i=><>{formatDateOnly(i.incoming_date)}</>},
-    {key:"sender",label:"Göndərən",width:180,search:i=>`${i.sender_name||""} ${i.sender_voen||""}`,render:i=><>{i.sender_name||"—"}{i.sender_voen&&<small className="requestsub">VÖEN: {i.sender_voen}</small>}</>},
+    {key:"sender",label:"Göndərən",width:180,search:i=>`${i.sender_name||""} ${i.sender_voen||""}`,render:i=><>{i.sender_name||"—"}{i.sender_voen&&<small className="requestsub">VÖEN: {i.sender_voen}</small>}{i.sender_phone&&<small className="requestsub">Tel: {formatPhone(i.sender_phone)}</small>}</>},
     {key:"senderDoc",label:"Sənədin № və tarixi",width:140,search:i=>`${i.sender_doc_no||""} ${formatDateOnly(i.sender_doc_date)}`,render:i=><>{i.sender_doc_no||"—"}{i.sender_doc_date&&<small className="requestsub">{formatDateOnly(i.sender_doc_date)}</small>}</>},
     {key:"documentType",label:"Sənədin tipi",width:130,search:i=>i.document_type||"",render:i=><>{i.document_type||"—"}</>},
     {key:"receiveMethod",label:"Daxil olma yolu",width:120,search:i=>i.receive_method||"",render:i=><>{i.receive_method||"—"}</>},
     {key:"summary",label:"Qısa məzmun",width:200,search:i=>i.summary||"",render:i=><>{i.summary||"—"}</>},
-    {key:"related",label:"Aidiyyatı şöbələr",width:170,search:i=>i.related_departments.join(", "),values:i=>i.related_departments,render:i=>i.related_departments.length?<>{i.related_departments.map(d=><div key={d} className="incomingdept"><b>{d}</b></div>)}</>:<span className="nodocument">—</span>},
+    {key:"related",label:"Aidiyyatı şöbələr",width:170,search:i=>i.related_departments.join(", "),values:i=>i.related_departments,render:i=>i.related_departments.length||(i.informed_departments||[]).length?<>{i.related_departments.map(d=><div key={d} className="incomingdept"><b>{d}</b></div>)}{(i.informed_departments||[]).map(d=><div key={"m-"+d} className="incomingdept">{d}<small className="requestsub">məlumat üçün</small></div>)}</>:<span className="nodocument">—</span>},
     {key:"status",label:"Status",width:140,search:i=>i.status,render:i=><><span className={`tablestatus ${incomingStatusTone(i.status)}`}>{i.status}</span>{i.status==="Rəhbər tanış olub"&&i.director_seen_by&&<small className="requestsub">{i.director_seen_by}</small>}{i.status==="Rəhbərdə"&&i.sent_to_director_by&&<small className="requestsub">Göndərən: {i.sent_to_director_by}</small>}</>},
     {key:"departments",label:"Tapşırıqlar",width:210,search:i=>i.assignments.map(a=>`${a.department} ${a.head_name||""}`).join(" "),render:i=>i.assignments.length?<>{i.assignments.map((a,n)=><div key={n} className="incomingdept"><b>{a.head_name||"—"}</b><small className="requestsub">{a.department}{a.task_status?` • ${a.task_status==="Təsdiqlənib"?"icra olundu":a.task_status}`:" • tapşırıq silinib"}</small></div>)}{i.due_date&&<small className="requestsub">Müddət: {formatDateOnly(i.due_date)}</small>}{i.status.startsWith("İcradadır")&&<LateDays due={i.due_date?`${i.due_date}T23:59:59`:null}/>}</>:<span className="nodocument">—</span>},
     {key:"requests",label:"Sorğular",width:180,search:i=>i.requests.map(r=>`${r.from_department||""} ${r.to_department} ${r.status}`).join(" "),render:i=>i.requests.length?<>{i.requests.map(r=><div key={r.id} className="incomingdept"><b>{r.from_department||"—"} → {r.to_department}</b><small className="requestsub">№{r.id} • {r.status}</small></div>)}</>:<span className="nodocument">—</span>},
@@ -1999,7 +2038,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const act=async(item:IncomingDocument,payload:Record<string,unknown>,message:string)=>{setBusy(true);setError("");setNotice("");try{await send("PATCH",{...payload,id:item.id});setNotice(`Sənəd №${item.incoming_no}: ${message}`)}catch(e){setError(e instanceof Error?e.message:"Təsdiq qeyd olunmadı.")}finally{setBusy(false)}};
   const colSpan=order.length+1;
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Daxil olan sənədlər</h2><p>{canRegister?(activeCompanyId?`${companyName(activeCompanyId)} — daxil olan sənədlərin qeydiyyatı`:"Qeydiyyat: Ümumi şöbə · baxış və tapşırıq: rəhbər · icra: aidiyyatı şöbələr"):"Şöbənizə aid və sizə tapşırılan daxil olan sənədlər"}</p></div>{canRegister&&<Button onClick={()=>{setCreating(v=>!v);setVoenState(s=>({...s,new:""}));setForm({relatedDepartments:"[]"})}}><Plus/>Yeni sənəd</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Daxil olan sənədlər</h2><p>{canRegister?(activeCompanyId?`${companyName(activeCompanyId)} — daxil olan sənədlərin qeydiyyatı`:"Qeydiyyat: Ümumi şöbə · baxış və tapşırıq: rəhbər · icra: aidiyyatı şöbələr"):"Rəhbəri olduğunuz şöbələrə aid və sizə tapşırılan daxil olan sənədlər"}</p></div>{canRegister&&<Button onClick={()=>{setCreating(v=>!v);setVoenState(s=>({...s,new:""}));setForm({relatedDepartments:"[]"})}}><Plus/>Yeni sənəd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow outgoingrow">{formFields("new",form,setForm,true)}<label className="field filefield">Sənədin skanı (istəyə bağlı — sonra cədvəldən də yükləmək olar)<Input type="file" onChange={e=>setNewFile(e.target.files?.[0]||null)}/>{newFile&&<small>{newFile.name} • {formatFileSize(newFile.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setNewFile(null)}}>Ləğv et</button><Button disabled={busy} onClick={()=>void create()}>{busy?"Qeydə alınır...":"Qeydə al"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {notice&&<div className="docnotice">{notice}</div>}

@@ -1,7 +1,7 @@
 import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, recordApproval, updateOutgoingDocument } from "@/db/catalog";
 
 // Çıxan sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
-// (db/catalog.ts, outgoingRights) — department members and the director see their documents without the permission.
+// (db/catalog.ts, outgoingRights) — department heads, the responsible person and the director see theirs without the permission.
 import { requireUser } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
