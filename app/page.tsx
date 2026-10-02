@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { TERMINATION_REASONS } from "@/lib/hr-calc";
 import { ORDER_TEMPLATE_TOKENS } from "@/lib/hr-orders";
 import { ActionsHeader, ColGroup, SortableTh, joinClass, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
-import { Bell, Briefcase, Maximize2, Minimize2, Minus, Volume2, VolumeX, Settings, ChevronDown, ChevronLeft, ChevronRight, Building2, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
+import { BookOpen, Bell, Briefcase, Maximize2, Minimize2, Minus, Volume2, VolumeX, Settings, ChevronDown, ChevronLeft, ChevronRight, Building2, ClipboardList, Download, Eye, EyeOff, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { HrPage, type HrSection } from "@/components/hr/hr-page";
 import { OrdersPage } from "@/components/hr/orders-page";
 import { DocumentsOverview, HrOverview, SectionOverview } from "@/components/section-overview";
+import { GuidesPage } from "@/components/guides";
 import { ACTIONS, ACTION_LABELS, LEVELED_SECTIONS, actionKey, deniedFromStored, parseStoredPermissions, storedFromDenied, type SectionAction } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
 import { MONTH_NAMES, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, formatBakuDate, monthlyKey, overdueDays, periodState, periodWindow, weeksOfMonth } from "@/lib/fixed-periods";
@@ -27,7 +28,7 @@ type WorkCompletion = { work_assignment_id:number; period_key:string; completed_
 type Data = { employees:Employee[]; companies:Company[]; tasks:Task[]; recurring:Recurring[]; workItems:WorkItem[]; workAssignments:WorkAssignment[]; workCompletions:WorkCompletion[]; dateRequests:DateRequest[] };
 type AppUser = { id:number; name:string; email:string; role:"admin"|"employee"; employeeId:number|null; active?:number; mustChangePassword?:boolean; backgroundKey?:string|null; avatarKey?:string|null };
 type ManagedUser = { id:number; name:string; email:string; role:string; employee_id:number|null; active:number; must_change_password:number };
-type Page = "dashboard"|"settings"|"tasks"|"requests"|"chat"|"employees"|"companies"|"customers"|"audit"|"documents"|"hr";
+type Page = "dashboard"|"settings"|"tasks"|"requests"|"chat"|"employees"|"companies"|"customers"|"audit"|"documents"|"hr"|"guides";
 type AuditItem = { id:number; actor_name:string; action:string; target_type:string; target_label:string|null; created_at:string };
 type Violation = { id:number; employee_id:number; employee_name:string; company_id:number|null; company_name:string|null; title:string; note:string|null; created_by_name:string|null; created_at:string };
 type EmployeeCompanyPosition = { company_id:number; position_id:number|null; position_title:string|null };
@@ -222,7 +223,7 @@ export default function Home(){
   useEffect(()=>{if(!user)return;try{const raw=localStorage.getItem(`seenOverdue:${user.id}`);setSeenOverdue(raw?JSON.parse(raw):[])}catch{setSeenOverdue([])}},[user]);
   useEffect(()=>{if(!user||(!notifOpen&&page!=="tasks"))return;const ids=overdue.map(t=>t.id);if(ids.every(id=>seenOverdue.includes(id)))return;const next=Array.from(new Set([...seenOverdue,...ids]));setSeenOverdue(next);try{localStorage.setItem(`seenOverdue:${user.id}`,JSON.stringify(next))}catch{}},[user,notifOpen,page,overdue,seenOverdue]);
   const activeEmployees=data.employees.filter(e=>Boolean(e.active));
-  const title:Record<Page,string>={dashboard:"Ana səhifə",settings:"Tənzimləmələr",tasks:"Tapşırıqlar",requests:"Sorğular",chat:"Çat",employees:"İstifadəçilər",companies:"Firmalar",customers:"Müştərilər",audit:"Əməliyyat jurnalı",documents:"Sənədlər",hr:"Kadrlar"};
+  const title:Record<Page,string>={dashboard:"Ana səhifə",settings:"Tənzimləmələr",tasks:"Tapşırıqlar",requests:"Sorğular",chat:"Çat",employees:"İstifadəçilər",companies:"Firmalar",customers:"Müştərilər",audit:"Əməliyyat jurnalı",documents:"Sənədlər",hr:"Kadrlar",guides:"Təlimatlar"};
   // "← Geri" (Versiya 2.69): every sub-section leads back to its parent's overview (Tənzimləmələr since 2.71).
   const subTitle=page==="tasks"?(taskSubTab==="overview"?null:taskSubTab==="monthly"?"Aylıq sabit işlər":taskSubTab==="weekly"?"Həftəlik sabit işlər":tasksSection==="mine"?"Şəxsi işlərim":"Verilən tapşırıqlar")
     :page==="documents"?({overview:null,templates:"Şablonlar",outgoing:"Çıxan sənədlər",incoming:"Daxil olan sənədlər"} as Record<string,string|null>)[documentSubTab]
@@ -234,7 +235,7 @@ export default function Home(){
     :page==="documents"&&documentSubTab!=="overview"?{label:"Sənədlər",go:()=>setDocumentSubTab("overview")}
     :page==="hr"&&hrSubTab!=="overview"?{label:"Kadrlar",go:()=>setHrSubTab("overview")}
     :null;
-  const nav:[Page,string,React.ComponentType][]=[["dashboard","Ana səhifə",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","Kadrlar",Briefcase],["settings","Tənzimləmələr",Settings]];
+  const nav:[Page,string,React.ComponentType][]=[["dashboard","Ana səhifə",LayoutDashboard],["tasks","Tapşırıqlar",ClipboardList],["documents","Sənədlər",FileText],["hr","Kadrlar",Briefcase],["guides","Təlimatlar",BookOpen],["settings","Tənzimləmələr",Settings]];
   const open=(kind:typeof dialog,initial:Record<string,string>={})=>{setForm(initial);setDialog(kind)};
   const pageAllowed=page==="customers"?can("dashboard.customers"):page==="requests"?can("tasks.requests"):page==="chat"?can("chat"):page==="hr"?hrSubTab==="overview"?Boolean(firstHrTab):can(hrSubTab==="violations"?"hr.violations":hrSubTab==="orders"?"hr.orders":"hr.personnel")
     :page==="documents"?(documentSubTab==="overview"?Boolean(firstDocumentTab)||can("dashboard.customers"):documentSubTab==="templates"?can(`documents.${documentSubTab}`):canDocument(documentSubTab)):page==="tasks"?(taskSubTab==="overview"?true:taskSubTab==="tasks"?tasksSection==="manager"||can("tasks.mine"):can(`tasks.${taskSubTab}`)):true;
@@ -247,9 +248,9 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.77</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.78</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
-      <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
+      <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
         if(id==="settings"){
           const inSettings=page==="settings"||page==="companies"||page==="employees"||page==="audit";
@@ -306,6 +307,9 @@ export default function Home(){
         {page==="companies"&&<CompaniesPage companies={data.companies} tasks={data.tasks} onNew={()=>open("company")} onEdit={c=>open("company",{id:String(c.id),name:c.name,voen:c.voen||"",manager:c.manager||""})} onToggle={c=>void request("PATCH",{action:"company",id:c.id,active:!Boolean(c.active)})}/>}
         {pageAllowed&&page==="customers"&&<CustomersPage isAdmin={isAdmin} canSeePersonnel={can("hr.personnel")} rights={{add:can("dashboard.customers:add"),edit:can("dashboard.customers:edit"),remove:can("dashboard.customers:delete")}}/>}
         {page==="audit"&&<AuditPage/>}
+        {page==="guides"&&<GuidesPage ctx={{isAdmin:isAdmin&&!viewAs,viewEmployeeId:viewAs?.id??null,
+          sections:{"tasks.fixed":can("tasks.monthly")||can("tasks.weekly"),"documents.incoming":canDocument("incoming"),"documents.outgoing":canDocument("outgoing"),"documents.templates":canTemplates},
+          rights:{"documents.incoming":can("documents.incoming"),"documents.outgoing":can("documents.outgoing")}}}/>}
         {pageAllowed&&page==="documents"&&<>
         {documentSubTab==="overview"&&<DocumentsOverview showCustomers={can("dashboard.customers")} onOpenCustomers={()=>setPage("customers")} openOverdue={filter=>{setOutgoingPreset(p=>({...filter,nonce:(p?.nonce??0)+1}));setDocumentSubTab("outgoing")}} showTemplates={canTemplates} showOutgoing={canDocument("outgoing")} showIncoming={canDocument("incoming")} activeCompanyId={companyScopeActive?activeCompanyId:null} open={tab=>setDocumentSubTab(tab)}/>}
         {documentSubTab==="templates"&&canTemplates&&<DocumentsPage isAdmin={isAdmin} companies={data.companies.filter(c=>Boolean(c.active))}/>}
