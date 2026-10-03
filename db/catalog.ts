@@ -1464,6 +1464,13 @@ const returnDays = (value: unknown) => { const n = Math.round(Number(value)); re
 export async function getDocumentTemplates(user?: SessionUser) {
   await ensureSchema();
   const rows = (await db().prepare("SELECT t.*, c.name AS company_name FROM document_templates t LEFT JOIN companies c ON c.id = t.company_id ORDER BY t.name").all<Record<string, unknown>>()).results;
+  // Versiya 2.83: a folder that is not (or no longer) on the server is flagged, so the admin picks it again.
+  const missing = (value: unknown) => Boolean(value && folderStore && !folderStore.isDir(String(value)));
+  for (const row of rows) {
+    row.draft_folder_missing = missing(row.draft_folder_path);
+    row.final_folder_missing = missing(row.final_folder_path);
+    row.incoming_folder_missing = missing(row.incoming_folder_path);
+  }
   const scope = user ? await outgoingCompanyScope(user) : null;
   return scope ? rows.filter((row) => scope.includes(Number(row.company_id))) : rows;
 }
@@ -1480,7 +1487,7 @@ export async function createDocumentTemplate(input: TemplateInput) {
   const inserted = await db().prepare(`INSERT INTO document_templates
     (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, signed_copy_returns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, input.draftFolderPath?.trim() || null, input.finalFolderPath?.trim() || null, input.fileNamePattern?.trim() || null, input.incomingFolderPath?.trim() || null, input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
+    .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, templateFolder(input.draftFolderPath, null), templateFolder(input.finalFolderPath, null), input.fileNamePattern?.trim() || null, templateFolder(input.incomingFolderPath, null), input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
   await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ?, signed_copy_days = ?, departments = ? WHERE id = ?").bind(companyId, group, yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), await templateDepartments(companyId, group, input.departments), Number(inserted.meta.last_row_id)).run();
 }
 
@@ -1506,10 +1513,10 @@ export async function updateDocumentTemplate(input: TemplateInput & { id: number
       input.template3Name ?? current.template3_name,
       input.template3Size ?? current.template3_size,
       input.template3Type ?? current.template3_type,
-      input.draftFolderPath !== undefined ? input.draftFolderPath.trim() || null : current.draft_folder_path,
-      input.finalFolderPath !== undefined ? input.finalFolderPath.trim() || null : current.final_folder_path,
+      input.draftFolderPath !== undefined ? templateFolder(input.draftFolderPath, current.draft_folder_path) : current.draft_folder_path,
+      input.finalFolderPath !== undefined ? templateFolder(input.finalFolderPath, current.final_folder_path) : current.final_folder_path,
       input.fileNamePattern !== undefined ? input.fileNamePattern.trim() || null : current.file_name_pattern,
-      input.incomingFolderPath !== undefined ? input.incomingFolderPath.trim() || null : current.incoming_folder_path,
+      input.incomingFolderPath !== undefined ? templateFolder(input.incomingFolderPath, current.incoming_folder_path) : current.incoming_folder_path,
       input.incomingNamePattern !== undefined ? input.incomingNamePattern.trim() || null : current.incoming_name_pattern,
       yesNo(input.signedCopyReturns) ?? current.signed_copy_returns ?? 1,
       input.id,
@@ -1762,19 +1769,17 @@ export async function deleteOutgoingDocument(user: SessionUser, id: number) {
   for (const key of [current?.draft_key, current?.final_key]) if (key && env.FILES) await env.FILES.delete(key);
 }
 
-const DOCUMENTS_ROOT_KEY = "documents_root";
-
-export async function getDocumentStorage() {
-  await ensureSchema();
-  const row = await db().prepare("SELECT value FROM app_settings WHERE key = ?").bind(DOCUMENTS_ROOT_KEY).first<{ value: string | null }>();
-  return { root: row?.value || "", folderSaving: Boolean(folderStore) };
+// Versiya 2.83: no common root folder any more — each template keeps the full path of a folder the admin picked on the server.
+export function getDocumentStorage() {
+  return { folderSaving: Boolean(folderStore) };
 }
 
-export async function setDocumentRoot(value: string) {
-  await ensureSchema();
-  const root = value.trim();
-  if (root && !folderStore) throw new Error("Papkaya yazmaq yalnız proqram öz serverdə işləyəndə mümkündür.");
-  await db().prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(DOCUMENTS_ROOT_KEY, root || null).run();
+// The folder picker of Şablonlar (admin only): the server's drives, or the sub-folders of one folder.
+export function browseServerFolders(dir: string) {
+  if (!folderStore) throw new Error("Papka seçmək yalnız proqram öz serverdə işləyəndə mümkündür.");
+  const wanted = dir.trim();
+  if (!wanted) return { path: "", parent: null, dirs: folderStore.roots() };
+  return folderStore.listDirs(wanted);
 }
 
 export const DEFAULT_FILE_NAME_PATTERN = "{ÇıxışNo}_{SənədTipi}_{Təşkilat}_{Tarix}";
@@ -1790,12 +1795,12 @@ function cleanPart(value: string) {
   return value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim();
 }
 
-function fillPattern(pattern: string, values: Record<string, string>, keepSeparators: boolean) {
+function fillPattern(pattern: string, values: Record<string, string>) {
   const byKey = Object.fromEntries(Object.entries(values).map(([name, value]) => [tokenKey(name), cleanPart(value)]));
   return pattern.split(/(\{[^{}]+\})/).map((part) => {
     const token = part.match(/^\{([^{}]+)\}$/);
     if (token) return byKey[tokenKey(token[1])] ?? part;
-    return keepSeparators ? part.replace(/[*?"<>|\u0000-\u001f]/g, "-") : cleanPart(part);
+    return cleanPart(part);
   }).join("");
 }
 
@@ -1823,20 +1828,29 @@ function documentValues(record: Record<string, unknown>) {
 
 const BLOCKED_DOCUMENT_EXTENSIONS = /\.(exe|bat|cmd|com|msi|scr|ps1|vbs|vbe|js|jse|wsf|wsh|jar|apk|dll|sh|bin|app|cpl|reg|hta|lnk)$/i;
 
-// Writes an uploaded document under `baseName` into the folder the template gives (a full path that must lie inside the allowed root), or — where no
-// folder can be written — into the FILES bucket. The file it replaces is removed only after the new one is safely written.
-async function storeDocumentFile(input: { baseName: string; fileName: string; contentType: string; data: Uint8Array; folderRule: string; values: Record<string, string>; oldPath: string | null; oldKey: string | null; missingRuleNote: string }) {
+// A template's folder: the full path the admin picked on the server. Checked only when it changes, so an old path does not block other edits.
+function templateFolder(value: string | undefined, current: unknown) {
+  const folder = (value ?? "").trim();
+  if (!folder || folder === String(current ?? "")) return folder || null;
+  if (folder.includes("{")) throw new Error("Papka yolunda dəyişən ({...}) ola bilməz — serverdə yaradılmış papkanı seçin.");
+  if (folderStore && !folderStore.isDir(folder)) throw new Error(`Papka serverdə tapılmadı: ${folder}`);
+  return folder;
+}
+
+// Writes an uploaded document under `baseName` into the folder the template gives (a folder the admin made on the server), or — where no
+// folder is set or can be written — into the FILES bucket. The file it replaces is removed only after the new one is safely written.
+async function storeDocumentFile(input: { baseName: string; fileName: string; contentType: string; data: Uint8Array; folderRule: string; oldPath: string | null; oldKey: string | null; missingRuleNote: string }) {
   if (BLOCKED_DOCUMENT_EXTENSIONS.test(input.fileName)) throw new Error("Bu fayl növünə icazə verilmir.");
   const extMatch = input.fileName.match(/\.[A-Za-z0-9]{1,10}$/);
   const ext = extMatch ? extMatch[0].toLowerCase() : "";
-  const { root } = await getDocumentStorage();
-  const folderRule = input.folderRule.trim();
+  const dir = input.folderRule.trim();
   let path: string | null = null;
   let key: string | null = null;
   let name: string;
   let note = "";
-  if (folderStore && root && folderRule) {
-    const dir = folderStore.resolveDir(root, fillPattern(folderRule, input.values, true));
+  if (folderStore && dir) {
+    // The app never creates folders: a folder removed or renamed on the server stops the upload instead of landing the file elsewhere.
+    if (!folderStore.isDir(dir)) throw new Error(`Şablondakı papka serverdə tapılmadı: ${dir} — adminə müraciət edin.`);
     path = await folderStore.saveUnique(dir, input.baseName, ext, input.data, input.oldPath);
     name = folderStore.baseName(path);
   } else {
@@ -1844,7 +1858,7 @@ async function storeDocumentFile(input: { baseName: string; fileName: string; co
     name = `${input.baseName}${ext}`;
     key = `${crypto.randomUUID()}-${name.replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
     await env.FILES.put(key, input.data, { httpMetadata: { contentType: input.contentType || "application/octet-stream" }, customMetadata: { originalName: name } });
-    note = !folderStore ? "Sənəd sistemdə saxlanıldı (papkaya yazmaq yalnız öz serverdə işləyir)." : !root ? "İcazə verilən kök papka təyin edilməyib (Şablonlar) — sənəd sistemdə saxlanıldı." : input.missingRuleNote;
+    note = !folderStore ? "Sənəd sistemdə saxlanıldı (papkaya yazmaq yalnız öz serverdə işləyir)." : input.missingRuleNote;
   }
   if (input.oldPath && input.oldPath !== path && folderStore) await folderStore.remove(input.oldPath);
   if (input.oldKey && env.FILES) await env.FILES.delete(input.oldKey);
@@ -1882,9 +1896,9 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
     ? await findTemplate(record.company_id, "outgoing", record.document_type)
     : null;
   // The name is worked out once, on the first upload, and reused for the signed copy — so the Word file and the signed file always match.
-  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(String(template?.file_name_pattern || DEFAULT_FILE_NAME_PATTERN), values, false)) || `Sənəd-${values.ÇıxışNo}`;
+  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(String(template?.file_name_pattern || DEFAULT_FILE_NAME_PATTERN), values)) || `Sənəd-${values.ÇıxışNo}`;
   const saved = await storeDocumentFile({
-    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data, values,
+    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data,
     folderRule: String(template?.[kind === "draft" ? "draft_folder_path" : "final_folder_path"] || ""),
     oldPath: record[`${kind}_path`] ? String(record[`${kind}_path`]) : null,
     oldKey: record[`${kind}_key`] ? String(record[`${kind}_key`]) : null,
@@ -2387,9 +2401,9 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
   const template = record.document_type
     ? await findTemplate<{ incoming_folder_path: string | null; incoming_name_pattern: string | null }>(record.company_id, "incoming", record.document_type)
     : null;
-  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(template?.incoming_name_pattern || DEFAULT_INCOMING_NAME, values, false)) || `Daxil-olan-${values.DaxilOlmaNo}`;
+  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(template?.incoming_name_pattern || DEFAULT_INCOMING_NAME, values)) || `Daxil-olan-${values.DaxilOlmaNo}`;
   const saved = await storeDocumentFile({
-    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data, values, folderRule: template?.incoming_folder_path || "",
+    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data, folderRule: template?.incoming_folder_path || "",
     oldPath: record.file_path ? String(record.file_path) : null, oldKey: record.file_key ? String(record.file_key) : null,
     missingRuleNote: template ? "Şablonda daxil olan sənəd papkası göstərilməyib — sənəd sistemdə saxlanıldı." : "Bu sənəd tipi üçün şablon yoxdur — sənəd sistemdə saxlanıldı.",
   });

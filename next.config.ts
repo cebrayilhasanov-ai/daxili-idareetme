@@ -12,6 +12,11 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const runtimeLocalPath = path.resolve(dirname, "lib/runtime.local.ts");
 
 const nextConfig: NextConfig = {
+  // Type-check against the same local runtime (tsconfig.local.json maps `@/lib/runtime` to it and leaves out the
+  // Cloudflare-only files); against lib/runtime.ts every database result would be untyped.
+  typescript: {
+    tsconfigPath: "tsconfig.local.json",
+  },
   turbopack: {
     resolveAlias: {
       "@/lib/runtime": "./lib/runtime.local.ts",

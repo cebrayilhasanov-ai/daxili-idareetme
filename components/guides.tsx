@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -223,7 +223,8 @@ const GUIDES: Guide[] = [
         ] },
         { list: [
           "Daxil olma No avtomatik verilir (firma üzrə ardıcıl); onu yalnız admin dəyişə bilər.",
-          "Skan şablondakı qaydaya görə adlandırılıb şablonun papkasına yazılır; şablon və ya papka yoxdursa, sistemdə saxlanılır.",
+          "Skan şablondakı qaydaya görə adlandırılıb şablonda seçilmiş papkaya yazılır; şablon yoxdursa və ya papka seçilməyibsə, sistemdə saxlanılır.",
+          "Şablondakı papka serverdə tapılmasa (silinib və ya adı dəyişib), skan yüklənmir — adminə müraciət edin.",
           "Şöbələrdən biri təsdiq verəndən sonra sənədi dəyişmək və silmək yalnız adminə qalır. Tapşırıq və ya sorğusu olan sənədi də yalnız admin silir.",
           "Hüquqlarınız Giriş icazələrindən gəlir: Baxış, Əlavə et (qeydiyyat və skanı olmayana skan yükləmək), Dəyişiklik et, Sil.",
         ] },
@@ -283,14 +284,15 @@ const GUIDES: Guide[] = [
         { steps: [
           "“Yeni sənəd” basın (bir neçə firmanız varsa, firmanı seçin).",
           "Sənədin tipini seçin — siyahıda yalnız həmin firmanın “Çıxan sənəd” şablonları olur. Şablonun faylları “Şablondan istifadə et” panelində yüklənir.",
-          "Əlaqəli şöbə(lər): şablonda göstərilibsə, avtomatik yazılır və dəyişdirilmir; yoxdursa, özünüz seçin (birinci seçilən — əsas şöbə, papka və fayl adındakı {Şöbə}).",
+          "Əlaqəli şöbə(lər): şablonda göstərilibsə, avtomatik yazılır və dəyişdirilmir; yoxdursa, özünüz seçin (birinci seçilən — əsas şöbə, fayl adındakı {Şöbə}).",
           "İstəsəniz, “Məlumatlandırılan şöbə(lər)” seçin.",
           "VÖEN-i yazın — təşkilatın adı və telefonu müştəri kartından gəlir (VÖEN müştəri siyahısında olmalıdır).",
           "Göndərilmə şəklini, nüsxə sayını, sənədin tarixini, məsul şəxsi seçin. “İmzalı nüsxə geri qaytarılır” şablondan gəlir, bu sənəd üçün dəyişmək olar.",
           "İstəsəniz, yazılmış sənədi (Word) elə burada yükləyin və “Əlavə et” basın.",
         ] },
         { list: [
-          "İlkin sənəd (Word) və Hazır sənəd (imzalı və ya sürəti) şablondakı ad qaydası ilə adlandırılıb şablonun papkalarına yazılır; papka yoxdursa, sistemdə saxlanılır. İkisi eyni adı daşıyır.",
+          "İlkin sənəd (Word) və Hazır sənəd (imzalı və ya sürəti) şablondakı ad qaydası ilə adlandırılıb şablonda seçilmiş papkalara yazılır; papka seçilməyibsə, sistemdə saxlanılır. İkisi eyni adı daşıyır.",
+          "Şablondakı papka serverdə tapılmasa (silinib və ya adı dəyişib), fayl yüklənmir — adminə müraciət edin.",
           "Fayl papkada əl ilə köçürülüb və ya silinibsə, cədvəldə “Fayl papkada tapılmadı” görünür.",
           "Şöbələrdən biri təsdiq verəndən sonra sənədi dəyişmək və silmək yalnız adminə qalır; hazır (imzalı) sənədi yüklənmiş sənədi də yalnız admin silir.",
         ] },
@@ -318,9 +320,25 @@ const GUIDES: Guide[] = [
         ] },
         { list: [
           "Aidiyyatı şöbələr firmanın strukturundan seçilir; birinci — əsas şöbə. Göstərilibsə, bu tipli sənəd qeydə alınanda şöbələr avtomatik yazılır və qeydiyyatçı dəyişə bilmir.",
-          "Papka yolu “İcazə verilən kök papka”nın içində olmalıdır; dəyişənlər: {ÇıxışNo}, {DaxilOlmaNo}, {SənədNo}, {SənədTipi}, {Təşkilat}, {VÖEN}, {Firma}, {Şöbə}, {Tarix}, {İl}, {Ay}.",
+          "Ad qaydasının dəyişənləri: {ÇıxışNo}, {DaxilOlmaNo}, {SənədNo}, {SənədTipi}, {Təşkilat}, {VÖEN}, {Firma}, {Şöbə}, {Tarix}, {İl}, {Ay}.",
           "“Kopyala” şablonu faylları, papkaları və qaydaları ilə başqa firmaya və ya qrupa köçürür. Hədəf firmada olmayan şöbələr köçmür — bu barədə xəbər verilir.",
           "“✕ Faylı sil” yanlış seçilmiş faylı “Yadda saxla” ilə silir (fayl başqa şablonda istifadə olunmursa, yaddaşdan da).",
+        ] },
+      ] },
+      { audience: "admin", title: "Papkaların seçilməsi", blocks: [
+        { steps: [
+          "Əvvəlcə papkanı serverdə özünüz yaradın (məs. Arsenal → Sənədlər → Müqavilə) — proqram papka yaratmır.",
+          "Şablonun papka sahəsində “Papka seç” basın: serverin diskləri açılır.",
+          "Diskə, sonra içindəki papkalara basaraq lazım olan papkaya keçin; “⬆ Yuxarı” bir pillə geri, “Disklər” əvvələ qaytarır.",
+          "Lazım olan papkada “Bu papkanı seç”, sonra şablonda “Yadda saxla” basın.",
+        ] },
+        { list: [
+          "Hər papka ayrıca seçilir: Çıxan sənəd üçün ilkin sənəd papkası (Word), hazır sənəd papkası (imzalı nüsxə), Daxil olan sənəd üçün papka (skan).",
+          "Şəbəkə papkasını (\\\\server\\paylaşım) pəncərənin yuxarısındakı sahəyə yazıb “Aç” basın, sonra oradan davam edin.",
+          "Papka yolunda dəyişən ({İl}, {Firma} və s.) olmur — dəyişənlər yalnız ad qaydasındadır.",
+          "“✕” seçilmiş papkanı götürür; papka seçilməyibsə, sənəd sistemdə saxlanılır.",
+          "Seçilmiş papka sonradan serverdən silinsə və ya adı dəyişsə, cədvəldə ⚠ görünür və bu tipli sənədin faylı yüklənmir — papkanı yenidən seçin.",
+          "Papka seçmək yalnız proqram öz serverdə işləyəndə mümkündür.",
         ] },
       ] },
     ],

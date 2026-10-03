@@ -1,4 +1,4 @@
-import { copyDocumentTemplate, createDocumentTemplate, deleteDocumentTemplate, getDocumentStorage, getDocumentTemplates, setDocumentRoot, updateDocumentTemplate } from "@/db/catalog";
+import { browseServerFolders, copyDocumentTemplate, createDocumentTemplate, deleteDocumentTemplate, getDocumentStorage, getDocumentTemplates, updateDocumentTemplate } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -16,7 +16,13 @@ export async function GET(request: Request) {
     // Şablonlar is admin-only; employees read the list only through Çıxan sənədlər (to download a template while writing),
     // and only the templates of the firms they work in.
     if (user.role !== "admin") await requireSection(user, "documents.outgoing");
-    return Response.json({ items: await getDocumentTemplates(user), storage: user.role === "admin" ? await getDocumentStorage() : undefined });
+    // Versiya 2.83: the folder picker of Şablonlar — only the admin may look at the server's folders.
+    const url = new URL(request.url);
+    if (url.searchParams.has("folders")) {
+      if (user.role !== "admin") throw new Error("FORBIDDEN");
+      return Response.json(browseServerFolders(url.searchParams.get("folders") || ""));
+    }
+    return Response.json({ items: await getDocumentTemplates(user), storage: user.role === "admin" ? getDocumentStorage() : undefined });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
@@ -34,11 +40,6 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser(request, "admin");
     const body = await request.json();
-    if (body.action === "storage") {
-      await setDocumentRoot(String(body.root || ""));
-      await logAudit(user, "Sənədlərin kök papkası dəyişdirildi", "document", String(body.root || "—"));
-      return Response.json({ items: await getDocumentTemplates(), storage: await getDocumentStorage() });
-    }
     if (body.action === "copy") {
       const copied = await copyDocumentTemplate({ id: Number(body.id), companyId: body.companyId, templateGroup: body.templateGroup, name: body.name });
       await logAudit(user, "Sənəd şablonu kopyalandı", "document", `#${body.id} → #${copied.id}`);

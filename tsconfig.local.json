@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/lib/runtime": ["./lib/runtime.local.ts"],
+      "@/*": ["./*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "worker", "examples", "db/index.ts", "lib/runtime.ts", "lib/notify.ts"]
+}

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { FolderStore } from "@/lib/folder-store";
 
@@ -86,6 +86,8 @@ const filesShim = {
         },
       }),
       size: buf.length,
+      // Like an R2 object: copying an attachment reads it whole.
+      arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
       httpMetadata: { contentType: meta.contentType },
       customMetadata: { originalName: meta.originalName },
       writeHttpMetadata: (headers: Headers) => {
@@ -110,15 +112,27 @@ export const env = {
 };
 
 export const folderStore: FolderStore = {
-  resolveDir(root, folder) {
-    const base = path.resolve(root);
-    const target = path.resolve(base, folder);
-    const rel = path.relative(base, target);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) throw new Error(`Şablondakı papka (${target}) icazə verilən kök papkadan (${base}) kənardadır.`);
-    return target;
+  isDir(dir) {
+    if (!dir || !path.isAbsolute(dir)) return false;
+    try { return statSync(dir).isDirectory(); } catch { return false; }
+  },
+  roots() {
+    if (process.platform !== "win32") return ["/"];
+    return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => `${letter}:\\`).filter((drive) => existsSync(drive));
+  },
+  listDirs(dir) {
+    if (!folderStore.isDir(dir)) throw new Error("Papka serverdə tapılmadı.");
+    const full = path.resolve(dir);
+    let entries;
+    try { entries = readdirSync(full, { withFileTypes: true }); } catch { throw new Error("Bu papkanı oxumağa icazə yoxdur."); }
+    const dirs = entries
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("$") && !entry.name.startsWith(".") && entry.name !== "System Volume Information")
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b, "az"));
+    const parent = path.dirname(full);
+    return { path: full, parent: parent === full ? null : parent, dirs };
   },
   async saveUnique(dir, baseName, ext, data, ownPath) {
-    mkdirSync(dir, { recursive: true });
     const own = ownPath ? path.resolve(ownPath).toLowerCase() : null;
     for (let n = 1; ; n++) {
       const candidate = path.join(dir, `${baseName}${n > 1 ? ` (${n})` : ""}${ext}`);

@@ -59,4 +59,4 @@ next-env.d.ts
 /img*.png
 
 # TypeScript incremental build cache
-tsconfig.tsbuildinfo
+*.tsbuildinfo

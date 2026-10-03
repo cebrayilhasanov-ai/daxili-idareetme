@@ -43,7 +43,7 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
     LEFT JOIN employees oe ON oe.id=other.employee_id
     WHERE m.user_id=? ORDER BY CASE WHEN t.id=? THEN 0 ELSE 1 END,last_message_at DESC,t.id DESC`)
     .bind(user.id, user.id, user.id, generalId).all();
-  const totalUnread = threads.results.reduce((sum, item: any) => sum + Number(item.unread || 0), 0);
+  const totalUnread = threads.results.reduce((sum: number, item: any) => sum + Number(item.unread || 0), 0);
   if (summaryOnly) {
     // The newest message waiting for this user (Versiya 2.73): the page shows a notification and plays a sound for it.
     const latest = totalUnread ? await env.DB.prepare(`SELECT msg.id, msg.thread_id, msg.body, msg.attachment_key, u.name AS sender_name, COALESCE(e.avatar_key,u.avatar_key) AS sender_avatar_key

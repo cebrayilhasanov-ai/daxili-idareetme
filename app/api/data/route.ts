@@ -13,7 +13,7 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   // Versiya 2.82: the tasks this user gave (handed-on steps, the director's dərkənar) that wait for their approval.
   const given = await tasksGivenBy(user);
   const approvals = data.tasks.filter((item: any) => given.has(Number(item.id)) && item.status === "Təqdim edilib");
-  const ownCompanyIds = new Set((data.employees.find((item: any) => item.id === user.employeeId)?.company_ids || "").split(",").filter(Boolean).map(Number));
+  const ownCompanyIds = new Set(((data.employees.find((item: any) => item.id === user.employeeId) as { company_ids?: string } | undefined)?.company_ids || "").split(",").filter(Boolean).map(Number));
   return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && frequencyVisible(item.frequency)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
 }
 

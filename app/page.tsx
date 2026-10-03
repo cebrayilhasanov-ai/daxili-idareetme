@@ -48,7 +48,7 @@ type ChecklistLikeItem = StepRequest & { id:number; title:string; done:number; d
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
-type DocumentTemplate = { id:number; name:string; departments?:string|null; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; created_at:string };
+type DocumentTemplate = { id:number; name:string; departments?:string|null; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; draft_folder_missing?:boolean; final_folder_missing?:boolean; incoming_folder_missing?:boolean; created_at:string };
 type OutgoingDocument = { informed_departments?:string[]; return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
 type WorkRequest = { id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { canAdd?:boolean; items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
@@ -250,7 +250,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.82</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.83</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -1383,9 +1383,7 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   const [signedDays,setSignedDays]=useState("");
   const [editSignedDays,setEditSignedDays]=useState("");
   const [editRemove,setEditRemove]=useState<Record<number,boolean>>({});
-  const [storage,setStorage]=useState<{root:string;folderSaving:boolean}|null>(null);
-  const [rootDraft,setRootDraft]=useState("");
-  const [rootBusy,setRootBusy]=useState(false);
+  const [storage,setStorage]=useState<{folderSaving:boolean}|null>(null);
   const [busy,setBusy]=useState(false);
   const [editingId,setEditingId]=useState<number|null>(null);
   const [editName,setEditName]=useState("");
@@ -1399,7 +1397,7 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
   const [editIncomingNamePattern,setEditIncomingNamePattern]=useState("");
   const [editSignedReturn,setEditSignedReturn]=useState("1");
   const [editBusy,setEditBusy]=useState(false);
-  const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[]);setStorage(body.storage||null);setRootDraft(body.storage?.root||"")}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
+  const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/documents");const body=await response.json();if(!response.ok)throw new Error(body.error);setItems(body.items||[]);setStorage(body.storage||null)}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
   const uploadFile=async(file:File)=>{
     if(file.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
@@ -1463,16 +1461,9 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
     }catch(e){setError(e instanceof Error?e.message:"Şablon kopyalanmadı.")}
     finally{setCopyBusy(false)}
   };
-  const saveRoot=async()=>{
-    setRootBusy(true);setError("");
-    try{
-      const response=await fetch("/api/documents",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"storage",root:rootDraft})});
-      const result=await response.json();
-      if(!response.ok)throw new Error(result.error);
-      setStorage(result.storage||null);setRootDraft(result.storage?.root||"");
-    }catch(e){setError(e instanceof Error?e.message:"Kök papka yadda saxlanılmadı.")}
-    finally{setRootBusy(false)}
-  };
+  // Versiya 2.83: a template folder is picked on the server; one no longer there is marked ⚠ so the admin picks it again.
+  const folderCell=(value:string|null,missing?:boolean)=>value?<span className={joinClass("folderpath",missing?"foldermissing":undefined)} title={missing?`Papka serverdə tapılmadı — yenidən seçin: ${value}`:value}>{missing&&"⚠ "}{value}</span>:<span className="nodocument">Qeyd edilməyib</span>;
+  const folderField=(key:string,label:string,value:string,set:(v:string)=>void)=><FolderField key={key} label={label} value={value} set={set} canPick={Boolean(storage?.folderSaving)}/>;
   const templateLink=(key:string|null,name:string|null,size:number|null)=>key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(key)}`}>{name}<small>{formatFileSize(size||0)}</small></a>:<span className="nodocument">Yoxdur</span>;
   const templateLabel=(n:number)=><span className="templatelabel">Sənədin şablonu<br/>{n}</span>;
   const documentColumns:Array<{key:string;label:string;width:number;search:(item:DocumentTemplate)=>string;render:(item:DocumentTemplate)=>React.ReactNode}>=[
@@ -1483,9 +1474,9 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
     {key:"template1",label:"Sənədin şablonu 1",width:220,search:item=>item.template1_name||"Yoxdur",render:item=>templateLink(item.template1_key,item.template1_name,item.template1_size)},
     {key:"template2",label:"Sənədin şablonu 2",width:220,search:item=>item.template2_name||"Yoxdur",render:item=>templateLink(item.template2_key,item.template2_name,item.template2_size)},
     {key:"template3",label:"Sənədin şablonu 3",width:220,search:item=>item.template3_name||"Yoxdur",render:item=>templateLink(item.template3_key,item.template3_name,item.template3_size)},
-    {key:"draftFolder",label:"Çıxan sənəd üçün ilkin sənəd papkası",width:220,search:item=>item.draft_folder_path||"Qeyd edilməyib",render:item=>item.draft_folder_path?<span className="folderpath" title={item.draft_folder_path}>{item.draft_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
-    {key:"finalFolder",label:"Çıxan sənəd üçün hazır sənəd papkası",width:220,search:item=>item.final_folder_path||"Qeyd edilməyib",render:item=>item.final_folder_path?<span className="folderpath" title={item.final_folder_path}>{item.final_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
-    {key:"incomingFolder",label:"Daxil olan sənəd üçün hazır sənəd papkası",width:230,search:item=>item.incoming_folder_path||"Qeyd edilməyib",render:item=>item.incoming_folder_path?<span className="folderpath" title={item.incoming_folder_path}>{item.incoming_folder_path}</span>:<span className="nodocument">Qeyd edilməyib</span>},
+    {key:"draftFolder",label:"Çıxan sənəd üçün ilkin sənəd papkası",width:220,search:item=>item.draft_folder_path||"Qeyd edilməyib",render:item=>folderCell(item.draft_folder_path,item.draft_folder_missing)},
+    {key:"finalFolder",label:"Çıxan sənəd üçün hazır sənəd papkası",width:220,search:item=>item.final_folder_path||"Qeyd edilməyib",render:item=>folderCell(item.final_folder_path,item.final_folder_missing)},
+    {key:"incomingFolder",label:"Daxil olan sənəd üçün hazır sənəd papkası",width:230,search:item=>item.incoming_folder_path||"Qeyd edilməyib",render:item=>folderCell(item.incoming_folder_path,item.incoming_folder_missing)},
     {key:"incomingNamePattern",label:"Daxil olan sənəd üçün adlanma qaydası",width:230,search:item=>item.incoming_name_pattern||DEFAULT_INCOMING_NAME,render:item=>item.incoming_name_pattern?<span className="folderpath">{item.incoming_name_pattern}</span>:<span className="nodocument" title="Qayda yazılmayıb — standart qayda işlədilir">{DEFAULT_INCOMING_NAME}</span>},
   ];
   // Only the columns (and form fields) of the group being looked at.
@@ -1508,9 +1499,9 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)}<Input type="file" onChange={e=>setFile1(e.target.files?.[0]||null)}/>{file1&&<small>{file1.name} • {formatFileSize(file1.size)}</small>}{group==="other_order"&&<small>Əmrin mətni bu Word (.docx) faylından oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)}<Input type="file" onChange={e=>setFile2(e.target.files?.[0]||null)}/>{file2&&<small>{file2.name} • {formatFileSize(file2.size)}</small>}</label>,
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)}<Input type="file" onChange={e=>setFile3(e.target.files?.[0]||null)}/>{file3&&<small>{file3.name} • {formatFileSize(file3.size)}</small>}</label>,
-    draftFolder:()=><Field key="draftFolder" label="Çıxan sənəd üçün ilkin sənəd papkası" value={draftFolderPath} set={setDraftFolderPath}/>,
-    finalFolder:()=><Field key="finalFolder" label="Çıxan sənəd üçün hazır sənəd papkası" value={finalFolderPath} set={setFinalFolderPath}/>,
-    incomingFolder:()=><Field key="incomingFolder" label="Daxil olan sənəd üçün hazır sənəd papkası" value={incomingFolderPath} set={setIncomingFolderPath}/>,
+    draftFolder:()=>folderField("draftFolder","Çıxan sənəd üçün ilkin sənəd papkası",draftFolderPath,setDraftFolderPath),
+    finalFolder:()=>folderField("finalFolder","Çıxan sənəd üçün hazır sənəd papkası",finalFolderPath,setFinalFolderPath),
+    incomingFolder:()=>folderField("incomingFolder","Daxil olan sənəd üçün hazır sənəd papkası",incomingFolderPath,setIncomingFolderPath),
     incomingNamePattern:()=><label className="field" key="incomingNamePattern">Daxil olan sənəd üçün adlanma qaydası<Input value={incomingNamePattern} placeholder={DEFAULT_INCOMING_NAME} onChange={e=>setIncomingNamePattern(e.target.value)}/></label>,
   };
   const editFieldRenderers=(item:DocumentTemplate):Record<string,()=>React.ReactNode>=>({
@@ -1521,17 +1512,16 @@ function DocumentsPage({isAdmin,companies}:{isAdmin:boolean;companies:Company[]}
     template1:()=><label className="field filefield" key="template1">{templateLabel(1)} (əvəz etmək üçün seçin){item.template1_name&&<small className={editRemove[1]?"templateremoved":undefined}>Hazırkı: {item.template1_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,1:!r[1]}))}}>{editRemove[1]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[1]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile1(e.target.files?.[0]||null)}/>{editFile1&&<small>{editFile1.name} • {formatFileSize(editFile1.size)}</small>}{group==="other_order"&&<small>Əmrin mətni bu Word (.docx) faylından oxunur. Yer tutucular: {ORDER_TEMPLATE_TOKENS.map(t=>"{"+t+"}").join(" ")}</small>}</label>,
     template2:()=><label className="field filefield" key="template2">{templateLabel(2)} (əvəz etmək üçün seçin){item.template2_name&&<small className={editRemove[2]?"templateremoved":undefined}>Hazırkı: {item.template2_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,2:!r[2]}))}}>{editRemove[2]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[2]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile2(e.target.files?.[0]||null)}/>{editFile2&&<small>{editFile2.name} • {formatFileSize(editFile2.size)}</small>}</label>,
     template3:()=><label className="field filefield" key="template3">{templateLabel(3)} (əvəz etmək üçün seçin){item.template3_name&&<small className={editRemove[3]?"templateremoved":undefined}>Hazırkı: {item.template3_name} <button type="button" className="templateremove" onClick={e=>{e.preventDefault();setEditRemove(r=>({...r,3:!r[3]}))}}>{editRemove[3]?"Geri al":"✕ Faylı sil"}</button></small>}{editRemove[3]&&<small className="templateremovenote">“Saxla” basılanda fayl silinəcək.</small>}<Input type="file" onChange={e=>setEditFile3(e.target.files?.[0]||null)}/>{editFile3&&<small>{editFile3.name} • {formatFileSize(editFile3.size)}</small>}</label>,
-    draftFolder:()=><Field key="draftFolder" label="Çıxan sənəd üçün ilkin sənəd papkası" value={editDraftFolderPath} set={setEditDraftFolderPath}/>,
-    finalFolder:()=><Field key="finalFolder" label="Çıxan sənəd üçün hazır sənəd papkası" value={editFinalFolderPath} set={setEditFinalFolderPath}/>,
-    incomingFolder:()=><Field key="incomingFolder" label="Daxil olan sənəd üçün hazır sənəd papkası" value={editIncomingFolderPath} set={setEditIncomingFolderPath}/>,
+    draftFolder:()=>folderField("draftFolder","Çıxan sənəd üçün ilkin sənəd papkası",editDraftFolderPath,setEditDraftFolderPath),
+    finalFolder:()=>folderField("finalFolder","Çıxan sənəd üçün hazır sənəd papkası",editFinalFolderPath,setEditFinalFolderPath),
+    incomingFolder:()=>folderField("incomingFolder","Daxil olan sənəd üçün hazır sənəd papkası",editIncomingFolderPath,setEditIncomingFolderPath),
     incomingNamePattern:()=><label className="field" key="incomingNamePattern">Daxil olan sənəd üçün adlanma qaydası<Input value={editIncomingNamePattern} placeholder={DEFAULT_INCOMING_NAME} onChange={e=>setEditIncomingNamePattern(e.target.value)}/></label>,
   });
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Sənədlər</h2><p>Sənəd adları və şablonları — hər firmanın öz şablonları</p></div>{isAdmin&&firmId>0&&<Button onClick={()=>{setCreating(v=>!v);setNotice("")}}><Plus/>Yeni sənəd</Button>}</div>
     {isAdmin&&storage&&<div className="docstoragebar">
-      <div className="docstoragerow"><label className="field">İcazə verilən kök papka (qorunma)<Input value={rootDraft} placeholder={storage.folderSaving?"Məsələn: D:\\Sənədlər":"Yalnız öz serverdə işləyəndə"} disabled={!storage.folderSaving} onChange={e=>setRootDraft(e.target.value)}/></label>{storage.folderSaving&&<Button disabled={rootBusy||rootDraft.trim()===storage.root} onClick={()=>void saveRoot()}>{rootBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button>}</div>
-      <p>{!storage.folderSaving?"Proqram hazırda buludda işləyir — sənədlər qaydaya uyğun adla sistemdə saxlanılır. Papkaya yazmaq proqram öz serverdə işləyəndə aktiv olur.":storage.root?`Şablonlarda papkanın tam yolunu yazın (məs. ${storage.root}\\{Firma}\\{İl}\\İlkin). Sistem yalnız bu kök papkanın içinə yazır — yol ondan kənara çıxarsa, fayl yazılmır və xəbərdarlıq verilir.`:"Kök papka təyin edilməyib — proqramın yaza biləcəyi sahəni göstərin (məs. D:\\Sənədlər). Təyin edilənə qədər sənədlər sistemdə saxlanılır."}</p>
-      <p className="doctokens">Qayda dəyişənləri: {DOCUMENT_TOKENS.map(t=><code key={t}>{"{"+t+"}"}</code>)}</p>
+      <p>{storage.folderSaving?"Papkanı “Papka seç” ilə serverdən seçin: diski açın, içindəki papkalara keçin və lazım olanda “Bu papkanı seç” basın. Papkaları serverdə admin özü yaradır — proqram papka yaratmır. Seçilmiş papka sonradan serverdən silinsə və ya adı dəyişsə, cədvəldə ⚠ görünür və sənəd yüklənmir — papkanı yenidən seçin.":"Proqram hazırda buludda işləyir — sənədlər qaydaya uyğun adla sistemdə saxlanılır. Papkaya yazmaq proqram öz serverdə işləyəndə aktiv olur."}</p>
+      <p className="doctokens">Ad qaydasının dəyişənləri: {DOCUMENT_TOKENS.map(t=><code key={t}>{"{"+t+"}"}</code>)}</p>
     </div>}
     {companies.length>0&&<div className="templatescope"><label className="field">Firma<select value={firmId||""} onChange={e=>setCompanyId(Number(e.target.value))}>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div className="fixedsubtabs">{TEMPLATE_GROUP_TABS.map(g=>{const n=items.filter(t=>Number(t.company_id)===firmId&&templateGroupOf(t)===g.key).length;return <button key={g.key} className={group===g.key?"on":""} onClick={()=>setGroup(g.key)}>{g.label} ({n})</button>})}</div></div>}
     {!companies.length&&!loading&&<div className="errorbox">Aktiv firma yoxdur — şablon firmaya aid olur, əvvəlcə Tənzimləmələr → Firmalar bölməsində firma əlavə edin.</div>}
@@ -2436,6 +2426,38 @@ function WorkHistory({events,title="İşin tarixçəsi"}:{events:WorkHistoryEven
 }
 function FormShell({title,desc,children,formClass=""}:{title:string;desc:string;children:React.ReactNode;formClass?:string}){return <><DialogHeader className="businessdialogheader"><span className="formeyebrow">DAXİLİ İDARƏETMƏ</span><DialogTitle>{title}</DialogTitle><DialogDescription>{desc}</DialogDescription></DialogHeader><div className={`form businessform ${formClass}`}>{children}</div></>}
 function Field({label,value,set,type="text"}:{label:string;value:string;set:(v:string)=>void;type?:string}){return <label className="field">{label}<Input type={type} value={value} onChange={e=>set(e.target.value)}/></label>}
+// Versiya 2.83: a template's folder is not typed — the admin picks a folder that exists on the server.
+function FolderField({label,value,set,canPick}:{label:string;value:string;set:(v:string)=>void;canPick:boolean}){
+  const [open,setOpen]=useState(false);
+  return <div className="field folderfield">{label}<div className="folderfieldrow"><Input value={value} readOnly title={value} placeholder={canPick?"Papka seçilməyib":"Yalnız öz serverdə işləyəndə"}/>{canPick&&<Button type="button" variant="outline" onClick={()=>setOpen(true)}>Papka seç</Button>}{value&&<button type="button" className="folderclear" title="Papkanı götür" aria-label="Papkanı götür" onClick={()=>set("")}><X/></button>}</div>{open&&<FolderPicker start={value} onClose={()=>setOpen(false)} onPick={picked=>{set(picked);setOpen(false)}}/>}</div>;
+}
+function FolderPicker({start,onClose,onPick}:{start:string;onClose:()=>void;onPick:(path:string)=>void}){
+  const [view,setView]=useState<{path:string;parent:string|null;dirs:string[]}|null>(null);
+  const [typed,setTyped]=useState(start);
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+  const go=async(dir:string)=>{
+    setLoading(true);setError("");
+    try{
+      const response=await fetch(`/api/documents?folders=${encodeURIComponent(dir)}`);
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.error||"Papka açılmadı.");
+      setView(body);setTyped(body.path);return true;
+    }catch(e){setError(e instanceof Error?e.message:"Papka açılmadı.");return false}
+    finally{setLoading(false)}
+  };
+  // Opens at the folder already chosen; if it is gone, at the server's drives.
+  useEffect(()=>{void (async()=>{if(!start||!(await go(start)))await go("")})()},[]);// eslint-disable-line react-hooks/exhaustive-deps
+  const child=(name:string)=>!view?.path?name:/[\\/]$/.test(view.path)?view.path+name:`${view.path}${view.path.includes("\\")?"\\":"/"}${name}`;
+  return <Dialog open onOpenChange={v=>!v&&onClose()}><DialogContent className="businessdialog folderpicker">
+    <DialogHeader><DialogTitle>Papka seç</DialogTitle><DialogDescription>Serverdəki papkalar: açmaq üçün papkanın adına basın, lazım olan papkada “Bu papkanı seç” basın.</DialogDescription></DialogHeader>
+    <div className="folderpickerpath"><Input value={typed} placeholder="Disk seçin və ya yolu yazın (məs. \\server\paylaşım)" onChange={e=>setTyped(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void go(typed)}}/><Button type="button" variant="outline" disabled={loading} onClick={()=>void go(typed)}>Aç</Button></div>
+    <div className="folderpickernav"><button type="button" disabled={loading||!view?.path} onClick={()=>void go("")}>Disklər</button><button type="button" disabled={loading||!view?.path} onClick={()=>void go(view?.parent||"")}>⬆ Yuxarı</button></div>
+    {error&&<div className="errorbox">{error}</div>}
+    <div className="folderpickerlist">{loading?<span className="nodocument">Açılır...</span>:view&&(view.dirs.length?view.dirs.map(d=><button type="button" key={d} onClick={()=>void go(child(d))}>📁 {d}</button>):<span className="nodocument">{view.path?"Bu papkanın içində başqa papka yoxdur.":"Disk tapılmadı."}</span>)}</div>
+    <div className="folderpickerfoot"><small>{view?.path?<>Seçiləcək: <b>{view.path}</b></>:"Əvvəlcə diski açın."}</small><div className="inlineactions"><button type="button" className="inlinecancel" onClick={onClose}>Ləğv et</button><Button type="button" disabled={loading||!view?.path} onClick={()=>view?.path&&onPick(view.path)}>Bu papkanı seç</Button></div></div>
+  </DialogContent></Dialog>;
+}
 function DateTimeField({label,value,set}:{label:string;value:string;set:(v:string)=>void}){
   const match=value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
   const preview=match?`${match[3]}.${match[2]}.${match[1]} ${match[4]}:${match[5]}`:"";
