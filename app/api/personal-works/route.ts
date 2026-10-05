@@ -1,4 +1,4 @@
-import { createPersonalWork, deletePersonalWork, getPersonalWorks, updatePersonalWork, updatePersonalWorkStatus } from "@/db/catalog";
+import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPersonalWorks, updatePersonalWork, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
@@ -10,7 +10,7 @@ function authError(error: unknown) {
   return null;
 }
 
-// Everyone — admin included — only sees their own created works. The one exception is an
+// "Mənim işlərim": everyone — admin included — only sees their own created works. The one exception is an
 // admin actively using "Personal görünüşü" (view as): they then see that specific employee's
 // own list, via the linked login account, never anyone else's.
 async function scopeUserId(user: Awaited<ReturnType<typeof requireUser>>, request: Request) {
@@ -21,9 +21,18 @@ async function scopeUserId(user: Awaited<ReturnType<typeof requireUser>>, reques
   return account?.id ?? -1;
 }
 
+// "Əməkdaşlarımın işləri" (Versiya 2.85): the works of the viewer's staff; for an admin in "view as", that employee's staff.
+async function teamViewer(user: Awaited<ReturnType<typeof requireUser>>, request: Request) {
+  const employeeId = Number(new URL(request.url).searchParams.get("employeeId"));
+  if (user.role !== "admin" || !employeeId) return { userId: user.id, employeeId: user.employeeId, isAdmin: user.role === "admin" };
+  const account = await env.DB.prepare("SELECT id FROM app_users WHERE employee_id = ?").bind(employeeId).first<{ id: number }>();
+  return { userId: account?.id ?? -1, employeeId, isAdmin: false };
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "tasks.mine");
+    if (new URL(request.url).searchParams.get("scope") === "team") return Response.json(await getTeamPersonalWorks(await teamViewer(user, request)));
     const items = await getPersonalWorks(await scopeUserId(user, request));
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }

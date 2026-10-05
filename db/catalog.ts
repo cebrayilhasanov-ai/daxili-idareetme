@@ -935,7 +935,8 @@ export type DelegateCandidate = { id: number; name: string; position_title: stri
 // walk down from the owner's position; a position held by someone yields those people, a vacant one is skipped
 // and its own subordinates are offered instead (e.g. no "şöbə müdiri" on staff → the director sees that department's staff).
 // ownerEmployeeId = null (the admin account, which has no personnel record) keeps the old behaviour: everyone in the company.
-export async function getDelegateCandidates(companyId: number | null, ownerEmployeeId: number | null): Promise<DelegateCandidate[]> {
+// deep = true walks the whole subtree (everyone below, not only the nearest filled level) — used to show a head their staff's works.
+export async function getDelegateCandidates(companyId: number | null, ownerEmployeeId: number | null, deep = false): Promise<DelegateCandidate[]> {
   await ensureSchema();
   if (!companyId) return [];
   const members = (await db().prepare(`SELECT e.id, e.name, ec.position_id, p.title AS position_title
@@ -962,8 +963,8 @@ export async function getDelegateCandidates(companyId: number | null, ownerEmplo
     if (visited.has(position.id)) continue;
     visited.add(position.id);
     const holders = members.filter((m) => m.position_id === position.id && m.id !== ownerEmployeeId);
-    if (holders.length) holders.forEach((m) => result.set(m.id, toCandidate(m)));
-    else queue.push(...positions.filter((p) => !visited.has(p.id) && reportsTo(p, position)));
+    holders.forEach((m) => result.set(m.id, toCandidate(m)));
+    if (deep || !holders.length) queue.push(...positions.filter((p) => !visited.has(p.id) && reportsTo(p, position)));
   }
   return [...result.values()].sort((a, b) => a.name.localeCompare(b.name, "az"));
 }
@@ -1024,15 +1025,71 @@ export async function setChecklistItemAttachment(input: { id: number; attachment
   return getChecklistItems(item.task_id);
 }
 
-export async function getPersonalWorks(userId: number | null) {
-  await ensureSchema();
-  const base = `SELECT personal_works.*, app_users.name AS owner_name, companies.name AS company_name
+const PERSONAL_WORKS_SQL = `SELECT personal_works.*, app_users.name AS owner_name, app_users.employee_id AS owner_employee_id, companies.name AS company_name
     FROM personal_works
     JOIN app_users ON app_users.id = personal_works.user_id
     LEFT JOIN companies ON companies.id = personal_works.company_id`;
+
+export async function getPersonalWorks(userId: number | null) {
+  await ensureSchema();
   const works = userId
-    ? (await db().prepare(`${base} WHERE personal_works.user_id = ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(userId).all<Record<string, unknown> & { id: number }>()).results
-    : (await db().prepare(`${base} ORDER BY personal_works.created_at DESC, personal_works.id DESC`).all<Record<string, unknown> & { id: number }>()).results;
+    ? (await db().prepare(`${PERSONAL_WORKS_SQL} WHERE personal_works.user_id = ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(userId).all<Record<string, unknown> & { id: number }>()).results
+    : (await db().prepare(`${PERSONAL_WORKS_SQL} ORDER BY personal_works.created_at DESC, personal_works.id DESC`).all<Record<string, unknown> & { id: number }>()).results;
+  return withPersonalWorkProgress(works);
+}
+
+// Versiya 2.85: a head sees the personal works of everyone below them in the firm's structure (read-only, with notes).
+// Per firm: the employees under the viewer's position(s), the whole subtree — so the director sees the whole firm.
+export type PersonalWorkViewer = { userId: number; employeeId: number | null; isAdmin: boolean };
+async function subordinatesByCompany(employeeId: number) {
+  const companies = (await db().prepare("SELECT company_id FROM employee_companies WHERE employee_id = ? AND position_id IS NOT NULL").bind(employeeId).all<{ company_id: number }>()).results;
+  const result = new Map<number, Set<number>>();
+  for (const { company_id } of companies) {
+    const people = await getDelegateCandidates(company_id, employeeId, true);
+    if (people.length) result.set(company_id, new Set(people.map((p) => p.id)));
+  }
+  return result;
+}
+// A work tied to a firm is seen by the owner's heads in that firm; a work without a firm by their heads in any firm.
+function supervises(subordinates: Map<number, Set<number>>, work: Record<string, unknown>) {
+  const owner = Number(work.owner_employee_id);
+  if (!owner) return false;
+  if (work.company_id) return Boolean(subordinates.get(Number(work.company_id))?.has(owner));
+  return [...subordinates.values()].some((people) => people.has(owner));
+}
+
+export async function getTeamPersonalWorks(viewer: PersonalWorkViewer) {
+  await ensureSchema();
+  const all = (await db().prepare(`${PERSONAL_WORKS_SQL} WHERE personal_works.user_id != ? ORDER BY personal_works.created_at DESC, personal_works.id DESC`).bind(viewer.userId).all<Record<string, unknown> & { id: number }>()).results;
+  if (viewer.isAdmin) return { hasTeam: true, items: await withPersonalWorkProgress(all) };
+  if (!viewer.employeeId) return { hasTeam: false, items: [] };
+  const subordinates = await subordinatesByCompany(viewer.employeeId);
+  if (!subordinates.size) return { hasTeam: false, items: [] };
+  return { hasTeam: true, items: await withPersonalWorkProgress(all.filter((work) => supervises(subordinates, work))) };
+}
+
+// The owner and the admin may open a work; a head may look at (and write notes on) the works of their staff.
+export async function personalWorkAccess(viewer: PersonalWorkViewer, personalWorkId: number): Promise<"owner" | "supervisor" | null> {
+  await ensureSchema();
+  const work = await db().prepare("SELECT personal_works.user_id, personal_works.company_id, app_users.employee_id AS owner_employee_id FROM personal_works JOIN app_users ON app_users.id = personal_works.user_id WHERE personal_works.id = ?")
+    .bind(personalWorkId).first<{ user_id: number; company_id: number | null; owner_employee_id: number | null }>();
+  if (!work) return null;
+  if (work.user_id === viewer.userId) return "owner";
+  if (viewer.isAdmin) return "supervisor";
+  if (!viewer.employeeId) return null;
+  return supervises(await subordinatesByCompany(viewer.employeeId), work) ? "supervisor" : null;
+}
+
+export async function addPersonalWorkNote(input: { personalWorkId: number; actorName: string; text: string }) {
+  await ensureSchema();
+  const text = input.text.trim();
+  if (!text) throw new Error("Qeydi yazın.");
+  if (text.length > 2000) throw new Error("Qeyd 2000 simvoldan uzun ola bilməz.");
+  await db().prepare("INSERT INTO personal_work_events (personal_work_id, actor_name, action, detail, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(input.personalWorkId, input.actorName, "Rəhbərin qeydi", text, new Date().toISOString()).run();
+}
+
+async function withPersonalWorkProgress(works: Array<Record<string, unknown> & { id: number }>) {
   // Who each work's steps were handed to, and how many of that person's steps are done (a step is checked once its task is approved).
   const delegations = (await db().prepare(`SELECT items.personal_work_id AS work_id, employees.id AS employee_id, employees.name AS name, items.done AS done
     FROM personal_work_checklist_items AS items

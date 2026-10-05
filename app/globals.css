@@ -840,3 +840,5 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .folderpickerlist{display:flex;flex-direction:column;margin-top:10px;max-height:320px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:9px;padding:4px}
 .folderpickerlist button{padding:7px 10px;border-radius:6px;text-align:left;font-size:13px;overflow-wrap:anywhere}.folderpickerlist button:hover{background:#eef6fb}.folderpickerlist .nodocument{padding:10px}
 .folderpickerfoot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:12px}.folderpickerfoot small{color:#475569;overflow-wrap:anywhere}
+/* Versiya 2.85: a head's note on a staff member's personal work */
+.worknote{display:grid;gap:8px;margin-top:12px;padding:14px 16px;border:1px solid #bfdbfe;border-top:4px solid #3b82f6;border-radius:12px;background:linear-gradient(180deg,#fff,#f5f9ff)}.worknote small{color:#64748b;font-size:11px}.worknote textarea{min-height:72px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;font-size:13px;resize:vertical;background:#fff}.worknote .inlineactions{justify-content:flex-end}

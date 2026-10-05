@@ -1,4 +1,4 @@
-import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
+import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, personalWorkAccess, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
@@ -21,7 +21,11 @@ export async function GET(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     const personalWorkId = Number(new URL(request.url).searchParams.get("personalWorkId"));
-    await assertAccess(user, personalWorkId);
+    // Versiya 2.85: a head may look at a staff member's steps (read-only) — no hand-over candidates or request targets for them.
+    if (!personalWorkId) throw new Error("İş seçilməyib.");
+    const access = await personalWorkAccess({ userId: user.id, employeeId: user.employeeId, isAdmin: user.role === "admin" }, personalWorkId);
+    if (!access) throw new Error("FORBIDDEN");
+    if (access === "supervisor" && user.role !== "admin") return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: [], canRequest: false, requestDepartments: [], ownDepartment: null });
     // A step can be sent to another department only by someone who may add Sorğular.
     const canRequest = (await sectionRights(user, "tasks.requests")).add;
     const targets = canRequest ? await getPersonalWorkRequestTargets(personalWorkId, user.employeeId) : { departments: [], ownDepartment: null };

@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -85,7 +85,7 @@ const GUIDES: Guide[] = [
   },
   {
     id: "personal", group: "Tapşırıqlar", title: "Şəxsi işlərim", path: "Tapşırıqlar → Şəxsi işlərim", section: "tasks.mine",
-    intro: "Özünüz üçün yazdığınız işlər və onların iş axını (addımlar). Addımı tabeliyinizdəki əməkdaşa həvalə edə və ya başqa şöbəyə sorğu kimi göndərə bilərsiniz. İşləri yalnız siz (və admin) görürsünüz.",
+    intro: "Özünüz üçün yazdığınız işlər və onların iş axını (addımlar). Addımı tabeliyinizdəki əməkdaşa həvalə edə və ya başqa şöbəyə sorğu kimi göndərə bilərsiniz. İşlərinizi siz, firmanın strukturuna görə rəhbərləriniz (şöbə rəisi, direktor) və admin görür — rəhbər yalnız baxır və qeyd yaza bilər.",
     parts: [
       { audience: "all", title: "İşin gedişi", blocks: [
         { steps: [
@@ -96,8 +96,9 @@ const GUIDES: Guide[] = [
         ] },
         { list: [
           "Yalnız “Yeni” statuslu iş silinir; tamamlanmış iş redaktə olunmur və ona addım əlavə olunmur.",
-          "“Aç” pəncərəsində işin tarixçəsi var: yaradılma, addımlar, həvalələr, sorğular, təsdiqlər.",
+          "“Aç” pəncərəsində işin tarixçəsi var: yaradılma, addımlar, həvalələr, sorğular, təsdiqlər, rəhbərin qeydləri.",
         ] },
+        { note: "İşləriniz rəhbərlərinizə görünür. Rəhbər işi dəyişə, silə və ya addımlara ✓ qoya bilməz; yazdığı qeyd işin tarixçəsində “Rəhbərin qeydi” kimi çıxır." },
       ] },
       { audience: "all", title: "Addımı başqasına vermək", blocks: [
         { list: [
@@ -105,6 +106,18 @@ const GUIDES: Guide[] = [
           "“Şöbəyə sorğu” — addım işin firmasının başqa şöbəsinə sorğu kimi gedir (Sorğular). İş icrada olmalı və firması seçilməlidir. Addımın faylı sorğuya da gedir.",
           "Sorğu açıq olduğu müddətdə addımı silmək, həvalə etmək və ya yenidən göndərmək olmur. Cavabı təsdiqləyəndə addımın ✓-u avtomatik qoyulur.",
         ] },
+      ] },
+      { audience: "head", title: "Əməkdaşlarımın işləri", blocks: [
+        { p: "Tabeliyinizdə əməkdaş varsa, Şəxsi işlərimin yuxarısında tablar görünür: “Mənim işlərim” və “Əməkdaşlarımın işləri”." },
+        { list: [
+          "Kimi görürsünüz — firmanın strukturuna görə sizdən aşağıda olan hər kəsi: şöbə rəisi öz şöbəsini, direktor bütün firmanı.",
+          "Firması seçilmiş iş həmin firmadakı rəhbərlərə görünür; firması olmayan iş — əməkdaşın istənilən firmadakı rəhbərinə.",
+          "Cədvəldə “Əməkdaş” sütunu var; süzgəclər “Mənim işlərim”dəki kimidir.",
+          "“Gecikənlər” tabı (sayğacla) son tarixi keçmiş, hələ tamamlanmamış işləri göstərir.",
+          "“Aç” ilə işin addımlarına, fayllarına və tarixçəsinə baxırsınız. İşi dəyişmək, silmək, addıma ✓ qoymaq olmur.",
+          "Pəncərənin altında “Rəhbərin qeydi” yazıb “Qeydi yaz” basın — qeyd işin tarixçəsinə düşür, əməkdaş onu görür. Qeyd silinmir.",
+        ] },
+        { note: "Əməkdaşa bildiriş getmir — qeydi o, işi açanda tarixçədə görür. Təcili məsələ üçün Çatdan istifadə edin." },
       ] },
     ],
   },
