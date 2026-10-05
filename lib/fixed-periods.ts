@@ -17,7 +17,7 @@ export const DEFAULT_FIXED_START = "2026-10-01";
 export const MONTH_NAMES = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun", "İyul", "Avqust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
 export const WEEKDAY_NAMES = ["Bazar ertəsi", "Çərşənbə axşamı", "Çərşənbə", "Cümə axşamı", "Cümə", "Şənbə", "Bazar"];
 
-// Defaults: a monthly work is due on the 10th of the following month, a weekly one on Friday of its week.
+// Defaults: a monthly work is due on the 10th of the following month, a weekly one on Friday of the following week.
 export function dueDay(rule: FixedWorkRule) { return rule.due_day || (rule.frequency === "weekly" ? 5 : 10); }
 
 export function bakuToday(now = Date.now()) {
@@ -39,8 +39,9 @@ export function weeksOfMonth(year: number, month: number) {
   return weeks;
 }
 
-// When a period can be worked on: a monthly work opens once its month has ended and is due on the given day of the
-// following month (January's work: 1 Feb → 10 Feb). Weekly works open on the Monday. `due` is the end of the deadline day.
+// When a period can be worked on: a period opens once it has ended and is due on the given day of the following period —
+// a monthly work on that day of the next month (January's work: 1 Feb → 10 Feb), a weekly one (since Versiya 2.91) on that
+// weekday of the next week (the week of 6–12 Oct: 13 Oct → Friday 17 Oct). `due` is the end of the deadline day.
 export function periodWindow(rule: FixedWorkRule, key: string): { start: number; due: number } | null {
   const monthly = key.match(/^monthly:(\d{4})-(\d{2})$/);
   if (monthly && rule.frequency === "monthly") {
@@ -51,7 +52,7 @@ export function periodWindow(rule: FixedWorkRule, key: string): { start: number;
   const weekly = key.match(/^weekly:(\d{4})-(\d{2})-(\d{2})$/);
   if (weekly && rule.frequency === "weekly") {
     const year = Number(weekly[1]), month = Number(weekly[2]) - 1, day = Number(weekly[3]);
-    return { start: bakuMidnight(year, month, day), due: bakuMidnight(year, month, day + Math.min(Math.max(dueDay(rule), 1), 7)) };
+    return { start: bakuMidnight(year, month, day + 7), due: bakuMidnight(year, month, day + 7 + Math.min(Math.max(dueDay(rule), 1), 7)) };
   }
   return null;
 }
@@ -63,7 +64,8 @@ export function periodCounts(rule: FixedWorkRule, key: string, scope: PeriodScop
   if (!window) return false;
   const start = /^d{4}-d{2}-d{2}$/.test(String(scope.start || "")) ? String(scope.start) : DEFAULT_FIXED_START;
   const [y, m, d] = start.split("-").map(Number);
-  const periodBegin = rule.frequency === "monthly" ? bakuMidnight(Number(key.slice(8, 12)), Number(key.slice(13, 15)) - 1, 1) : window.start;
+  // The period itself: the first of the month reported on, or the week's Monday (the week opens for work a week later).
+  const periodBegin = rule.frequency === "monthly" ? bakuMidnight(Number(key.slice(8, 12)), Number(key.slice(13, 15)) - 1, 1) : window.start - 7 * DAY_MS;
   if (periodBegin < bakuMidnight(y, m - 1, d)) return false;
   const assigned = scope.assignedAt ? new Date(scope.assignedAt).getTime() : NaN;
   return Number.isNaN(assigned) || assigned < window.start;

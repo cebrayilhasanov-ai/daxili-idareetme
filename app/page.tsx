@@ -262,7 +262,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.90</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.91</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -2384,7 +2384,7 @@ function WorkList({employeeView,tab,frequency,items,assignments,completions,empl
   const dueEditor=(item:WorkItem)=><label className="catalogdue"><select aria-label={`${item.title}: son tarix`} value={dueDay(item)} onChange={e=>onDue(item,Number(e.target.value))}>{item.frequency==="weekly"?WEEKDAY_NAMES.map((name,i)=><option key={name} value={i+1}>{name}</option>):Array.from({length:31},(_,i)=><option key={i+1} value={i+1}>{i+1}</option>)}</select></label>;
   // Versiya 2.90: Excel-like filters on both tables, as in the other tables of the program.
   const assigneeOf=(item:WorkItem,companyId:number)=>assignments.find(a=>a.work_definition_id===item.id&&a.company_id===companyId)?.employee_name||"";
-  const catalogExcelColumns:ExcelColumn<WorkItem>[]=[{key:"title",label:"İşlərin siyahısı",search:i=>i.title},{key:"description",label:"İşin açıqlaması",search:i=>i.description||""},{key:"due",label:frequency==="monthly"?"Son tarix (növbəti ay)":"Son tarix",search:i=>dueLabel(i),sort:i=>dueDay(i)},...shownCompanies.map(c=>({key:`c${c.id}`,label:c.name,search:(i:WorkItem)=>assigneeOf(i,c.id)}))];
+  const catalogExcelColumns:ExcelColumn<WorkItem>[]=[{key:"title",label:"İşlərin siyahısı",search:i=>i.title},{key:"description",label:"İşin açıqlaması",search:i=>i.description||""},{key:"due",label:frequency==="monthly"?"Son tarix (növbəti ay)":"Son tarix (növbəti həftə)",search:i=>dueLabel(i),sort:i=>dueDay(i)},...shownCompanies.map(c=>({key:`c${c.id}`,label:c.name,search:(i:WorkItem)=>assigneeOf(i,c.id)}))];
   const catalogCol=Object.fromEntries(catalogExcelColumns.map(c=>[c.key,c]));
   const catalogExcel=useExcelFilters(`workcatalog-${frequency}`,catalogExcelColumns,filteredCatalogItems.filter(item=>item.frequency===frequency));
   const catalogGroup=(freq:"monthly"|"weekly"|"daily")=>{
@@ -2398,7 +2398,7 @@ function WorkList({employeeView,tab,frequency,items,assignments,completions,empl
   const showCompany=employeeView?new Set(rows.map(r=>r.company_id)).size>1:catalogCompanyFilter==="all";
   const periods=frequency==="monthly"?MONTH_NAMES.map((label,i)=>({key:monthlyKey(year,i),label,col:`m${i}`})):weeksOfMonth(year,month).map((week,i)=>({...week,col:`w${i}`}));
   const periodColumns=colTemplate([["no",48],["title",240],["description",260],...(showCompany?[["company",150] as [string,number]]:[]),...(employeeView?[]:[["user",150] as [string,number]]),["due",frequency==="weekly"?130:90],...periods.map(p=>[p.col,frequency==="monthly"?70:104] as [string,number])],periodWidths);
-  const periodExcelColumns:ExcelColumn<WorkAssignment>[]=[{key:"title",label:"İşlərin siyahısı",search:a=>a.title},{key:"description",label:"İşin açıqlaması",search:a=>a.description||""},{key:"company",label:"Firma",search:a=>a.company_name},{key:"user",label:"İstifadəçi",search:a=>a.employee_name},{key:"due",label:frequency==="monthly"?"Son tarix (növbəti ay)":"Son tarix",search:a=>dueLabel(a),sort:a=>dueDay(a)}];
+  const periodExcelColumns:ExcelColumn<WorkAssignment>[]=[{key:"title",label:"İşlərin siyahısı",search:a=>a.title},{key:"description",label:"İşin açıqlaması",search:a=>a.description||""},{key:"company",label:"Firma",search:a=>a.company_name},{key:"user",label:"İstifadəçi",search:a=>a.employee_name},{key:"due",label:frequency==="monthly"?"Son tarix (növbəti ay)":"Son tarix (növbəti həftə)",search:a=>dueLabel(a),sort:a=>dueDay(a)}];
   const periodCol=Object.fromEntries(periodExcelColumns.map(c=>[c.key,c]));
   const periodExcel=useExcelFilters(`workperiods-${frequency}`,periodExcelColumns,rows);
   const completedAt=new Map(completions.map(c=>[`${c.work_assignment_id}|${c.period_key}`,c.completed_at]));
