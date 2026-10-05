@@ -215,12 +215,14 @@ export default function Home(){
   useEffect(()=>{
     if(!effectiveView){if(activeCompanyId!==null)setActiveCompanyId(null);return}
     let saved:number|null=null;
-    try{const raw=localStorage.getItem(`activeCompany:${effectiveView.id}`);saved=raw?Number(raw):null}catch{saved=null}
-    const next=myCompanies.some(c=>c.id===saved)?saved:(myCompanies[0]?.id??null);
+    let all=false;
+    try{const raw=localStorage.getItem(`activeCompany:${effectiveView.id}`);all=raw==="all";saved=raw&&!all?Number(raw):null}catch{saved=null}
+    // Versiya 2.88: "Bütün firmalar" (null) stays only for someone working in 2+ firms.
+    const next=all&&myCompanies.length>1?null:myCompanies.some(c=>c.id===saved)?saved:(myCompanies[0]?.id??null);
     if(next!==activeCompanyId)setActiveCompanyId(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[effectiveView?.id,myCompanies.map(c=>c.id).join(",")]);
-  const pickCompany=(id:number)=>{setActiveCompanyId(id);if(effectiveView)try{localStorage.setItem(`activeCompany:${effectiveView.id}`,String(id))}catch{}};
+  const pickCompany=(id:number|null)=>{setActiveCompanyId(id);if(effectiveView)try{localStorage.setItem(`activeCompany:${effectiveView.id}`,id===null?"all":String(id))}catch{}};
   const visibleTasks=(effectiveView?data.tasks.filter(t=>t.employee_id===effectiveView.id):data.tasks).filter(t=>!companyScopeActive||!activeCompanyId||t.company_id===activeCompanyId);
   const activeTasks=visibleTasks.filter(t=>t.status!=="Təsdiqlənib");
   const overdue=activeTasks.filter(t=>new Date(t.due_at)<new Date());
@@ -258,8 +260,8 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.87</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
-      {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.88</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
         if(id==="settings"){
@@ -879,7 +881,8 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const excel=useExcelFilters("tasks",taskColumns,tasks);
   const filtered=excel.rows;
   // An employee sees only their own tasks inside one chosen firma, so firma, name and position add nothing there.
-  const shownOrder=order.filter(k=>columnsByKey[k]&&!(employeeView&&["company","employee","position"].includes(k)));
+  const severalFirms=new Set(tasks.map(t=>t.company_id)).size>1;
+  const shownOrder=order.filter(k=>columnsByKey[k]&&!(employeeView&&(k==="company"?!severalFirms:["employee","position"].includes(k))));
   const current=detailTask&&tasks.find(t=>t.id===detailTask.id)||detailTask;
   useEffect(()=>{if(!current){setChecklist([]);setChecklistError("");return}let cancelled=false;setChecklistLoading(true);void fetch(`/api/checklist?taskId=${current.id}`).then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled){setChecklist(body.items||[]);setDelegateCandidates(body.candidates||[])}}).finally(()=>{if(!cancelled)setChecklistLoading(false)});return()=>{cancelled=true}},[current?.id]);
   const reviewDelegated=async(item:ChecklistLikeItem,approve:boolean,score:number,note:string)=>{if(!current)return false;setChecklistError("");try{await reviewHandedOnTask(item,approve,score,note);const response=await fetch(`/api/checklist?taskId=${current.id}`);const body=await response.json();if(response.ok)setChecklist(body.items||[]);return true}catch(e){setChecklistError(e instanceof Error?e.message:"Tapşırıq yenilənmədi.");return false}};
@@ -1678,7 +1681,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse,customerResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents"),fetch("/api/customers")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);setCanRegister(Boolean(outgoingBody.canRegister));const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates((templateBody.items||[]).filter((t:DocumentTemplate)=>templateGroupOf(t)==="outgoing"));const customerBody=await customerResponse.json();if(customerResponse.ok)setCustomers(customerBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   const reloadItems=async()=>{const response=await fetch("/api/documents/outgoing");const body=await response.json();if(response.ok)setItems(body.items||[])};
   useEffect(()=>{void load()},[]);
-  // An employee files documents for the firm picked in the sidebar; the admin (who sees every firm) picks it in the form.
+  // An employee files documents for the firm picked in the sidebar; the admin, or an employee in "Bütün firmalar" (2.88), picks it in the form.
   const companyOf=(values:Record<string,string>)=>Number(values.companyId||activeCompanyId||(companies.length===1?companies[0].id:0))||0;
   const createCompanyId=companyOf(form);
   const editCompanyId=companyOf(editForm);
@@ -1765,7 +1768,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   // Fields the system fills itself — the numbers at creation, Daxil olma No / tarixi when the signed document is uploaded — are left out of the new-document form.
   const autoFilled=new Set(["incomingNo","incomingDate","documentNumber","outgoingNo","draft","final","returnDue"]);
   const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
-    company:(values,set)=>{const chosen=companyOf(values);return isAdmin&&companies.length>1&&!activeCompanyId
+    company:(values,set)=>{const chosen=companyOf(values);return (isAdmin||values===form)&&companies.length>1&&!activeCompanyId
       ?<label className="field" key="company">Firma<select value={chosen||""} onChange={e=>set({...values,companyId:e.target.value,relatedDepartments:"[]"})}><option value="">Seçin</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       :<label className="field" key="company">Firma<Input value={chosen?companyName(chosen):""} readOnly/></label>},
     outgoingDate:(values,set)=><Field key="outgoingDate" label="Çıxış tarixi" type="date" value={values.outgoingDate||""} set={v=>set({...values,outgoingDate:v})}/>,
@@ -2202,9 +2205,10 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const pending={incoming:scoped.filter(i=>i.box==="incoming"&&i.actionable).length,outgoing:scoped.filter(i=>i.box==="outgoing"&&i.actionable).length};
   const excel=useExcelFilters("requests",requestColumns,scoped.filter(i=>i.box===box));
   const filtered=excel.rows;
-  // Employees work inside one chosen firma, so the firma column only matters in the admin's all-firma view.
-  const shownOrder=order.filter(k=>columnsByKey[k]&&(isAdmin||k!=="company")&&(k!=="score"||box==="incoming"));
-  const formCompanyId=Number(form.companyId||activeCompanyId||companies[0]?.id||0);
+  // The firma column matters in an all-firma view: the admin's, or an employee's "Bütün firmalar" (Versiya 2.88).
+  const shownOrder=order.filter(k=>columnsByKey[k]&&(isAdmin||!activeCompanyId||k!=="company")&&(k!=="score"||box==="incoming"));
+  // With "Bütün firmalar" a new request's firm must be picked; nothing is taken on its own.
+  const formCompanyId=Number(form.companyId||activeCompanyId||(isAdmin||companies.length===1?companies[0]?.id:0)||0);
   const myDepartment=data.myDepartments[String(formCompanyId)]||null;
   const departmentOptions=(data.departments[String(formCompanyId)]||[]).filter(d=>d!==myDepartment);
   const create=async()=>{
@@ -2244,7 +2248,7 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">ŞÖBƏLƏRARASI</span><h2>Sorğular</h2><p>Başqa şöbəyə iş tələbi və ya məlumat sorğusu göndərin</p></div>{data.canAdd!==false&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sorğu</Button>}</div>
     {creating&&<div className="inlinetaskrow requestrow">
-      {(isAdmin||companies.length>1)&&<label className="field">Firma<select value={String(formCompanyId||"")} onChange={e=>setForm({...form,companyId:e.target.value,toDepartment:""})}>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+      {(isAdmin||companies.length>1)&&<label className="field">Firma<select value={String(formCompanyId||"")} onChange={e=>setForm({...form,companyId:e.target.value,toDepartment:""})}>{!formCompanyId&&<option value="">Seçin</option>}{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       <label className="field">Hansı şöbəyə<select value={form.toDepartment||""} onChange={e=>setForm({...form,toDepartment:e.target.value})}><option value="">Şöbə seçin</option>{departmentOptions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
       <Field label="Mövzu" value={form.title||""} set={v=>setForm({...form,title:v})}/>
       <label className="field">İstədiyiniz tarix (istəyə bağlı)<Input type="date" value={form.desiredDueAt||""} onChange={e=>setForm({...form,desiredDueAt:e.target.value})}/></label>

@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -181,7 +181,7 @@ const GUIDES: Guide[] = [
         { p: "Xananın rəngi dövrün vəziyyətini göstərir:" },
         { list: ["Hələ açılmayıb (zolaqlı) — bu dövrü hələ işarələmək olmur.", "Açıqdır (mavi çərçivə) — icra etmək vaxtıdır.", "Vaxtında icra edilib (yaşıl).", "Gecikməklə icra edilib (narıncı) — son tarixdən sonra işarələnib.", "Gecikib (qırmızı, gün sayı ilə) — son tarix keçib, iş hələ icra edilməyib."] },
         { note: "İcra qeydi geri götürülmür. Xananı yalnız iş həqiqətən icra olunanda işarələyin. İcra tarixini görmək üçün siçanı xananın üzərinə gətirin." },
-        { note: "Bir neçə firmada işləyirsinizsə, cədvəl soldakı “Aktiv firma” seçiminə görə göstərilir; eyni iş hər firma üzrə ayrıca sətirdir." },
+        { note: "Bir neçə firmada işləyirsinizsə, cədvəl soldakı “Aktiv firma” seçiminə görə göstərilir; eyni iş hər firma üzrə ayrıca sətirdir. “Bütün firmalar” seçiləndə bütün firmaların işləri “Firma” sütunu ilə birlikdə görünür." },
       ] },
       { audience: "all", title: "Tez-tez verilən suallar", blocks: [
         { qa: [
@@ -297,7 +297,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "registrar", title: "Sənədin qeydiyyatı", blocks: [
         { steps: [
-          "“Yeni sənəd” basın (bir neçə firmanız varsa, firmanı seçin).",
+          "“Yeni sənəd” basın (soldakı “Aktiv firma”da “Bütün firmalar” seçilibsə, formada firmanı seçin).",
           "Sənədin tipini seçin — siyahıda yalnız həmin firmanın “Çıxan sənəd” şablonları olur. Şablonun faylları “Şablondan istifadə et” panelində yüklənir.",
           "Əlaqəli şöbə(lər): şablonda göstərilibsə, avtomatik yazılır və dəyişdirilmir; yoxdursa, özünüz seçin (birinci seçilən — əsas şöbə, fayl adındakı {Şöbə}).",
           "İstəsəniz, “Məlumatlandırılan şöbə(lər)” seçin.",
@@ -430,6 +430,15 @@ const GUIDES: Guide[] = [
           "Profil şəkli — adınızın yanında görünən şəkil: Ana səhifədə, siyahılarda və çatda (ən çox 5 MB).",
         ] },
         { note: "Şifrəni unutmusunuzsa, admin İstifadəçilər bölməsində “Şifrəni yenilə” ilə yeni şifrə təyin edir." },
+      ] },
+      { audience: "all", title: "Aktiv firma və “Bütün firmalar”", blocks: [
+        { list: [
+          "Bir neçə firmada işləyirsinizsə, sol menyuda “Aktiv firma” seçimi var: tapşırıqlar, işlər, sorğular və sənədlər seçilmiş firmaya görə göstərilir. Seçim yadda qalır.",
+          "Siyahının ən başındakı “Bütün firmalar” bütün firmalarınızın məlumatını bir yerdə göstərir; cədvəllərdə hər sətrin hansı firmaya aid olduğu “Firma” sütunundan görünür.",
+          "“Bütün firmalar”da yeni nəsə yaradanda (sorğu, sənəd, iş) formada firmanı özünüz seçirsiniz — proqram firmanı özbaşına götürmür.",
+          "Hüquqlar qarışmır: hər sənəd və iş üzrə nə edə biləcəyiniz həmin sətrin firmasındakı vəzifənizə görə müəyyən olunur. Məsələn, bir firmada şöbə rəisi, digərində əməkdaşsınızsa, təsdiqi yalnız birincinin sənədlərinə verə bilərsiniz.",
+        ] },
+        { note: "Tək firmada işləyənlər üçün bu seçim görünmür." },
       ] },
     ],
   },
