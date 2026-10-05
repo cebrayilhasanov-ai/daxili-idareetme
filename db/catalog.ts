@@ -594,14 +594,32 @@ export async function createWorkItem(input: { title: string; description?: strin
     .bind(title, input.description?.trim() || null, frequency, normalizeDueDay(frequency, input.dueDay), new Date().toISOString()).run();
 }
 
-export async function updateWorkItem(input: { id: number; frequency?: string; dueDay?: number | null }) {
-  const current = await db().prepare("SELECT frequency, due_day FROM work_definitions WHERE id = ?").bind(input.id).first<{frequency:string;due_day:number|null}>();
+export async function updateWorkItem(input: { id: number; frequency?: string; dueDay?: number | null; title?: string; description?: string | null }) {
+  const current = await db().prepare("SELECT title, frequency, due_day FROM work_definitions WHERE id = ?").bind(input.id).first<{title:string;frequency:string;due_day:number|null}>();
   if (!current) throw new Error("İş tapılmadı.");
+  // Versiya 2.90: the admin corrects a work's name and description; the new text shows at once for everyone it is assigned to.
+  if (input.title !== undefined) {
+    const title = String(input.title || "").trim();
+    if (!title) throw new Error("İşin adını yazın.");
+    await db().prepare("UPDATE work_definitions SET title = ?, description = ? WHERE id = ?").bind(title, String(input.description ?? "").trim() || null, input.id).run();
+    return { before: current.title, after: title };
+  }
   const frequency = input.frequency || current.frequency;
   if (!["monthly", "weekly", "daily"].includes(frequency)) throw new Error("Dövr seçimi düzgün deyil.");
   // Switching monthly <-> weekly resets the deadline to that frequency's default, since the numbers mean different things.
   const dueDay = input.dueDay !== undefined ? input.dueDay : frequency === current.frequency ? current.due_day : null;
   await db().prepare("UPDATE work_definitions SET frequency = ?, due_day = ? WHERE id = ?").bind(frequency, normalizeDueDay(frequency, dueDay), input.id).run();
+}
+
+// Versiya 2.90: a work is deleted only while nobody has it — taking it from the people first keeps anyone's marks from vanishing by mistake.
+export async function deleteWorkItem(id: number) {
+  const current = await db().prepare("SELECT title FROM work_definitions WHERE id = ?").bind(id).first<{ title: string }>();
+  if (!current) throw new Error("İş tapılmadı.");
+  const assigned = await db().prepare("SELECT COUNT(*) AS n FROM work_assignments WHERE work_definition_id = ?").bind(id).first<{ n: number }>();
+  if (Number(assigned?.n || 0) > 0) throw new Error("Bu iş işçilərə təyin edilib — əvvəlcə işi işçilərdən götürün.");
+  await db().prepare("DELETE FROM work_definition_companies WHERE work_definition_id = ?").bind(id).run();
+  await db().prepare("DELETE FROM work_definitions WHERE id = ?").bind(id).run();
+  return current.title;
 }
 
 export async function toggleWorkDefinitionCompany(input: { id:number; companyId:number; selected:boolean }) {

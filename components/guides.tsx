@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -186,6 +186,7 @@ const GUIDES: Guide[] = [
           "“Mənim sabit işlərim” cədvəlində ili seçin. Hər sətir bir işdir, sütunlar aylardır (həftəlik işlərdə — həftələr).",
           "İcra etdiyiniz dövrün xanasına basın və “icra edildi kimi işarələnsin?” sualını təsdiqləyin.",
         ] },
+        { p: "Sütun başlıqlarındakı ▾ düyməsi ilə digər cədvəllərdəki kimi süzmək (iş, açıqlama, firma, istifadəçi, son tarix) və A→Z / Z→A sıralamaq olar." },
         { p: "Xananın rəngi dövrün vəziyyətini göstərir:" },
         { list: ["Hesablanmır (boz, çəp zolaqlı) — dövr hesablama başlanğıcından və ya işin təyinindən əvvəldir.", "Hələ açılmayıb (zolaqlı) — bu dövrü hələ işarələmək olmur.", "Açıqdır (mavi çərçivə) — icra etmək vaxtıdır.", "Vaxtında icra edilib (yaşıl).", "Gecikməklə icra edilib (narıncı) — son tarixdən sonra işarələnib.", "Gecikib (qırmızı, gün sayı ilə) — son tarix keçib, iş hələ icra edilməyib."] },
         { note: "Səhvən qoyulmuş qeydi geri götürmək: rəngli xanaya basın və “icra qeydi geri götürülsün?” sualını təsdiqləyin. Bunu işin son tarixinədək özünüz edə bilərsiniz; son tarix keçəndən sonra qeydi yalnız admin geri götürür. Hər geri götürmə Əməliyyat jurnalına yazılır. İcra tarixini görmək üçün siçanı xananın üzərinə gətirin." },
@@ -205,6 +206,12 @@ const GUIDES: Guide[] = [
           "Sətirdə son tarix gününü seçin (aylıq: növbəti ayın günü, həftəlik: həftənin günü). Seçilməsə, standart işləyir — 10-u / cümə.",
           "İşin aid olduğu firmaları işarələyin və hər firma üçün icra edəcək istifadəçini seçin. Bir firmada bir iş yalnız bir nəfərə təyin olunur.",
           "“Personal sabit işlər” tabında işlərin personal və firmalar üzrə bölgüsünə baxın; buradan da bir işi seçib istifadəçiyə bir neçə firma üzrə birdən təyin etmək olar.",
+        ] },
+        { list: [
+          "Redaktə: “Sabit işlərin siyahısı”nda işin sətrindəki “Redaktə et” — adı və açıqlamanı dəyişib “Yadda saxla” basın. İş artıq təyin edilibsə, yeni ad həmin işçilərin cədvəlində də dərhal görünür. Aylıq işi həftəlikə (və ya əksinə) çevirmək olmur — lazımsa, işi silib yenisini yaradın.",
+          "Silmə: “Sil” yalnız iş heç bir işçiyə təyin edilməyəndə işləyir (təsdiq soruşulur). Təyin edilmiş işdə düymə bozdur — əvvəlcə işi işçilərdən götürün: firmanın xanasında “Seçin”i seçin və təsdiqləyin. Diqqət: işçinin həmin firma üzrə icra qeydləri də silinir; bu da jurnala yazılır. İşin firma işarələri onunla birlikdə silinir.",
+          "Redaktə və silmə Əməliyyat jurnalına yazılır (“köhnə ad → yeni ad”).",
+          "Hər iki cədvəldə sütun başlıqlarında filtr var; siyahıda firma sütunlarının filtri ilə, məsələn, həmin firmada heç kimə təyin edilməyən işləri (Boş) tapmaq olar.",
         ] },
         { list: [
           "“Hesablama başlanğıcı” — “Sabit işlərin siyahısı” tabının yuxarısında tarixi seçib “Yadda saxla” basın. Bu tarixdən əvvəlki dövrlər hamı üçün “Hesablanmır” olur. Dəyişiklik Əməliyyat jurnalına yazılır.",

@@ -1,4 +1,4 @@
-import { canApproveTask, completeWorkAssignment, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
+import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { hiddenSections, requireSection } from "@/lib/permissions";
@@ -109,8 +109,15 @@ export async function PATCH(request: Request) {
     }
     else if (body.action === "task") await updateTask({ ...body, actorName: user.name });
     else if (body.action === "recurring") await updateRecurring(body);
-    else if (body.action === "work-item") await updateWorkItem(body);
-    else if (body.action === "work-assignment") await toggleWorkAssignment(body);
+    else if (body.action === "work-item") {
+      const renamed = await updateWorkItem(body);
+      if (renamed) await logAudit(user, "Sabit iş redaktə edildi", "work-definition", renamed.before === renamed.after ? renamed.after : `${renamed.before} → ${renamed.after}`);
+    }
+    else if (body.action === "work-assignment") {
+      await toggleWorkAssignment(body);
+      // Versiya 2.90: taking a work back from a person removes their marks too, so it is logged.
+      if (!body.selected) await logAudit(user, "Sabit iş işçidən götürüldü", "work-assignment", `iş #${body.workDefinitionId}, işçi #${body.employeeId}, firma #${body.companyId}`);
+    }
     else if (body.action === "work-definition-company") await toggleWorkDefinitionCompany(body);
     else if (body.action === "resolve-date-request") await resolveDateChangeRequest({ id: Number(body.id), approve: Boolean(body.approve), adminNote: body.adminNote, finalDueAt: body.finalDueAt });
     else return Response.json({ error: "Əməliyyat seçilməyib." }, { status: 400 });
@@ -126,6 +133,7 @@ export async function DELETE(request: Request) {
     const employeeId = Number(params.get("employeeId"));
     if (taskId) await deleteTask(taskId, user.name);
     else if (employeeId) { await deleteEmployee(employeeId); await logAudit(user, "Personal silindi", "employee", `#${employeeId}`); }
+    else if (Number(params.get("workDefinitionId"))) { const title = await deleteWorkItem(Number(params.get("workDefinitionId"))); await logAudit(user, "Sabit iş silindi", "work-definition", title); }
     else return Response.json({ error: "Silinəcək məlumat seçilməyib." }, { status: 400 });
     return Response.json(await getAllData());
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Məlumat silinmədi." }, { status: 500 }); }
