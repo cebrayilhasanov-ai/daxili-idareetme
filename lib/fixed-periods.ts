@@ -8,7 +8,11 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const bakuMidnight = (year: number, month: number, day: number) => Date.UTC(year, month, day) - BAKU_OFFSET_MS;
 
 export type FixedWorkRule = { frequency: string; due_day: number | null };
-export type PeriodState = "future" | "active" | "overdue" | "done" | "late-done";
+export type PeriodState = "future" | "active" | "overdue" | "done" | "late-done" | "skipped";
+// Versiya 2.89: which periods count at all — none before the counting start (admin setting, default 1 Oct 2026), and none that
+// opened before the work was assigned to the person. A period that does not count is "skipped": no lateness, nothing to mark.
+export type PeriodScope = { start?: string | null; assignedAt?: string | null };
+export const DEFAULT_FIXED_START = "2026-10-01";
 
 export const MONTH_NAMES = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun", "İyul", "Avqust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
 export const WEEKDAY_NAMES = ["Bazar ertəsi", "Çərşənbə axşamı", "Çərşənbə", "Cümə axşamı", "Cümə", "Şənbə", "Bazar"];
@@ -52,9 +56,25 @@ export function periodWindow(rule: FixedWorkRule, key: string): { start: number;
   return null;
 }
 
-export function periodState(rule: FixedWorkRule, key: string, completedAt: string | null | undefined, now = Date.now()): PeriodState {
+// A period counts when the period itself (the month reported on, or the week from its Monday) begins on or after the counting
+// start, and the work was assigned before the period opened for work.
+export function periodCounts(rule: FixedWorkRule, key: string, scope: PeriodScope = {}) {
   const window = periodWindow(rule, key);
-  if (completedAt) return !window || new Date(completedAt).getTime() < window.due ? "done" : "late-done";
+  if (!window) return false;
+  const start = /^d{4}-d{2}-d{2}$/.test(String(scope.start || "")) ? String(scope.start) : DEFAULT_FIXED_START;
+  const [y, m, d] = start.split("-").map(Number);
+  const periodBegin = rule.frequency === "monthly" ? bakuMidnight(Number(key.slice(8, 12)), Number(key.slice(13, 15)) - 1, 1) : window.start;
+  if (periodBegin < bakuMidnight(y, m - 1, d)) return false;
+  const assigned = scope.assignedAt ? new Date(scope.assignedAt).getTime() : NaN;
+  return Number.isNaN(assigned) || assigned < window.start;
+}
+
+export function periodState(rule: FixedWorkRule, key: string, completedAt: string | null | undefined, now = Date.now(), scope?: PeriodScope): PeriodState {
+  const window = periodWindow(rule, key);
+  const counts = !scope || periodCounts(rule, key, scope);
+  // A mark left on a period that does not count shows as done, without lateness.
+  if (completedAt) return !window || !counts || new Date(completedAt).getTime() < window.due ? "done" : "late-done";
+  if (!counts) return "skipped";
   if (!window || now < window.start) return "future";
   return now < window.due ? "active" : "overdue";
 }

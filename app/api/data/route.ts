@@ -1,4 +1,4 @@
-import { canApproveTask, completeWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
+import { canApproveTask, completeWorkAssignment, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { hiddenSections, requireSection } from "@/lib/permissions";
@@ -14,7 +14,7 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const given = await tasksGivenBy(user);
   const approvals = data.tasks.filter((item: any) => given.has(Number(item.id)) && item.status === "Təqdim edilib");
   const ownCompanyIds = new Set(((data.employees.find((item: any) => item.id === user.employeeId) as { company_ids?: string } | undefined)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && frequencyVisible(item.frequency)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
+  return { fixedWorksStart: data.fixedWorksStart, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && frequencyVisible(item.frequency)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
 }
 
 function authError(error: unknown) {
@@ -61,11 +61,15 @@ export async function PATCH(request: Request) {
       return Response.json(await scopedData(user));
     }
     if (user.role !== "admin") {
-      if (body.action === "work-completion") {
+      if (body.action === "work-completion" || body.action === "work-uncompletion") {
         const assignment = await env.DB.prepare("SELECT d.frequency FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?").bind(Number(body.assignmentId)).first<{ frequency: string }>();
         if (assignment?.frequency === "monthly") await requireSection(user, "tasks.monthly");
         if (assignment?.frequency === "weekly") await requireSection(user, "tasks.weekly");
-        await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
+        if (body.action === "work-uncompletion") {
+          // Versiya 2.89: one's own mark, until the period's deadline.
+          const title = await uncompleteWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
+          await logAudit(user, "Sabit işin icra qeydi geri götürüldü", "work-assignment", `${title} — ${body.periodKey}`);
+        } else await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
         return Response.json(await scopedData(user));
       }
       // Whoever gave the task approves it or sends it back (Versiya 2.82); otherwise one moves only one's own task.
@@ -81,6 +85,14 @@ export async function PATCH(request: Request) {
       if (!task || task.employee_id !== user.employeeId) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
     }
     if (body.action === "work-completion") await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, null);
+    else if (body.action === "work-uncompletion") {
+      const title = await uncompleteWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, null);
+      await logAudit(user, "Sabit işin icra qeydi geri götürüldü", "work-assignment", `${title} — ${body.periodKey}`);
+    }
+    else if (body.action === "fixed-works-start") {
+      await setFixedWorksStart(String(body.value || ""));
+      await logAudit(user, "Sabit işlərin hesablama başlanğıcı dəyişdirildi", "setting", String(body.value));
+    }
     else if (body.action === "employee") {
       await updateEmployee(body);
       if (user.role === "admin") {

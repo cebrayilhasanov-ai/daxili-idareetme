@@ -1,6 +1,6 @@
 import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
-import { periodWindow } from "@/lib/fixed-periods";
+import { DEFAULT_FIXED_START, periodCounts, periodWindow } from "@/lib/fixed-periods";
 import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { parseHiddenSections, sectionRights } from "@/lib/permissions";
 import { formatPhone } from "@/lib/phone";
@@ -575,7 +575,7 @@ export async function getAllData() {
     const currentPeriod = periodKey({ frequency: String(item.frequency) });
     return { ...item, period_key: currentPeriod, is_completed: Number(completedKeys.has(`${item.id}:${currentPeriod}`)) };
   });
-  return { employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
+  return { fixedWorksStart: await getFixedWorksStart(), employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
 }
 
 function normalizeDueDay(frequency: string, dueDay: unknown) {
@@ -635,17 +635,47 @@ export async function toggleWorkAssignment(input: { workDefinitionId:number; emp
 
 // Marks one period (a month or a week column) done. A period can be ticked once its window has opened, also after the deadline
 // (it then shows as done late); future periods stay closed.
-export async function completeWorkAssignment(input: { assignmentId:number; periodKey?:string }, employeeId:number|null) {
-  if (!input.assignmentId) throw new Error("Sabit iş seçilməyib.");
+// Versiya 2.89: fixed works count from this day on (app_settings, set by the admin); earlier periods are not counted.
+export async function getFixedWorksStart() {
+  const row = await db().prepare("SELECT value FROM app_settings WHERE key = 'fixed_works_start'").first<{ value: string | null }>();
+  return /^d{4}-d{2}-d{2}$/.test(String(row?.value || "")) ? String(row?.value) : DEFAULT_FIXED_START;
+}
+
+export async function setFixedWorksStart(value: string) {
+  if (!/^d{4}-d{2}-d{2}$/.test(String(value || ""))) throw new Error("Tarix düzgün deyil.");
+  await db().prepare("INSERT INTO app_settings (key, value) VALUES ('fixed_works_start', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(value).run();
+}
+
+async function fixedAssignment(assignmentId: number, employeeId: number | null) {
+  if (!assignmentId) throw new Error("Sabit iş seçilməyib.");
   const statement = employeeId
-    ? db().prepare(`SELECT a.id, d.frequency, d.due_day FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ? AND a.employee_id = ?`).bind(input.assignmentId, employeeId)
-    : db().prepare(`SELECT a.id, d.frequency, d.due_day FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?`).bind(input.assignmentId);
-  const assignment = await statement.first<{id:number;frequency:string;due_day:number|null}>();
+    ? db().prepare(`SELECT a.id, a.created_at, d.title, d.frequency, d.due_day FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ? AND a.employee_id = ?`).bind(assignmentId, employeeId)
+    : db().prepare(`SELECT a.id, a.created_at, d.title, d.frequency, d.due_day FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?`).bind(assignmentId);
+  const assignment = await statement.first<{id:number;created_at:string|null;title:string;frequency:string;due_day:number|null}>();
   if (!assignment) throw new Error("Bu sabit iş sizə təyin edilməyib.");
+  return assignment;
+}
+
+// Versiya 2.89: a mark put by mistake is taken back — by the person until the period's deadline, afterwards only by the admin
+// (employeeId null), so a late work cannot be turned into an on-time one later.
+export async function uncompleteWorkAssignment(input: { assignmentId:number; periodKey?:string }, employeeId:number|null) {
+  const assignment = await fixedAssignment(input.assignmentId, employeeId);
+  const key = String(input.periodKey || "");
+  const window = periodWindow(assignment, key);
+  if (!window) throw new Error("Dövr seçimi düzgün deyil.");
+  if (employeeId && Date.now() >= window.due) throw new Error("Son tarix keçib — icra qeydini yalnız admin geri götürə bilər.");
+  const result = await db().prepare("DELETE FROM work_assignment_completions WHERE work_assignment_id = ? AND period_key = ?").bind(assignment.id, key).run();
+  if (!result.meta.changes) throw new Error("Bu dövr üzrə icra qeydi yoxdur.");
+  return assignment.title;
+}
+
+export async function completeWorkAssignment(input: { assignmentId:number; periodKey?:string }, employeeId:number|null) {
+  const assignment = await fixedAssignment(input.assignmentId, employeeId);
   const key = String(input.periodKey || "");
   const window = periodWindow(assignment, key);
   if (!window) throw new Error("Dövr seçimi düzgün deyil.");
   if (Date.now() < window.start) throw new Error("Bu dövr hələ açılmayıb.");
+  if (!periodCounts(assignment, key, { start: await getFixedWorksStart(), assignedAt: assignment.created_at })) throw new Error("Bu dövr hesablanmır (hesablama başlanğıcından və ya işin təyinindən əvvəldir).");
   await db().prepare("INSERT OR IGNORE INTO work_assignment_completions (work_assignment_id, period_key, completed_at) VALUES (?, ?, ?)")
     .bind(assignment.id, key, new Date().toISOString()).run();
 }
