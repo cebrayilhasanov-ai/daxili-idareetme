@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -149,7 +149,7 @@ const GUIDES: Guide[] = [
   },
   {
     id: "fixed", group: "Tapşırıqlar", title: "Sabit işlər (aylıq və həftəlik)", path: "Tapşırıqlar → Aylıq sabit işlər / Həftəlik sabit işlər", section: "tasks.fixed",
-    intro: "Sabit işlər hər ay və ya hər həftə təkrarlanan, konkret işçiyə həvalə edilmiş işlərdir (məsələn, aylıq hesabat, həftəlik yoxlama). Hər dövr üçün işçi işin icrasını cədvəldə ✓ ilə qeyd edir.",
+    intro: "Sabit işlər hər ay və ya hər həftə təkrarlanan, konkret işçiyə həvalə edilmiş işlərdir (məsələn, aylıq hesabat, həftəlik yoxlama). Hər dövr üçün işçi işin icrasını cədvəldə qeyd edir — icra edilmiş xana rənglə (yaşıl və ya narıncı) göstərilir.",
     parts: [
       { audience: "all", title: "Dövrlər və son tarixlər", blocks: [
         { list: [
@@ -166,13 +166,13 @@ const GUIDES: Guide[] = [
           "İcra etdiyiniz dövrün xanasına basın və “icra edildi kimi işarələnsin?” sualını təsdiqləyin.",
         ] },
         { p: "Xananın rəngi dövrün vəziyyətini göstərir:" },
-        { list: ["Hələ açılmayıb — bu dövrə hələ ✓ qoymaq olmur.", "Açıqdır — icra etmək vaxtıdır.", "Vaxtında icra edilib.", "Gecikməklə icra edilib — ✓ son tarixdən sonra qoyulub."] },
-        { note: "Qoyulan ✓ geri götürülmür. Onu yalnız iş həqiqətən icra olunanda qoyun." },
+        { list: ["Hələ açılmayıb (zolaqlı) — bu dövrü hələ işarələmək olmur.", "Açıqdır (mavi çərçivə) — icra etmək vaxtıdır.", "Vaxtında icra edilib (yaşıl).", "Gecikməklə icra edilib (narıncı) — son tarixdən sonra işarələnib.", "Gecikib (qırmızı, gün sayı ilə) — son tarix keçib, iş hələ icra edilməyib."] },
+        { note: "İcra qeydi geri götürülmür. Xananı yalnız iş həqiqətən icra olunanda işarələyin. İcra tarixini görmək üçün siçanı xananın üzərinə gətirin." },
         { note: "Bir neçə firmada işləyirsinizsə, cədvəl soldakı “Aktiv firma” seçiminə görə göstərilir; eyni iş hər firma üzrə ayrıca sətirdir." },
       ] },
       { audience: "all", title: "Tez-tez verilən suallar", blocks: [
         { qa: [
-          ["Son tarix keçib, yenə ✓ qoya bilərəmmi?", "Bəli. Dövr açıqdırsa, istənilən vaxt qoymaq olar, amma iş “Gecikməklə icra edilib” kimi qalır."],
+          ["Son tarix keçib, yenə icra edildi kimi işarələyə bilərəmmi?", "Bəli. Dövr açıqdırsa, istənilən vaxt işarələmək olar, amma iş “Gecikməklə icra edilib” kimi qalır."],
           ["Xanaya basa bilmirəm.", "Dövr hələ açılmayıb (məs. cari ayın aylıq işi yalnız növbəti ayın 1-də açılır) və ya Giriş icazələrində bu bölmə sizin üçün bağlıdır."],
           ["Mənə yeni iş lazımdır və ya iş başqasına keçməlidir.", "Sabit işləri yalnız admin yaradır və təyin edir — ona müraciət edin."],
         ] },
@@ -184,7 +184,7 @@ const GUIDES: Guide[] = [
           "İşin aid olduğu firmaları işarələyin və hər firma üçün icra edəcək istifadəçini seçin. Bir firmada bir iş yalnız bir nəfərə təyin olunur.",
           "“Personal sabit işlər” tabında işlərin personal və firmalar üzrə bölgüsünə baxın; buradan da bir işi seçib istifadəçiyə bir neçə firma üzrə birdən təyin etmək olar.",
         ] },
-        { note: "İstifadəçidə “Aylıq/Həftəlik sabit işlər” icazəsi bağlıdırsa, o, təyin edilmiş işlərə ✓ qoya bilməz — Giriş icazələrində bu barədə xəbərdarlıq çıxır." },
+        { note: "İstifadəçidə “Aylıq/Həftəlik sabit işlər” icazəsi bağlıdırsa, o, təyin edilmiş işləri icra edildi kimi işarələyə bilməz — Giriş icazələrində bu barədə xəbərdarlıq çıxır." },
       ] },
     ],
   },
@@ -442,7 +442,7 @@ const GUIDES: Guide[] = [
           "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
           "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini olduğu kimi köçürür; “Hamısını aç” — hamısını açır.",
           "Daxil olan və Çıxan sənədlər icazəsi olan istifadəçi qeydiyyatçı sayılır və öz firmalarının BÜTÜN sənədlərini görür — bu icazəni yalnız qeydiyyatı aparan (Ümumi şöbə) əməkdaşlara verin.",
-          "Sabit işi olan istifadəçidə Aylıq/Həftəlik sabit işləri bağlayanda xəbərdarlıq çıxır — o, işlərinə ✓ qoya bilməyəcək.",
+          "Sabit işi olan istifadəçidə Aylıq/Həftəlik sabit işləri bağlayanda xəbərdarlıq çıxır — o, işlərini icra edildi kimi işarələyə bilməyəcək.",
           "Şablonlar, Firmalar, İstifadəçilər və Əməliyyat jurnalı yalnız adminindir.",
         ] },
       ] },
