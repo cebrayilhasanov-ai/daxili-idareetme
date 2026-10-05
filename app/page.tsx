@@ -258,7 +258,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.86</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.87</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -1192,11 +1192,19 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     return()=>{cancelled=true};
   },[]);
   const docsOf=(item:Customer)=>item.voen?.trim()?customerDocs.get(item.voen.trim())||[]:[];
-  const {order,widths,setWidth,moveColumn}=useTableColumns("customers2",customerColumns.map(c=>c.key));
+  const unreturnedOf=(item:Customer)=>docsOf(item).filter(d=>{const r=customerDocReturn(d);return Boolean(r&&r.kind!=="done")}).length;
+  // "Sənəd dövriyyəsi" (Versiya 2.87): its own column instead of a button among the actions; a click opens the history below the row.
+  const columns=[...customerColumns,{key:"docs",label:"Sənəd dövriyyəsi",width:170,
+    search:(i:Customer)=>{const d=docsOf(i);if(!d.length)return "";const n=unreturnedOf(i);return `Çıxan ${d.filter(x=>x.kind==="outgoing").length} · Daxil olan ${d.filter(x=>x.kind==="incoming").length}${n?` · ${n} qayıtmayıb`:""}`},
+    values:(i:Customer)=>!docsOf(i).length?[]:unreturnedOf(i)?["Sənəd var","Qayıtmayan var"]:["Sənəd var"],
+    sort:(i:Customer)=>docsOf(i).length||null,
+    render:(i:Customer)=>{const d=docsOf(i);if(!d.length)return <span className="nodocument">—</span>;const n=unreturnedOf(i);
+      return <button className={`docsflowbtn${docsOpen===i.id?" on":""}`} title="Sənədlərin tarixçəsini aç" onClick={()=>setDocsOpen(v=>v===i.id?null:i.id)}><span>➡ {d.filter(x=>x.kind==="outgoing").length}</span><span>⬅ {d.filter(x=>x.kind==="incoming").length}</span>{n>0&&<em className="docsunreturned">{n} qayıtmayıb</em>}</button>}}];
+  const {order,widths,setWidth,moveColumn}=useTableColumns("customers2",columns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
-  const columnsByKey=Object.fromEntries(customerColumns.map(c=>[c.key,c]));
-  const defaultWidths=Object.fromEntries(customerColumns.map(c=>[c.key,c.width]));
+  const columnsByKey=Object.fromEntries(columns.map(c=>[c.key,c]));
+  const defaultWidths=Object.fromEntries(columns.map(c=>[c.key,c.width]));
   const [items,setItems]=useState<Customer[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -1278,8 +1286,8 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     manager:(values,set)=><label className="field" key="manager">Rəhbər<Input value={values.manager||""} onChange={e=>set({...values,manager:e.target.value})} onBlur={e=>set({...values,manager:properCase(e.target.value)})}/></label>,
     phone:(values,set)=><label className="field" key="phone">Telefon<Input inputMode="tel" placeholder="+99412 345 67 89" value={values.phone||""} onChange={e=>set({...values,phone:e.target.value})} onBlur={()=>set({...values,phone:formatPhone(values.phone)})}/></label>,
   };
-  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.map(key=>fieldRenderers[key](values,set))}</>;
-  const excel=useExcelFilters("customers",customerColumns,items);
+  const fields=(values:Record<string,string>,set:(next:Record<string,string>)=>void)=><>{order.map(key=>fieldRenderers[key]?.(values,set))}</>;
+  const excel=useExcelFilters("customers",columns,items);
   const filtered=excel.rows;
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştərilər</h2><p>{filtered.length} müştəri göstərilir</p></div>{rights.add&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button>}</div>
@@ -1287,7 +1295,7 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     {error&&<div className="errorbox">{error}</div>}
     {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
-      <td data-label="Əməliyyat"><div className="tableactions">{rights.edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}{rights.remove&&!item.usage_count&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}{(formerStaff?.get(item.id)?.length||0)>0&&<button className={`formerbtn${formerOpen===item.id?" on":""}`} onClick={()=>setFormerOpen(v=>v===item.id?null:item.id)}>Keçmiş əməkdaşlar ({formerStaff?.get(item.id)?.length})</button>}{docsOf(item).length>0&&<button className={`formerbtn${docsOpen===item.id?" on":""}`} onClick={()=>setDocsOpen(v=>v===item.id?null:item.id)}>Sənədlər ({docsOf(item).length}){(()=>{const n=docsOf(item).filter(d=>customerDocReturn(d)&&customerDocReturn(d)?.kind!=="done").length;return n>0?<em className="docsunreturned">{n} qayıtmayıb</em>:null})()}</button>}</div></td>
+      <td data-label="Əməliyyat"><div className="tableactions">{rights.edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}{rights.remove&&!item.usage_count&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}{(formerStaff?.get(item.id)?.length||0)>0&&<button className={`formerbtn${formerOpen===item.id?" on":""}`} onClick={()=>setFormerOpen(v=>v===item.id?null:item.id)}>Keçmiş əməkdaşlar ({formerStaff?.get(item.id)?.length})</button>}</div></td>
     </tr>{formerOpen===item.id&&<tr className="formerrow"><td colSpan={order.length+1}><FormerStaffList rows={formerStaff?.get(item.id)||[]}/></td></tr>}{docsOpen===item.id&&<tr className="formerrow"><td colSpan={order.length+1}><CustomerHistory rows={docsOf(item)}/></td></tr>}</Fragment>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
   </section>;
 }
