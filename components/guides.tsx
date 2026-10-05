@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -168,15 +168,15 @@ const GUIDES: Guide[] = [
         { list: [
           "Aylıq iş ay bitəndən sonra açılır və növbəti ayın göstərilən gününədək icra olunmalıdır. Standart son gün — 10-u. Məsələn: yanvarın işi 1 fevralda açılır, son tarix 10 fevral (günün sonuna qədər).",
           "Göstərilən gün ayda yoxdursa (məs. 31-i), son tarix ayın son gününə düşür.",
-          "Həftəlik iş də həftə bitəndən sonra açılır və növbəti həftənin göstərilən gününədək icra olunmalıdır. Standart — cümə. Məsələn: 06.10 – 12.10 həftəsinin işi 13 oktyabrda (bazar ertəsi) açılır, son tarix 17 oktyabr (cümə).",
-          "Həftə bazar ertəsinin düşdüyü aya aiddir: iki aya düşən həftə (məs. 27.10 – 02.11) yalnız bir ayın cədvəlində — bazar ertəsinin ayında — görünür və bir dəfə hesablanır.",
+          "Həftəlik iş də həftə bitəndən sonra açılır və növbəti həftənin göstərilən gününədək icra olunmalıdır. Standart — cümə. Məsələn: 05.10 – 11.10 həftəsinin işi 12 oktyabrda (bazar ertəsi) açılır, son tarix 16 oktyabr (cümə).",
+          "Həftə bazar ertəsinin düşdüyü aya aiddir: iki aya düşən həftə (məs. 26.10 – 01.11) yalnız bir ayın cədvəlində — bazar ertəsinin ayında — görünür və bir dəfə hesablanır.",
           "Bütün vaxtlar Bakı vaxtı ilə hesablanır.",
         ] },
       ] },
       { audience: "all", title: "Hansı dövrlər hesablanır", blocks: [
         { list: [
-          "Sabit işlər “Hesablama başlanğıcı” tarixindən (standart — 01.10.2026) hesablanır. Bundan əvvəlki aylar və bazar ertəsi bu tarixdən əvvəl olan həftələr boz zolaqlı xana ilə — “Hesablanmır” — görünür: gecikmə sayılmır və işarələnmir. Məsələn, Sentyabr və 29.09 – 05.10 həftəsi hesablanmır, ilk həftə 06.10-dur.",
-          "Dövr yalnız iş sizə həmin dövr açılmazdan əvvəl təyin edilibsə hesablanır. Aylıq iş 15 oktyabrda təyin edilibsə, Oktyabr hesablanır (1 noyabrda açılır); 2 noyabrda təyin edilibsə, ilk dövr Noyabrdır. Həftəlik iş də belədir: 14 oktyabrda (çərşənbə) təyin edilibsə, 13.10 – 19.10 həftəsi hesablanır (20 oktyabrda açılır); həftə açılandan sonra təyin edilibsə, növbəti həftədən hesablanır.",
+          "Sabit işlər “Hesablama başlanğıcı” tarixindən (standart — 01.10.2026) hesablanır. Bundan əvvəlki aylar və bazar ertəsi bu tarixdən əvvəl olan həftələr boz zolaqlı xana ilə — “Hesablanmır” — görünür: gecikmə sayılmır və işarələnmir. Məsələn, Sentyabr və 28.09 – 04.10 həftəsi hesablanmır, ilk hesablanan həftə 05.10 – 11.10-dur.",
+          "Dövr yalnız iş sizə həmin dövr açılmazdan əvvəl təyin edilibsə hesablanır. Aylıq iş 15 oktyabrda təyin edilibsə, Oktyabr hesablanır (1 noyabrda açılır); 2 noyabrda təyin edilibsə, ilk dövr Noyabrdır. Həftəlik iş də belədir: 14 oktyabrda (çərşənbə) təyin edilibsə, 12.10 – 18.10 həftəsi hesablanır (19 oktyabrda açılır); həftə açılandan sonra təyin edilibsə, növbəti həftədən hesablanır.",
           "Hesablanmayan dövrdə əvvəllər qoyulmuş qeyd yaşıl (icra edilib) göstərilir, gecikmə rəngi olmadan.",
         ] },
       ] },
@@ -186,6 +186,7 @@ const GUIDES: Guide[] = [
           "“Mənim sabit işlərim” cədvəlində ili seçin. Hər sətir bir işdir, sütunlar aylardır (həftəlik işlərdə — həftələr).",
           "İcra etdiyiniz dövrün xanasına basın və “icra edildi kimi işarələnsin?” sualını təsdiqləyin.",
         ] },
+        { p: "Hər işçinin öz rəngi var: siyahıda firma xanası və “Personal sabit işlər”dəki ad həmin rənglə göstərilir, rəng hər yerdə eynidir. Ağ (“Seçin”) xana — iş həmin firmada heç kimə verilməyib." },
         { p: "Sütun başlıqlarındakı ▾ düyməsi ilə digər cədvəllərdəki kimi süzmək (iş, açıqlama, firma, istifadəçi, son tarix) və A→Z / Z→A sıralamaq olar." },
         { p: "Xananın rəngi dövrün vəziyyətini göstərir:" },
         { list: ["Hesablanmır (boz, çəp zolaqlı) — dövr hesablama başlanğıcından və ya işin təyinindən əvvəldir.", "Hələ açılmayıb (zolaqlı) — bu dövrü hələ işarələmək olmur.", "Açıqdır (mavi çərçivə) — icra etmək vaxtıdır.", "Vaxtında icra edilib (yaşıl).", "Gecikməklə icra edilib (narıncı) — son tarixdən sonra işarələnib.", "Gecikib (qırmızı, gün sayı ilə) — son tarix keçib, iş hələ icra edilməyib."] },

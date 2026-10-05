@@ -860,3 +860,5 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .workmatrixhead .excelhead{width:100%}.workmatrixhead .excelhead .excellabel{color:#fff;font-size:12px;white-space:normal;overflow:visible;text-align:center}
 .catalogedit{display:flex;align-items:center;padding:6px 8px;border-right:1px solid #d5e0ed}.catalogedit input{height:32px;font-size:12px}
 .catalogactions{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;flex-wrap:wrap}.catalogactions .deletetaskbtn:disabled{opacity:.45;cursor:not-allowed}
+/* Versiya 2.92: each person's own colour in the fixed-works tables */
+.personchip{display:inline-block;font-style:normal;padding:2px 7px;border:1px solid;border-radius:999px;font-weight:800}

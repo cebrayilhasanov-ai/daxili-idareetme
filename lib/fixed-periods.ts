@@ -41,7 +41,7 @@ export function weeksOfMonth(year: number, month: number) {
 
 // When a period can be worked on: a period opens once it has ended and is due on the given day of the following period —
 // a monthly work on that day of the next month (January's work: 1 Feb → 10 Feb), a weekly one (since Versiya 2.91) on that
-// weekday of the next week (the week of 6–12 Oct: 13 Oct → Friday 17 Oct). `due` is the end of the deadline day.
+// weekday of the next week (the week of 5–11 Oct 2026: 12 Oct → Friday 16 Oct). `due` is the end of the deadline day.
 export function periodWindow(rule: FixedWorkRule, key: string): { start: number; due: number } | null {
   const monthly = key.match(/^monthly:(\d{4})-(\d{2})$/);
   if (monthly && rule.frequency === "monthly") {
