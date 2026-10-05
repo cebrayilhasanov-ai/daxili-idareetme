@@ -12,8 +12,7 @@ export const SECTION_KEYS = [
   "dashboard.customers",
   "tasks.requests",
   "tasks.mine",
-  "tasks.monthly",
-  "tasks.weekly",
+  "tasks.fixed",
   "documents.templates",
   "documents.outgoing",
   "documents.incoming",
@@ -46,7 +45,10 @@ const isLeveled = (section: string) => (LEVELED_SECTIONS as readonly string[]).i
 const isOptIn = (section: string) => (OPT_IN_SECTIONS as readonly string[]).includes(section);
 const deniedByDefault = (section: string, action: SectionAction) => Boolean(DEFAULT_DENIED[section as SectionKey]?.includes(action));
 
-const VALID_KEYS = new Set<string>([...SECTION_KEYS, ...LEVELED_SECTIONS.flatMap((s) => ACTIONS.map((a) => actionKey(s, a)))]);
+// Versiya 2.93: "Aylıq" and "Həftəlik sabit işlər" became one "Sabit işlər" (tasks.fixed). Old lists keep their keys: the new
+// section is closed only when both old ones were, so nobody loses access to works they could mark before.
+const LEGACY_FIXED = ["tasks.monthly", "tasks.weekly"];
+const VALID_KEYS = new Set<string>([...SECTION_KEYS, ...LEGACY_FIXED, ...LEVELED_SECTIONS.flatMap((s) => ACTIONS.map((a) => actionKey(s, a)))]);
 
 export function parseStoredPermissions(raw: unknown): string[] {
   let list: unknown = raw;
@@ -63,7 +65,8 @@ export function deniedFromStored(stored: string[]): Set<string> {
   const denied = new Set<string>();
   for (const section of SECTION_KEYS) {
     if (!isLeveled(section)) {
-      if (isOptIn(section) ? !flips.has(section) : flips.has(section)) denied.add(section);
+      const flipped = flips.has(section) || (section === "tasks.fixed" && LEGACY_FIXED.every((key) => flips.has(key)));
+      if (isOptIn(section) ? !flipped : flipped) denied.add(section);
       continue;
     }
     const whole = flips.has(section) ? (isOptIn(section) ? "open" : "closed") : null;

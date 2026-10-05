@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -161,29 +161,32 @@ const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "fixed", group: "Tapşırıqlar", title: "Sabit işlər (aylıq və həftəlik)", path: "Tapşırıqlar → Aylıq sabit işlər / Həftəlik sabit işlər", section: "tasks.fixed",
-    intro: "Sabit işlər hər ay və ya hər həftə təkrarlanan, konkret işçiyə həvalə edilmiş işlərdir (məsələn, aylıq hesabat, həftəlik yoxlama). Hər dövr üçün işçi işin icrasını cədvəldə qeyd edir — icra edilmiş xana rənglə (yaşıl və ya narıncı) göstərilir.",
+    id: "fixed", group: "Tapşırıqlar", title: "Sabit işlər", path: "Tapşırıqlar → Sabit işlər", section: "tasks.fixed",
+    intro: "Sabit işlər hər həftə, ay, rüb, yarımil və ya il təkrarlanan, konkret işçiyə həvalə edilmiş işlərdir (məsələn, aylıq hesabat, həftəlik yoxlama). Hər dövr üçün işçi işin icrasını cədvəldə qeyd edir — icra edilmiş xana rənglə (yaşıl və ya narıncı) göstərilir.",
     parts: [
       { audience: "all", title: "Dövrlər və son tarixlər", blocks: [
+        { p: "Bölmənin yuxarısında tablar var: Həftəlik · Aylıq · Rüblük · Yarımillik · İllik. Hər tabın yanında iş sayı, gecikən varsa qırmızı nişan görünür. Sizdə hansı növ iş yoxdursa, o tab göstərilmir (admin bütün tabları görür)." },
         { list: [
           "Aylıq iş ay bitəndən sonra açılır və növbəti ayın göstərilən gününədək icra olunmalıdır. Standart son gün — 10-u. Məsələn: yanvarın işi 1 fevralda açılır, son tarix 10 fevral (günün sonuna qədər).",
           "Göstərilən gün ayda yoxdursa (məs. 31-i), son tarix ayın son gününə düşür.",
           "Həftəlik iş də həftə bitəndən sonra açılır və növbəti həftənin göstərilən gününədək icra olunmalıdır. Standart — cümə. Məsələn: 05.10 – 11.10 həftəsinin işi 12 oktyabrda (bazar ertəsi) açılır, son tarix 16 oktyabr (cümə).",
           "Həftə bazar ertəsinin düşdüyü aya aiddir: iki aya düşən həftə (məs. 26.10 – 01.11) yalnız bir ayın cədvəlində — bazar ertəsinin ayında — görünür və bir dəfə hesablanır.",
+          "Rüblük, yarımillik və illik iş də dövr bitəndən sonra açılır; son tarix “dövr bitəndən sonra neçənci ayın neçəsi” kimi verilir. Standart: rüblük və yarımillik — 1-ci ayın 20-si, illik — 3-cü ayın 31-i. Məsələn: I rüb 1 apreldə açılır, son tarix 20 aprel; II yarımil 1 yanvarda açılır, son tarix 20 yanvar; 2026-cı ilin işi 1 yanvar 2027-də açılır, son tarix 31 mart 2027.",
+          "Cədvəldə rüblük işlərdə sütunlar I–IV rüb, yarımillikdə I–II yarımildir (ili seçin), illik işlərdə isə illərdir.",
           "Bütün vaxtlar Bakı vaxtı ilə hesablanır.",
         ] },
       ] },
       { audience: "all", title: "Hansı dövrlər hesablanır", blocks: [
         { list: [
-          "Sabit işlər “Hesablama başlanğıcı” tarixindən (standart — 01.10.2026) hesablanır. Bundan əvvəlki aylar və bazar ertəsi bu tarixdən əvvəl olan həftələr boz zolaqlı xana ilə — “Hesablanmır” — görünür: gecikmə sayılmır və işarələnmir. Məsələn, Sentyabr və 28.09 – 04.10 həftəsi hesablanmır, ilk hesablanan həftə 05.10 – 11.10-dur.",
+          "Sabit işlər “Hesablama başlanğıcı” tarixindən (standart — 01.10.2026) hesablanır. Dövr yalnız bu tarixdə və ya ondan sonra başlayırsa hesablanır: bundan əvvəlki aylar, bazar ertəsi bu tarixdən əvvəl olan həftələr, eləcə də bu tarixdən əvvəl başlamış rüb, yarımil və il boz zolaqlı xana ilə — “Hesablanmır” — görünür: gecikmə sayılmır və işarələnmir. Məsələn, Sentyabr və 28.09 – 04.10 həftəsi hesablanmır, ilk hesablanan həftə 05.10 – 11.10-dur.",
           "Dövr yalnız iş sizə həmin dövr açılmazdan əvvəl təyin edilibsə hesablanır. Aylıq iş 15 oktyabrda təyin edilibsə, Oktyabr hesablanır (1 noyabrda açılır); 2 noyabrda təyin edilibsə, ilk dövr Noyabrdır. Həftəlik iş də belədir: 14 oktyabrda (çərşənbə) təyin edilibsə, 12.10 – 18.10 həftəsi hesablanır (19 oktyabrda açılır); həftə açılandan sonra təyin edilibsə, növbəti həftədən hesablanır.",
           "Hesablanmayan dövrdə əvvəllər qoyulmuş qeyd yaşıl (icra edilib) göstərilir, gecikmə rəngi olmadan.",
         ] },
       ] },
       { audience: "all", title: "İşin icrasını necə qeyd etməli", blocks: [
         { steps: [
-          "Tapşırıqlar → Aylıq sabit işlər (və ya Həftəlik sabit işlər) bölməsini açın.",
-          "“Mənim sabit işlərim” cədvəlində ili seçin. Hər sətir bir işdir, sütunlar aylardır (həftəlik işlərdə — həftələr).",
+          "Tapşırıqlar → Sabit işlər bölməsini açın və yuxarıda lazımi tabı seçin (Həftəlik, Aylıq, Rüblük, Yarımillik, İllik).",
+          "“Mənim sabit işlərim” cədvəlində ili seçin (həftəlik işlərdə — həm də ayı). Hər sətir bir işdir, sütunlar dövrlərdir.",
           "İcra etdiyiniz dövrün xanasına basın və “icra edildi kimi işarələnsin?” sualını təsdiqləyin.",
         ] },
         { p: "Hər işçinin öz rəngi var: siyahıda firma xanası və “Personal sabit işlər”dəki ad həmin rənglə göstərilir, rəng hər yerdə eynidir. Ağ (“Seçin”) xana — iş həmin firmada heç kimə verilməyib." },
@@ -204,7 +207,7 @@ const GUIDES: Guide[] = [
       { audience: "admin", title: "Sabit işin yaradılması və təyini", blocks: [
         { steps: [
           "“Sabit işlərin siyahısı” tabında işin adını və açıqlamasını yazıb “Siyahıya əlavə et” basın.",
-          "Sətirdə son tarix gününü seçin (aylıq: növbəti ayın günü, həftəlik: növbəti həftənin günü). Seçilməsə, standart işləyir — 10-u / cümə.",
+          "Sətirdə son tarixi seçin: aylıq — növbəti ayın günü, həftəlik — növbəti həftənin günü, rüblük / yarımillik / illik — dövrdən sonrakı ay (1-ci, 2-ci…) və gün. Seçilməsə, standart işləyir: 10-u / cümə / 1-ci ayın 20-si / 3-cü ayın 31-i.",
           "İşin aid olduğu firmaları işarələyin və hər firma üçün icra edəcək istifadəçini seçin. Bir firmada bir iş yalnız bir nəfərə təyin olunur.",
           "“Personal sabit işlər” tabında işlərin personal və firmalar üzrə bölgüsünə baxın; buradan da bir işi seçib istifadəçiyə bir neçə firma üzrə birdən təyin etmək olar.",
         ] },
@@ -219,7 +222,7 @@ const GUIDES: Guide[] = [
           "Admin icra qeydini istənilən vaxt geri götürə bilər (son tarix keçəndən sonra da) — İstifadəçi görünüşündə rəngli xanaya basın.",
           "İşi istifadəçiyə yenidən təyin etsəniz (götürüb təzədən vermək), təyin tarixi yenilənir və ondan əvvəlki dövrlər həmin istifadəçi üçün hesablanmır.",
         ] },
-        { note: "İstifadəçidə “Aylıq/Həftəlik sabit işlər” icazəsi bağlıdırsa, o, təyin edilmiş işləri icra edildi kimi işarələyə bilməz — Giriş icazələrində bu barədə xəbərdarlıq çıxır." },
+        { note: "Yeni iş yuxarıda seçilmiş növün tabında yaranır — əvvəlcə tabı seçin. İstifadəçidə “Sabit işlər” icazəsi bağlıdırsa, o, təyin edilmiş işləri icra edildi kimi işarələyə bilməz — Giriş icazələrində bu barədə xəbərdarlıq çıxır." },
       ] },
     ],
   },
@@ -510,7 +513,7 @@ const GUIDES: Guide[] = [
           "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
           "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini olduğu kimi köçürür; “Hamısını aç” — hamısını açır.",
           "Daxil olan və Çıxan sənədlər icazəsi olan istifadəçi qeydiyyatçı sayılır və öz firmalarının BÜTÜN sənədlərini görür — bu icazəni yalnız qeydiyyatı aparan (Ümumi şöbə) əməkdaşlara verin.",
-          "Sabit işi olan istifadəçidə Aylıq/Həftəlik sabit işləri bağlayanda xəbərdarlıq çıxır — o, işlərini icra edildi kimi işarələyə bilməyəcək.",
+          "Sabit işi olan istifadəçidə “Sabit işlər”i bağlayanda xəbərdarlıq çıxır — o, işlərini icra edildi kimi işarələyə bilməyəcək. Bütün növlər (həftəlik … illik) üçün bir icazədir; əvvəlki “Aylıq” və “Həftəlik” icazələrindən biri açıq olan istifadəçidə o açıqdır.",
           "Şablonlar, Firmalar, İstifadəçilər və Əməliyyat jurnalı yalnız adminindir.",
         ] },
       ] },

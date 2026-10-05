@@ -8,7 +8,8 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
   if (user.role === "admin") return { ...data, approvals: [] };
   const hidden = await hiddenSections(user);
-  const frequencyVisible = (frequency: unknown) => !(frequency === "monthly" && hidden.has("tasks.monthly")) && !(frequency === "weekly" && hidden.has("tasks.weekly"));
+  // Versiya 2.93: one "Sabit işlər" permission for every frequency.
+  const frequencyVisible = (_frequency: unknown) => !hidden.has("tasks.fixed");
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
   // Versiya 2.82: the tasks this user gave (handed-on steps, the director's dərkənar) that wait for their approval.
   const given = await tasksGivenBy(user);
@@ -62,9 +63,7 @@ export async function PATCH(request: Request) {
     }
     if (user.role !== "admin") {
       if (body.action === "work-completion" || body.action === "work-uncompletion") {
-        const assignment = await env.DB.prepare("SELECT d.frequency FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?").bind(Number(body.assignmentId)).first<{ frequency: string }>();
-        if (assignment?.frequency === "monthly") await requireSection(user, "tasks.monthly");
-        if (assignment?.frequency === "weekly") await requireSection(user, "tasks.weekly");
+        await requireSection(user, "tasks.fixed");
         if (body.action === "work-uncompletion") {
           // Versiya 2.89: one's own mark, until the period's deadline.
           const title = await uncompleteWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);

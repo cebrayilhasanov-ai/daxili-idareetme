@@ -862,3 +862,5 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .catalogactions{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;flex-wrap:wrap}.catalogactions .deletetaskbtn:disabled{opacity:.45;cursor:not-allowed}
 /* Versiya 2.92: each person's own colour in the fixed-works tables */
 .personchip{display:inline-block;font-style:normal;padding:2px 7px;border:1px solid;border-radius:999px;font-weight:800}
+/* Versiya 2.93: the frequency tabs of "Sabit işlər" sit above the admin's catalog / assignments tabs */
+.fixedfreqtabs{margin-bottom:6px}.fixedfreqtabs button{font-weight:800}
