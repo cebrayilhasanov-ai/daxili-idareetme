@@ -85,6 +85,9 @@ export default function Home(){
   const [chatUnread,setChatUnread]=useState(0);
   const [requestsPending,setRequestsPending]=useState(0);
   const [incomingPending,setIncomingPending]=useState(0);
+  // Versiya 2.86: outgoing documents whose signed copy is late — in the bell for the registrars and the related departments' heads.
+  const [overdueDocs,setOverdueDocs]=useState<OverdueSignedCopy[]>([]);
+  const [seenOverdueDocs,setSeenOverdueDocs]=useState<number[]>([]);
   const [dashboardMenuOpen,setDashboardMenuOpen]=useState(false);
   const [tasksMenuOpen,setTasksMenuOpen]=useState(false);
   // The Tapşırıqlar sub-menu (with Sorğular inside) remembers whether it was left open.
@@ -159,6 +162,7 @@ export default function Home(){
   useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/chat?summary=1").then(r=>r.ok?r.json():null).then(v=>{if(!v)return;setChatUnread(Number(v.totalUnread||0));chatSummaryRef.current(v.latest??null)});check();const timer=setInterval(check,10000);return()=>clearInterval(timer)},[user]);
   // Director's badge on Daxil olan sənədlər: documents waiting for their dərkənar.
   useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/incoming?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setIncomingPending(Number(v.pending||0)));check();const timer=setInterval(check,30000);return()=>clearInterval(timer)},[user]);
+  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/outgoing?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setOverdueDocs(v.overdue||[]));check();const timer=setInterval(check,60000);return()=>clearInterval(timer)},[user]);
   useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/requests?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setRequestsPending(Number(v.actionable||0)));check();const timer=setInterval(check,30000);return()=>clearInterval(timer)},[user]);
   const signIn=async()=>{setError("");setAuthLoading(true);try{const response=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"login",...authForm})});const body=await response.json();if(!response.ok)throw new Error(body.error);setUser(body.user);setAuthForm({email:"",password:""})}catch(e){setError(e instanceof Error?e.message:"Giriş baş tutmadı.")}finally{setAuthLoading(false)}};
   const signOut=async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});setUser(null);setData(emptyData);setPage("dashboard");setViewAs(null)};
@@ -222,6 +226,10 @@ export default function Home(){
   const overdue=activeTasks.filter(t=>new Date(t.due_at)<new Date());
   const pendingDateRequests=data.dateRequests.filter(r=>r.status==="Gözləyir");
   const unseenOverdue=overdue.filter(t=>!seenOverdue.includes(t.id));
+  const shownOverdueDocs=viewAs?[]:overdueDocs;
+  const unseenOverdueDocs=shownOverdueDocs.filter(d=>!seenOverdueDocs.includes(d.id));
+  useEffect(()=>{if(!user)return;try{const raw=localStorage.getItem(`seenOverdueDocs:${user.id}`);setSeenOverdueDocs(raw?JSON.parse(raw):[])}catch{setSeenOverdueDocs([])}},[user]);
+  useEffect(()=>{if(!user||!notifOpen)return;const ids=shownOverdueDocs.map(d=>d.id);if(ids.every(id=>seenOverdueDocs.includes(id)))return;const next=Array.from(new Set([...seenOverdueDocs,...ids]));setSeenOverdueDocs(next);try{localStorage.setItem(`seenOverdueDocs:${user.id}`,JSON.stringify(next))}catch{}},[user,notifOpen,shownOverdueDocs,seenOverdueDocs]);
   useEffect(()=>{if(!user)return;try{const raw=localStorage.getItem(`seenOverdue:${user.id}`);setSeenOverdue(raw?JSON.parse(raw):[])}catch{setSeenOverdue([])}},[user]);
   useEffect(()=>{if(!user||(!notifOpen&&page!=="tasks"))return;const ids=overdue.map(t=>t.id);if(ids.every(id=>seenOverdue.includes(id)))return;const next=Array.from(new Set([...seenOverdue,...ids]));setSeenOverdue(next);try{localStorage.setItem(`seenOverdue:${user.id}`,JSON.stringify(next))}catch{}},[user,notifOpen,page,overdue,seenOverdue]);
   const activeEmployees=data.employees.filter(e=>Boolean(e.active));
@@ -250,7 +258,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.85</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.86</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??""} onChange={e=>pickCompany(Number(e.target.value))}>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -277,7 +285,7 @@ export default function Home(){
       <div className="admin"><span>{initials(viewAs?viewAs.name:user.name)}</span><div><b>{viewAs?viewAs.name:user.name}</b><small>{viewAs?"İstifadəçi":isAdmin?"Baş administrator":"İstifadəçi"}</small><small>{viewAs?(viewAs.email||"—"):user.email}</small></div>{isAdmin&&myOwnEmployee&&!viewAs&&<button className="switchuserbtn" title="İstifadəçi hesabına keç" onClick={()=>{setViewAs(myOwnEmployee);setPage("dashboard")}}><Users/></button>}<button className="logoutbtn" title="Çıxış" onClick={()=>void signOut()}><LogOut/></button></div>
     </aside>
     <main className={user.backgroundKey?"hasbg":undefined} style={user.backgroundKey?{backgroundImage:`linear-gradient(rgba(246,248,255,.2),rgba(242,246,251,.2)), url(/api/file?key=${encodeURIComponent(user.backgroundKey)})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:undefined}>
-      <header><button className="hamb" onClick={()=>setMenu(true)}><Menu/></button><div><div className="headrow">{back&&<button className="backbtn" title={`${back.label} bölməsinə qayıt`} onClick={back.go}><ChevronLeft/>{back.label}</button>}<h1>{subTitle||title[page]}</h1></div><p>{effectiveView?`${effectiveView.name} tapşırıqları`:"İstifadəçiləri, tapşırıqları və nəticələri vahid sistemdə idarə edin"}</p></div><div className="actions"><button onClick={()=>void load()} title="Yenilə"><RefreshCw/></button>{!viewAs&&can("chat")&&<div className="bellwrap"><button className={page==="chat"?"bellbtn chatbtn on":"bellbtn chatbtn"} title="Çat" onClick={()=>{askChatNotificationPermission();openChat()}}><MessageCircle/>{chatUnread>0&&<em className="headerbadge">{chatUnread}</em>}</button></div>}<div className="bellwrap">{notifOpen&&<button className="notifshade" aria-label="Bağla" onClick={()=>setNotifOpen(false)}/>}<button className="bellbtn" title="Bildirişlər" onClick={()=>setNotifOpen(v=>!v)}><Bell/>{(shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0))>0&&<em className="headerbadge">{shownRequestsPending+unseenOverdue.length+(isAdmin&&!viewAs?pendingDateRequests.length:0)}</em>}</button>{notifOpen&&<div className="notifpanel">{!viewAs&&can("tasks.requests")&&<div className="notifsection"><b>Sorğular</b><button onClick={()=>{setNotifOpen(false);setPage("requests")}}>{requestsPending>0?`${requestsPending} sorğu sizi gözləyir`:"Gözləyən sorğu yoxdur"}</button></div>}<div className="notifsection"><b>Gecikən tapşırıqlar</b>{overdue.length?<>{overdue.slice(0,5).map(t=><button key={t.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{t.title} — {t.employee_name}</button>)}{overdue.length>5&&<small>+{overdue.length-5} daha</small>}</>:<small>Gecikən tapşırıq yoxdur</small>}</div>{isAdmin&&!viewAs&&<div className="notifsection"><b>Tarix dəyişikliyi tələbləri</b>{pendingDateRequests.length?<>{pendingDateRequests.slice(0,5).map(r=><button key={r.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{r.task_title} — {r.employee_name} → {formatDate(r.proposed_due_at)}</button>)}{pendingDateRequests.length>5&&<small>+{pendingDateRequests.length-5} daha</small>}</>:<small>Gözləyən tələb yoxdur</small>}</div>}</div>}</div></div></header>
+      <header><button className="hamb" onClick={()=>setMenu(true)}><Menu/></button><div><div className="headrow">{back&&<button className="backbtn" title={`${back.label} bölməsinə qayıt`} onClick={back.go}><ChevronLeft/>{back.label}</button>}<h1>{subTitle||title[page]}</h1></div><p>{effectiveView?`${effectiveView.name} tapşırıqları`:"İstifadəçiləri, tapşırıqları və nəticələri vahid sistemdə idarə edin"}</p></div><div className="actions"><button onClick={()=>void load()} title="Yenilə"><RefreshCw/></button>{!viewAs&&can("chat")&&<div className="bellwrap"><button className={page==="chat"?"bellbtn chatbtn on":"bellbtn chatbtn"} title="Çat" onClick={()=>{askChatNotificationPermission();openChat()}}><MessageCircle/>{chatUnread>0&&<em className="headerbadge">{chatUnread}</em>}</button></div>}<div className="bellwrap">{notifOpen&&<button className="notifshade" aria-label="Bağla" onClick={()=>setNotifOpen(false)}/>}<button className="bellbtn" title="Bildirişlər" onClick={()=>setNotifOpen(v=>!v)}><Bell/>{(shownRequestsPending+unseenOverdue.length+unseenOverdueDocs.length+(isAdmin&&!viewAs?pendingDateRequests.length:0))>0&&<em className="headerbadge">{shownRequestsPending+unseenOverdue.length+unseenOverdueDocs.length+(isAdmin&&!viewAs?pendingDateRequests.length:0)}</em>}</button>{notifOpen&&<div className="notifpanel">{!viewAs&&can("tasks.requests")&&<div className="notifsection"><b>Sorğular</b><button onClick={()=>{setNotifOpen(false);setPage("requests")}}>{requestsPending>0?`${requestsPending} sorğu sizi gözləyir`:"Gözləyən sorğu yoxdur"}</button></div>}<div className="notifsection"><b>Gecikən tapşırıqlar</b>{overdue.length?<>{overdue.slice(0,5).map(t=><button key={t.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{t.title} — {t.employee_name}</button>)}{overdue.length>5&&<small>+{overdue.length-5} daha</small>}</>:<small>Gecikən tapşırıq yoxdur</small>}</div>{shownOverdueDocs.length>0&&<div className="notifsection"><b>Qayıtmayan imzalı nüsxələr</b>{shownOverdueDocs.slice(0,5).map(d=><button key={d.id} onClick={()=>{setNotifOpen(false);setOutgoingPreset(p=>({nonce:(p?.nonce??0)+1}));setDocumentSubTab("outgoing");setPage("documents")}}>№{d.outgoing_no} {d.document_type||"Sənəd"} — {d.organization_name||"—"} (son tarix {formatDateOnly(d.return_due_date)})</button>)}{shownOverdueDocs.length>5&&<small>+{shownOverdueDocs.length-5} daha</small>}</div>}{isAdmin&&!viewAs&&<div className="notifsection"><b>Tarix dəyişikliyi tələbləri</b>{pendingDateRequests.length?<>{pendingDateRequests.slice(0,5).map(r=><button key={r.id} onClick={()=>{setNotifOpen(false);setTaskSubTab("tasks");setTasksSection("manager");setPage("tasks")}}>{r.task_title} — {r.employee_name} → {formatDate(r.proposed_due_at)}</button>)}{pendingDateRequests.length>5&&<small>+{pendingDateRequests.length-5} daha</small>}</>:<small>Gözləyən tələb yoxdur</small>}</div>}</div>}</div></div></header>
       {viewAs&&<div className="viewasbar"><div><strong>{viewAs.name}</strong><span>İstifadəçi görünüşündəsiniz</span></div><button onClick={()=>{setViewAs(null);setPage("employees")}}>Admin görünüşünə qayıt</button></div>}
       {error&&<div className="errorbox">{error}</div>}
       {loading?<div className="loading">Məlumatlar yüklənir...</div>:<>
@@ -310,7 +318,7 @@ export default function Home(){
         {pageAllowed&&page==="customers"&&<CustomersPage isAdmin={isAdmin} canSeePersonnel={can("hr.personnel")} rights={{add:can("dashboard.customers:add"),edit:can("dashboard.customers:edit"),remove:can("dashboard.customers:delete")}}/>}
         {page==="audit"&&<AuditPage/>}
         {page==="guides"&&<GuidesPage ctx={{isAdmin:isAdmin&&!viewAs,viewEmployeeId:viewAs?.id??null,
-          sections:{"chat":can("chat")&&!viewAs,"settings":true,"tasks.manager":true,"tasks.mine":can("tasks.mine"),"tasks.requests":can("tasks.requests")&&!viewAs,"tasks.fixed":can("tasks.monthly")||can("tasks.weekly"),"documents.incoming":canDocument("incoming"),"documents.outgoing":canDocument("outgoing"),"documents.templates":canTemplates},
+          sections:{"chat":can("chat")&&!viewAs,"settings":true,"tasks.manager":true,"tasks.mine":can("tasks.mine"),"tasks.requests":can("tasks.requests")&&!viewAs,"tasks.fixed":can("tasks.monthly")||can("tasks.weekly"),"documents.incoming":canDocument("incoming"),"documents.outgoing":canDocument("outgoing"),"documents.templates":canTemplates,"dashboard.customers":can("dashboard.customers")},
           rights:{"documents.incoming":can("documents.incoming"),"documents.outgoing":can("documents.outgoing")}}}/>}
         {pageAllowed&&page==="documents"&&<>
         {documentSubTab==="overview"&&<DocumentsOverview showCustomers={can("dashboard.customers")} onOpenCustomers={()=>setPage("customers")} openOverdue={filter=>{setOutgoingPreset(p=>({...filter,nonce:(p?.nonce??0)+1}));setDocumentSubTab("outgoing")}} showTemplates={canTemplates} showOutgoing={canDocument("outgoing")} showIncoming={canDocument("incoming")} activeCompanyId={companyScopeActive?activeCompanyId:null} open={tab=>setDocumentSubTab(tab)}/>}
@@ -1170,6 +1178,20 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     }).catch(()=>{});
     return()=>{cancelled=true};
   },[canSeePersonnel]);
+  // Versiya 2.86: each customer's outgoing and incoming documents (by VÖEN) — only those this user may see in the document sections.
+  const [customerDocs,setCustomerDocs]=useState<Map<string,CustomerDocument[]>>(new Map());
+  const [docsOpen,setDocsOpen]=useState<number|null>(null);
+  useEffect(()=>{
+    let cancelled=false;
+    fetch("/api/customers?documents=1").then(r=>r.ok?r.json():{documents:[]}).then((body:{documents?:CustomerDocument[]})=>{
+      if(cancelled)return;
+      const map=new Map<string,CustomerDocument[]>();
+      (body.documents||[]).forEach(d=>map.set(d.voen,[...(map.get(d.voen)||[]),d]));
+      setCustomerDocs(map);
+    }).catch(()=>{});
+    return()=>{cancelled=true};
+  },[]);
+  const docsOf=(item:Customer)=>item.voen?.trim()?customerDocs.get(item.voen.trim())||[]:[];
   const {order,widths,setWidth,moveColumn}=useTableColumns("customers2",customerColumns.map(c=>c.key));
   const resize=useEdgeResize(setWidth,60);
   const {dragProps}=useColumnDrag(moveColumn);
@@ -1265,9 +1287,42 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     {error&&<div className="errorbox">{error}</div>}
     {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
-      <td data-label="Əməliyyat"><div className="tableactions">{rights.edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}{rights.remove&&!item.usage_count&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}{(formerStaff?.get(item.id)?.length||0)>0&&<button className={`formerbtn${formerOpen===item.id?" on":""}`} onClick={()=>setFormerOpen(v=>v===item.id?null:item.id)}>Keçmiş əməkdaşlar ({formerStaff?.get(item.id)?.length})</button>}</div></td>
-    </tr>{formerOpen===item.id&&<tr className="formerrow"><td colSpan={order.length+1}><FormerStaffList rows={formerStaff?.get(item.id)||[]}/></td></tr>}</Fragment>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
+      <td data-label="Əməliyyat"><div className="tableactions">{rights.edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}{rights.remove&&!item.usage_count&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}{(formerStaff?.get(item.id)?.length||0)>0&&<button className={`formerbtn${formerOpen===item.id?" on":""}`} onClick={()=>setFormerOpen(v=>v===item.id?null:item.id)}>Keçmiş əməkdaşlar ({formerStaff?.get(item.id)?.length})</button>}{docsOf(item).length>0&&<button className={`formerbtn${docsOpen===item.id?" on":""}`} onClick={()=>setDocsOpen(v=>v===item.id?null:item.id)}>Sənədlər ({docsOf(item).length}){(()=>{const n=docsOf(item).filter(d=>customerDocReturn(d)&&customerDocReturn(d)?.kind!=="done").length;return n>0?<em className="docsunreturned">{n} qayıtmayıb</em>:null})()}</button>}</div></td>
+    </tr>{formerOpen===item.id&&<tr className="formerrow"><td colSpan={order.length+1}><FormerStaffList rows={formerStaff?.get(item.id)||[]}/></td></tr>}{docsOpen===item.id&&<tr className="formerrow"><td colSpan={order.length+1}><CustomerHistory rows={docsOf(item)}/></td></tr>}</Fragment>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun müştəri tapılmadı.":"Hələ müştəri əlavə edilməyib."}/>}</div>}
   </section>;
+}
+// Versiya 2.86: a customer's history — its outgoing and incoming documents in one list, newest first, with where each signed copy stands.
+type CustomerDocument={kind:"outgoing"|"incoming";id:number;voen:string;company_name:string|null;no:string;date:string|null;document_type:string|null;document_number:string|null;document_date?:string|null;note:string|null;returns_signed_copy?:number;return_due_date?:string|null;returned_no?:string|null;returned_date?:string|null;draft_name?:string|null;final_name?:string|null;has_draft?:boolean;has_final?:boolean;status?:string;file_name?:string|null};
+const customerDocReturn=(d:CustomerDocument)=>d.kind==="outgoing"?outgoingReturnState({returns_signed_copy:d.returns_signed_copy,return_due_date:d.return_due_date,final_name:d.has_final?"1":null}):null;
+function CustomerHistory({rows}:{rows:CustomerDocument[]}){
+  const [direction,setDirection]=useState<"all"|"outgoing"|"incoming"|"unreturned">("all");
+  const [docType,setDocType]=useState("");
+  const [from,setFrom]=useState("");
+  const [to,setTo]=useState("");
+  const types=[...new Set(rows.map(r=>r.document_type||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b,"az"));
+  const unreturned=rows.filter(r=>{const s=customerDocReturn(r);return Boolean(s&&s.kind!=="done")});
+  const shown=(direction==="unreturned"?unreturned:rows).filter(r=>(direction==="all"||direction==="unreturned"||r.kind===direction)&&(!docType||r.document_type===docType)&&(!from||String(r.date||"")>=from)&&(!to||String(r.date||"")<=to));
+  const count=(kind:"outgoing"|"incoming")=>rows.filter(r=>r.kind===kind).length;
+  const fileLink=(r:CustomerDocument)=>r.kind==="incoming"?(r.file_name?<a className="filelink" href={`/api/documents/incoming/file?id=${r.id}`} target="_blank" rel="noreferrer">Aç</a>:<span className="nodocument">—</span>)
+    :r.has_final?<a className="filelink" href={`/api/documents/outgoing/file?id=${r.id}&kind=final`} target="_blank" rel="noreferrer" title={r.final_name||""}>Hazır</a>
+    :r.has_draft?<a className="filelink" href={`/api/documents/outgoing/file?id=${r.id}&kind=draft`} target="_blank" rel="noreferrer" title={r.draft_name||""}>İlkin</a>:<span className="nodocument">—</span>;
+  const state=(r:CustomerDocument)=>{
+    if(r.kind==="incoming")return <span className="nodocument">{r.status||"—"}</span>;
+    const s=customerDocReturn(r);
+    if(!s)return <span className="nodocument">{r.returns_signed_copy===0?"Qaytarılmır":"Müddət yoxdur"}</span>;
+    if(s.kind==="done")return <span className="returnchip done" title={r.returned_no?`Daxil olma №${r.returned_no}`:""}>✓ Qayıdıb{r.returned_date?` — ${formatDateOnly(r.returned_date)}`:""}</span>;
+    return s.kind==="overdue"?<span className="returnchip late">Yubanır — {-s.days} gün</span>:<span className="returnchip wait">Gözlənilir — {s.days===0?"bu gün son gündür":`${s.days} gün qalıb`}</span>;
+  };
+  return <div className="formerlist customerhistory"><b>Müştəri üzrə sənədlərin tarixçəsi</b>
+    <div className="historyfilters">
+      <div className="fixedsubtabs"><button className={direction==="all"?"on":""} onClick={()=>setDirection("all")}>Hamısı ({rows.length})</button><button className={direction==="outgoing"?"on":""} onClick={()=>setDirection("outgoing")}>➡ Çıxan ({count("outgoing")})</button><button className={direction==="incoming"?"on":""} onClick={()=>setDirection("incoming")}>⬅ Daxil olan ({count("incoming")})</button><button className={direction==="unreturned"?"on":""} onClick={()=>setDirection("unreturned")}>Qayıtmayanlar ({unreturned.length})</button></div>
+      {types.length>1&&<select value={docType} onChange={e=>setDocType(e.target.value)}><option value="">Bütün növlər</option>{types.map(t=><option key={t} value={t}>{t}</option>)}</select>}
+      <label>Tarixdən<Input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Tarixədək<Input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+    </div>
+    <table><thead><tr><th>Tarix</th><th>İstiqamət</th><th>№</th><th>Firma</th><th>Növ</th><th>Sənədin nömrəsi</th><th>Qısa məzmun / qeyd</th><th>Vəziyyət</th><th>Fayl</th></tr></thead><tbody>
+      {shown.map(r=><tr key={`${r.kind}-${r.id}`}><td>{formatDateOnly(r.date)}</td><td>{r.kind==="outgoing"?<span className="historydir out">➡ Çıxan</span>:<span className="historydir in">⬅ Daxil olan</span>}</td><td>{r.no}</td><td>{r.company_name||"—"}</td><td>{r.document_type||"—"}</td><td>{r.document_number||"—"}{r.document_date?` · ${formatDateOnly(r.document_date)}`:""}</td><td>{r.note||"—"}</td><td>{state(r)}</td><td>{fileLink(r)}</td></tr>)}
+    </tbody></table>{!shown.length&&<small className="nodocument">Seçimə uyğun sənəd yoxdur.</small>}
+  </div>;
 }
 function FormerStaffList({rows}:{rows:FormerStaff[]}){
   return <div className="formerlist"><b>Bu müştəridə işləmiş əməkdaşlarımız</b><table><thead><tr><th>İşçi</th><th>Oradakı vəzifəsi</th><th>Dövr</th><th>Oradan çıxma əsası</th><th>İndi bizdə</th></tr></thead><tbody>
@@ -1583,6 +1638,7 @@ function outgoingReturnState(item:{returns_signed_copy?:number;return_due_date?:
 }
 const outgoingMainDepartment=(item:OutgoingDocument)=>(item.related_departments||[])[0]||item.sending_department||"Şöbə göstərilməyib";
 const outgoingResponsible=(item:OutgoingDocument)=>item.responsible_name||item.delivered_by||"Məsul göstərilməyib";
+type OverdueSignedCopy={id:number;outgoing_no:string;organization_name:string|null;document_type:string|null;return_due_date:string|null};
 type OutgoingPreset={department?:string;responsible?:string;nonce:number};
 function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPresetUsed}:{isAdmin:boolean;companies:Company[];activeCompanyId:number|null;preset?:OutgoingPreset|null;onPresetUsed?:()=>void}){
   const [items,setItems]=useState<OutgoingDocument[]>([]);

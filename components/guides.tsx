@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -288,6 +288,8 @@ const GUIDES: Guide[] = [
           "İmzalı nüsxəsi geri qaytarılan sənədin (şablonda “Bəli”) qaytarılma tarixi çıxış tarixi + şablondakı gün sayıdır; qeydiyyatçı onu dəyişə bilər.",
           "Cədvəldə: “N gün qalıb”, “Yubanır — N gün”, “✓ Qaytarılıb”. “Yubananlar” tabında gecikənlər şöbə və məsul üzrə süzülür; Sənədlər icmalında “Yubanan sənədlər” kartı var.",
           "İmzalı nüsxə yüklənəndə ona Daxil olma No və tarixi avtomatik verilir (Çıxan sənədlərin öz ardıcıllığı).",
+          "Qaytarılma tarixi keçib, imzalı nüsxə hələ yüklənməyibsə, yuxarıdakı 🔔 Bildirişlərdə “Qayıtmayan imzalı nüsxələr” bölməsində görünür — qeydiyyatçılara və əlaqəli şöbələrin rəhbərlərinə. Sənədə basanda “Yubananlar” tabı açılır; zəngdəki say bildirişlərə baxanda sıfırlanır, sənəd isə imzalı nüsxə yüklənənədək siyahıda qalır.",
+          "Müştəri üzrə bütün sənədlərə Müştərilər bölməsində, müştərinin sətrindəki “Sənədlər” düyməsi ilə baxmaq olar.",
         ] },
       ] },
       { audience: "all", title: "Məsul şəxs", blocks: [
@@ -316,6 +318,26 @@ const GUIDES: Guide[] = [
           "Sonra firmanın rəhbəri “Son təsdiq” verir; səbəb yazaraq “Geri qaytar” da edə bilər — şöbələr yenidən təsdiqləyir.",
         ] },
         { note: "Məlumatlandırılan şöbələr təsdiq vermir. “Təsdiqimi gözləyir” tabında sizdən gözlənilənlər görünür." },
+      ] },
+    ],
+  },
+  {
+    id: "customers", group: "Sənədlər", title: "Müştərilər", path: "Sənədlər → Müştərilər", section: "dashboard.customers",
+    intro: "Sənəd göndərdiyimiz və sənəd aldığımız təşkilatların kartları. Çıxan və daxil olan sənədlər müştəriyə VÖEN üzrə bağlanır, ona görə hər müştərinin sənəd tarixçəsi bir yerdə görünür.",
+    parts: [
+      { audience: "all", title: "Müştəri üzrə sənədlərin tarixçəsi", blocks: [
+        { steps: [
+          "Müştərinin sətrində “Sənədlər (N)” düyməsini basın — sətrin altında tarixçə açılır (yenidən basanda bağlanır).",
+          "Siyahıda həmin VÖEN üzrə çıxan (➡) və daxil olan (⬅) sənədlər tarix sırası ilə, ən yenisi yuxarıda göstərilir: tarix, nömrə, firma, növ, sənədin nömrəsi, qısa məzmun, vəziyyət və fayl.",
+          "Yuxarıdakı tablar: Hamısı, Çıxan, Daxil olan, Qayıtmayanlar. Növ (bir neçə növ olanda) və tarix aralığı ilə də süzmək olar.",
+          "“Fayl” sütununda: çıxan sənəd üçün “Hazır” (imzalı nüsxə və ya sürəti) və ya “İlkin” (Word), daxil olan sənəd üçün “Aç”.",
+        ] },
+        { list: [
+          "Çıxan sənədin vəziyyəti: “Gözlənilir — N gün qalıb”, “Yubanır — N gün”, “✓ Qayıdıb — tarix” (imzalı nüsxə yüklənəndə), “Qaytarılmır” (imzalı nüsxəsi geri gəlməyən sənəd).",
+          "Daxil olan sənədin vəziyyəti Daxil olan sənədlər bölməsindəki statusdur.",
+          "Qayıtmayan imzalı nüsxəsi olan müştərinin düyməsində qırmızı “N qayıtmayıb” yazılır.",
+        ] },
+        { note: "Tarixçədə yalnız Çıxan və Daxil olan sənədlər bölmələrində görməyə icazəniz olan sənədlər görünür (kommersiya sirri). Ona görə eyni müştəri üzrə fərqli işçilər fərqli sayda sənəd görə bilər. VÖEN-i olmayan sənədlər tarixçəyə düşmür." },
       ] },
     ],
   },

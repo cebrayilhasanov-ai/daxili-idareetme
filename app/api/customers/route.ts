@@ -1,4 +1,4 @@
-import { createCustomer, deleteCustomer, getCustomers, updateCustomer } from "@/db/catalog";
+import { createCustomer, deleteCustomer, getCustomerDocuments, getCustomers, updateCustomer } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { requireAction, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
@@ -12,7 +12,9 @@ function authError(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    await requireSection(await requireUser(request), "dashboard.customers");
+    const user = await requireSection(await requireUser(request), "dashboard.customers");
+    // A customer's history (Versiya 2.86): only the documents this user may see in Çıxan / Daxil olan sənədlər.
+    if (new URL(request.url).searchParams.get("documents") === "1") return Response.json({ documents: await getCustomerDocuments(user) });
     return Response.json({ items: await getCustomers() });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }

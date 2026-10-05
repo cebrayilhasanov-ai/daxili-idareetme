@@ -1,4 +1,4 @@
-import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, recordApproval, updateOutgoingDocument } from "@/db/catalog";
+import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, overdueSignedCopies, recordApproval, updateOutgoingDocument } from "@/db/catalog";
 
 // Çıxan sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
 // (db/catalog.ts, outgoingRights) — department heads, the responsible person and the director see theirs without the permission.
@@ -20,6 +20,8 @@ async function listBody(user: Awaited<ReturnType<typeof requireUser>>) {
 export async function GET(request: Request) {
   try {
     const user = await requireUser(request);
+    // The bell (Versiya 2.86): signed copies past their return date, for the registrars and the related departments' heads.
+    if (new URL(request.url).searchParams.get("summary") === "1") return Response.json({ overdue: await overdueSignedCopies(user) });
     return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }

@@ -1691,6 +1691,8 @@ export async function getOutgoingDocuments(user: SessionUser) {
       final_missing: Boolean(row.final_path && folderStore && !folderStore.exists(String(row.final_path))),
       // What "Hazır sənəd" waits for: the other side's signed copy (1) or just a copy of what we sent (0).
       returns_signed_copy: flag(row.signed_copy_returns) ?? flag(row.template_signed_copy_returns) ?? 1,
+      // Versiya 2.86: whose bell rings when the signed copy is late — the registrars and the related departments' heads.
+      overdue_watch: rights.registrarHere || rights.head,
       can: {
         edit: rights.registrarHere && access.may.edit && editable,
         upload: rights.registrarHere && (access.admin || !approval.final) && (access.may.edit || (access.may.add && !hasOutgoingFile(row, "draft"))),
@@ -1700,6 +1702,19 @@ export async function getOutgoingDocuments(user: SessionUser) {
     }];
   });
 }
+
+// The bell (Versiya 2.86): outgoing documents whose signed copy is past its return date and not back yet, for the registrars
+// and the related departments' heads.
+export async function overdueSignedCopies(user: SessionUser) {
+  const today = bakuDateIso();
+  return (await outgoingRows(user))
+    .filter((d) => d.overdue_watch && d.returns_signed_copy !== 0 && d.return_due_date && String(d.return_due_date) < today && !hasOutgoingFile(d, "final"))
+    .map((d) => ({ id: Number(d.id), outgoing_no: d.outgoing_no, organization_name: d.organization_name, document_type: d.document_type, return_due_date: d.return_due_date }))
+    .sort((a, b) => String(a.return_due_date).localeCompare(String(b.return_due_date)));
+}
+
+// The list rows read as plain records (getOutgoingDocuments spreads the table row into them).
+const outgoingRows = async (user: SessionUser) => (await getOutgoingDocuments(user)) as unknown as Array<Record<string, unknown>>;
 
 export async function canRegisterOutgoing(user: SessionUser) {
   return (await outgoingAccess(user)).may.add;
@@ -2504,6 +2519,22 @@ export async function getCustomers() {
   await ensureSchema();
   const usage = await customerUsageSql();
   return (await db().prepare(`SELECT customers.*, ${usage.outgoing} + ${usage.incoming} + ${usage.hr} AS usage_count FROM customers ORDER BY name`).all()).results;
+}
+
+// A customer's history (Versiya 2.86): the outgoing and incoming documents with its VÖEN, newest first. Each user gets only the
+// documents they may see in Çıxan / Daxil olan sənədlər, so the history keeps the commercial secrecy of those sections.
+export async function getCustomerDocuments(user: SessionUser) {
+  const outgoing = (await outgoingRows(user)).filter((d) => String(d.voen || "").trim()).map((d) => ({
+    kind: "outgoing" as const, id: Number(d.id), voen: String(d.voen).trim(), company_name: d.company_name, no: d.outgoing_no, date: d.outgoing_date || String(d.created_at || "").slice(0, 10),
+    document_type: d.document_type, document_number: d.document_number, note: d.note,
+    returns_signed_copy: d.returns_signed_copy, return_due_date: d.return_due_date, returned_no: d.incoming_no, returned_date: d.incoming_date,
+    draft_name: d.draft_name, final_name: d.final_name, has_draft: hasOutgoingFile(d, "draft"), has_final: hasOutgoingFile(d, "final"),
+  }));
+  const incoming = ((await getIncomingDocuments(user)).items as unknown as Array<Record<string, unknown>>).filter((d: Record<string, unknown>) => String(d.sender_voen || "").trim()).map((d: Record<string, unknown>) => ({
+    kind: "incoming" as const, id: Number(d.id), voen: String(d.sender_voen).trim(), company_name: d.company_name, no: d.incoming_no, date: d.incoming_date || String(d.created_at || "").slice(0, 10),
+    document_type: d.document_type, document_number: d.sender_doc_no, document_date: d.sender_doc_date, note: d.summary, status: d.status, file_name: d.file_name,
+  }));
+  return [...outgoing, ...incoming].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || b.id - a.id);
 }
 
 export async function createCustomer(input: { entityType?: string; country?: string; voen?: string; name: string; legalAddress?: string; legalAddress2?: string; manager?: string; phone?: string }) {
