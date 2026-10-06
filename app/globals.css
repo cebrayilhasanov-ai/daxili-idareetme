@@ -160,7 +160,9 @@
 .matrixplus.assigned{background:#15803d}
 .matrixplus.completed{background:#15803d}
 .matrixplus.completed .selectiondot{display:grid;place-items:center;border-color:#16a34a;background:#fff;color:#123a68;font-size:15px;font-style:normal;font-weight:1000;line-height:1;box-shadow:0 0 0 3px #16a34a22}
-.catalogassignee{display:flex;align-items:stretch;min-width:0;border-right:1px solid #d5e0ed;background:#fff}
+.catalogassignee{display:flex;align-items:stretch;min-width:0;border-right:1px solid #d5e0ed;background:#e5e7eb}
+/* Versiya 2.95: a firm nobody does the work in is grey; an assigned one takes the person's colour (inline style). */
+.catalogassignee:not(.assignedname) select{color:#6b7280}
 .catalogassignee select{width:100%;min-width:0;border:0;background:transparent;padding:8px 5px;color:#334155;font-size:10px;font-weight:800;text-align:center;outline:none;cursor:pointer}
 .catalogassignee select:focus{box-shadow:inset 0 0 0 2px #0C8599}
 .catalogassignee.assignedname select{background:#ecfdf5;color:#166534}
