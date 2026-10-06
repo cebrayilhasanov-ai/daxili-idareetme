@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır — 2.97): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -28,7 +28,7 @@ const AUDIENCE_LABELS: Record<Audience, string> = { all: "Hamı üçün", regist
 const GUIDES: Guide[] = [
   {
     id: "tasks", group: "Tapşırıqlar", title: "Verilən tapşırıqlar", path: "Tapşırıqlar → Verilən tapşırıqlar", section: "tasks.manager",
-    intro: "Sizə verilmiş tapşırıqlar: admin tərəfindən verilənlər, rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
+    intro: "Sizə verilmiş tapşırıqlar: rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
     parts: [
       { audience: "all", title: "Statuslar və icra ardıcıllığı", blocks: [
         { steps: [
@@ -43,7 +43,7 @@ const GUIDES: Guide[] = [
           "Addımı sizə “Ver” ilə həvalə edən şəxs — onun tapşırığından və ya şəxsi işindən gələn tapşırığı o təsdiqləyir.",
           "Daxil olan sənəd üzrə dərkənarla verilən tapşırığı — firmanın rəhbəri (direktor).",
           "Sorğudan yaranan tapşırığı — sorğunun getdiyi şöbənin rəhbəri, Sorğular bölməsində.",
-          "Admin verdiyi tapşırıqları, eləcə də istənilən tapşırığı təsdiqləyə bilər.",
+          "Admin istənilən tapşırığı təsdiqləyə bilər.",
           "Zəncir varsa, hər pillə öz verdiyini təsdiqləyir: əməkdaşın işini onu verən şöbə rəhbəri, şöbə rəhbərinin işini isə ona verən.",
         ] },
       ] },
@@ -73,9 +73,9 @@ const GUIDES: Guide[] = [
       { audience: "all", title: "Sorğudan yaranan tapşırıq", blocks: [
         { p: "Şöbə rəhbəri gələn sorğunu sizə verəndə o, burada “Sorğu əsasında” tapşırıq kimi görünür. Təqdim edərkən yazdığınız cavab mətni və fayl sorğunu göndərənə gedir. Belə tapşırığı sorğunu göndərən cavabı təsdiqləyəndən sonra şöbə rəhbəri Sorğular bölməsində qiymətləndirir." },
       ] },
-      { audience: "admin", title: "Tapşırıq vermək və yoxlamaq", blocks: [
+      { audience: "admin", title: "Tapşırıqları yoxlamaq", blocks: [
+        { note: "Admin hesabı tapşırıq vermir və şəxsi iş yaratmır: onda “Şəxsi işlərim” bölməsi yoxdur, tapşırığın addımını da kiməsə həvalə etmək olmur. Tapşırıq vermək lazımdırsa, öz istifadəçi hesabınızla daxil olun. Admin bütün tapşırıqları görür, yoxlayır və tarix tələblərini həll edir." },
         { list: [
-          "Yeni tapşırığı admin verir: icraçı, firma (icraçının firmalarından), adı, açıqlaması, son tarixi, istəyə görə doldurulacaq fayl.",
           "Təqdim edilmiş tapşırığı “Qiymətləndir” ilə 1–10 balla təsdiqləyin və ya səbəb yazıb geri qaytarın. Həvalə edilmiş və dərkənar tapşırıqlarını adətən onları verən şəxs təsdiqləyir, amma admin də edə bilər.",
           "Tarix dəyişikliyi tələblərini qəbul və ya rədd edin.",
           "Yalnız “Yeni” statuslu tapşırıq silinir. Sorğudan yaranan tapşırıq silinmir — onu Sorğular bölməsindən (icraçını dəyişmək, imtina) idarə edin.",

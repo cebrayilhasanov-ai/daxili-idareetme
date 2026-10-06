@@ -41,6 +41,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "tasks.mine");
+    // Versiya 2.97: the admin account keeps no personal works.
+    if (user.role === "admin") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     const body = await request.json();
     await createPersonalWork({
       userId: user.id,

@@ -25,7 +25,8 @@ export async function GET(request: Request) {
     if (!personalWorkId) throw new Error("İş seçilməyib.");
     const access = await personalWorkAccess({ userId: user.id, employeeId: user.employeeId, isAdmin: user.role === "admin" }, personalWorkId);
     if (!access) throw new Error("FORBIDDEN");
-    if (access === "supervisor" && user.role !== "admin") return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: [], canRequest: false, requestDepartments: [], ownDepartment: null });
+    // Versiya 2.97: the admin gives no tasks or requests from a work's steps, so gets no candidates or targets either.
+    if (access === "supervisor" || user.role === "admin") return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: [], canRequest: false, requestDepartments: [], ownDepartment: null });
     // A step can be sent to another department only by someone who may add Sorğular.
     const canRequest = (await sectionRights(user, "tasks.requests")).add;
     const targets = canRequest ? await getPersonalWorkRequestTargets(personalWorkId, user.employeeId) : { departments: [], ownDepartment: null };
@@ -52,6 +53,7 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT personal_work_id FROM personal_work_checklist_items WHERE id = ?").bind(id).first<{ personal_work_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertAccess(user, existing.personal_work_id);
+    if (user.role === "admin" && (body.requestDepartment || body.delegateEmployeeId)) return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     if (body.requestDepartment) {
       await requireAction(user, "tasks.requests", "add");
       const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, attachmentKey: body.attachmentKey, attachmentName: body.attachmentName, attachmentSize: body.attachmentSize, attachmentType: body.attachmentType });

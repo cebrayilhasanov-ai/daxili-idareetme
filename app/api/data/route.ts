@@ -1,4 +1,4 @@
-import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
+import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { hiddenSections, requireSection } from "@/lib/permissions";
@@ -51,7 +51,8 @@ export async function POST(request: Request) {
     if (user.role !== "admin") return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
     if (body.action === "employee") { await createEmployee(body); await logAudit(user, "Personal yaradıldı", "employee", body.name); }
     else if (body.action === "company") { await createCompany(body); await logAudit(user, "Firma yaradıldı", "company", body.name); }
-    else if (body.action === "task") await createTask(body);
+    // Versiya 2.97: the admin account gives no tasks.
+    else if (body.action === "task") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     else if (body.action === "recurring") await createRecurring(body);
     else if (body.action === "work-item") await createWorkItem(body);
     else if (body.action === "work-assignment") await createWorkAssignment(body);

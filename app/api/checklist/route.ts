@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     const user = await requireUser(request);
     const taskId = Number(new URL(request.url).searchParams.get("taskId"));
     await assertTaskAccess(user, taskId);
-    return Response.json({ items: await getChecklistItems(taskId), candidates: await getTaskDelegateCandidates(taskId) });
+    // Versiya 2.97: the admin does not hand a task's steps to anyone, so gets no candidates.
+    return Response.json({ items: await getChecklistItems(taskId), candidates: user.role === "admin" ? [] : await getTaskDelegateCandidates(taskId) });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
 
@@ -44,6 +45,7 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT task_id FROM task_checklist_items WHERE id = ?").bind(id).first<{ task_id: number }>();
     if (!existing) return Response.json({ error: "Addım tapılmadı." }, { status: 404 });
     await assertTaskAccess(user, existing.task_id);
+    if (body.action === "delegate" && user.role === "admin") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     const items = body.action === "delegate"
       ? await delegateTaskChecklistItem({ id, isAdmin: user.role === "admin", actorEmployeeId: user.employeeId, actorName: user.name, employeeId: Number(body.employeeId), comment: body.comment })
       : body.removeAttachment || body.attachmentKey
