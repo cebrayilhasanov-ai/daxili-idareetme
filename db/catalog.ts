@@ -1,6 +1,6 @@
 import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
-import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, isLongPeriod, periodCounts, periodWindow } from "@/lib/fixed-periods";
+import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, hasFixedDue, isLongPeriod, periodCounts, periodWindow } from "@/lib/fixed-periods";
 import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { parseHiddenSections, sectionRights } from "@/lib/permissions";
 import { formatPhone } from "@/lib/phone";
@@ -618,6 +618,7 @@ export async function updateWorkItem(input: { id: number; frequency?: string; du
   }
   const frequency = input.frequency || current.frequency;
   if (!FREQUENCIES.includes(frequency)) throw new Error("Dövr seçimi düzgün deyil.");
+  if (hasFixedDue(frequency) && (input.dueDay != null || input.dueMonth != null)) throw new Error("Rüblük işin son tarixi dəyişmir: növbəti rübün 1-ci ayının 20-si.");
   if (input.dueMonth !== undefined) await db().prepare("UPDATE work_definitions SET due_month = ? WHERE id = ?").bind(normalizeDueMonth(frequency, input.dueMonth), input.id).run();
   // Switching monthly <-> weekly resets the deadline to that frequency's default, since the numbers mean different things.
   const dueDay = input.dueDay !== undefined ? input.dueDay : frequency === current.frequency ? current.due_day : null;
@@ -1127,6 +1128,28 @@ export async function getTeamPersonalWorks(viewer: PersonalWorkViewer) {
   const subordinates = await subordinatesByCompany(viewer.employeeId);
   if (!subordinates.size) return { hasTeam: false, items: [] };
   return { hasTeam: true, items: await withPersonalWorkProgress(all.filter((work) => supervises(subordinates, work))) };
+}
+
+// Versiya 2.94: "Əməkdaşlarımın sabit işləri" — the fixed works of everyone below the head in that firm's structure (the whole
+// subtree, as for personal works), with their marks; read-only, since marking stays with the person (completeWorkAssignment).
+export async function getTeamFixedWorks(employeeId: number | null) {
+  await ensureSchema();
+  const none = { hasTeam: false, assignments: [] as Record<string, unknown>[], completions: [] as { work_assignment_id: number; period_key: string; completed_at: string }[] };
+  if (!employeeId) return none;
+  const subordinates = await subordinatesByCompany(employeeId);
+  if (!subordinates.size) return none;
+  const [assignments, completions] = await Promise.all([
+    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, d.due_day, d.due_month, e.name AS employee_name, c.name AS company_name
+      FROM work_assignments a
+      JOIN work_definitions d ON d.id = a.work_definition_id
+      JOIN employees e ON e.id = a.employee_id
+      JOIN companies c ON c.id = a.company_id
+      WHERE a.employee_id != ? ORDER BY a.id DESC`).bind(employeeId).all<Record<string, unknown> & { id: number; employee_id: number; company_id: number }>(),
+    db().prepare("SELECT work_assignment_id, period_key, completed_at FROM work_assignment_completions").all<{ work_assignment_id: number; period_key: string; completed_at: string }>(),
+  ]);
+  const team = assignments.results.filter((a) => subordinates.get(Number(a.company_id))?.has(Number(a.employee_id)));
+  const ids = new Set(team.map((a) => a.id));
+  return { hasTeam: true, assignments: team, completions: completions.results.filter((c) => ids.has(c.work_assignment_id)) };
 }
 
 // The owner and the admin may open a work; a head may look at (and write notes on) the works of their staff.

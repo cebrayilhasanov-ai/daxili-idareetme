@@ -29,10 +29,14 @@ export const MONTH_ORDINALS = ["1-ci", "2-ci", "3-cü", "4-cü", "5-ci", "6-cı"
 
 // Defaults: weekly — Friday of the following week; monthly — the 10th of the following month; quarterly and half-yearly — the
 // 20th of the first month after the period; yearly — 31 March (the 31st of the 3rd month after the year).
+// Versiya 2.94: a quarterly work is always due on the 20th of the next quarter's first month — the admin no longer picks it.
+export const hasFixedDue = (frequency: string) => frequency === "quarterly";
 export function dueDay(rule: FixedWorkRule) {
+  if (hasFixedDue(rule.frequency)) return 20;
   return rule.due_day || (rule.frequency === "weekly" ? 5 : rule.frequency === "monthly" ? 10 : rule.frequency === "yearly" ? 31 : 20);
 }
 export function dueMonth(rule: FixedWorkRule) {
+  if (hasFixedDue(rule.frequency)) return 1;
   return Math.min(Math.max(rule.due_month || (rule.frequency === "yearly" ? 3 : 1), 1), 12);
 }
 
@@ -107,15 +111,15 @@ export function periodWindow(rule: FixedWorkRule, key: string): { start: number;
   return null;
 }
 
-// Where the period itself begins: the week's Monday, the first of the month, or the first day of the quarter / half / year.
+// Where the period counts from: the week's Monday or the first of the month; a quarter / half / year (since Versiya 2.94) from
+// the day it opens for work, so the III quarter of 2026 (opens 1 Oct, due 20 Oct) counts from a 1 Oct start.
 function periodBegin(rule: FixedWorkRule, key: string, window: { start: number }) {
   if (rule.frequency === "weekly") return window.start - 7 * DAY_MS;
   if (rule.frequency === "monthly") return bakuMidnight(Number(key.slice(8, 12)), Number(key.slice(13, 15)) - 1, 1);
-  const long = longPeriod(key);
-  return long ? bakuMidnight(long.year, long.first, 1) : window.start;
+  return window.start;
 }
 
-// A period counts when the period itself begins on or after the counting start, and the work was assigned before the period
+// A period counts when it begins (see periodBegin) on or after the counting start, and the work was assigned before the period
 // opened for work.
 export function periodCounts(rule: FixedWorkRule, key: string, scope: PeriodScope = {}) {
   const window = periodWindow(rule, key);

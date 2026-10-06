@@ -1,4 +1,4 @@
-import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
+import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createTask, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { hiddenSections, requireSection } from "@/lib/permissions";
@@ -26,7 +26,16 @@ function authError(error: unknown) {
 }
 
 export async function GET(request: Request) {
-  try { const user = await requireUser(request); return Response.json(await scopedData(user)); }
+  try {
+    const user = await requireUser(request);
+    // Versiya 2.94: "Əməkdaşlarımın sabit işləri" — the viewer's staff; for an admin in "view as", that employee's staff.
+    const params = new URL(request.url).searchParams;
+    if (params.get("scope") === "fixed-team") {
+      await requireSection(user, "tasks.fixed");
+      return Response.json(await getTeamFixedWorks(user.role === "admin" ? Number(params.get("employeeId")) || null : user.employeeId));
+    }
+    return Response.json(await scopedData(user));
+  }
   catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Məlumatlar açıla bilmədi." }, { status: 500 }); }
 }
 
