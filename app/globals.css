@@ -741,6 +741,7 @@ main{min-height:100vh}
 main.hasbg>header h1{font-weight:800;text-shadow:0 1px 3px #ffffffd9,0 0 12px #ffffffb3}
 main.hasbg>header p{color:#334155;font-weight:600;text-shadow:0 1px 2px #ffffffd9}
 .pageactions>.hrheadactions{margin-right:0;margin-left:auto}
+.pageactions>.adminnote{margin-left:auto;color:#64748b;font-size:13px;font-style:italic}
 /* Versiya 2.66: the background picture shows in its colours (20% veil); the page title sits on a frosted band. */
 main.hasbg>header{background:#ffffffb8;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);margin:0 -32px;padding:0 32px;border-bottom-color:#ffffff80}
 @media(max-width:730px){main.hasbg>header{margin:0 -15px;padding:0 15px}}
