@@ -30,7 +30,7 @@ async function teamViewer(user: Awaited<ReturnType<typeof requireUser>>, request
   return { userId: account?.id ?? -1, employeeId, isAdmin: false };
 }
 
-// Versiya 2.100: Şəxsi işlərim is given per firm — only the works of the firms where it is open (a work without a firm stays).
+// Versiya 3.00: Şəxsi işlərim is given per firm — only the works of the firms where it is open (a work without a firm stays).
 async function ownWorks(user: Awaited<ReturnType<typeof requireUser>>, request: Request) {
   const items = await getPersonalWorks(await scopeUserId(user, request));
   const firms = (await firmAccess(user, "tasks.mine")).firms("view");
@@ -78,7 +78,7 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     if (!body.status) await requireWorkFirm(user, body.companyId);
     if (body.action === "file") {
-      // Versiya 2.102: only the work's files — allowed in every status, a completed work too (2.104: the whole list).
+      // Versiya 3.02: only the work's files — allowed in every status, a completed work too (3.04: the whole list).
       await updatePersonalWorkFile({ id: Number(body.id), userId: user.id, actorName: user.name, files: parseFiles(body.files) });
     } else if (body.status) {
       await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });

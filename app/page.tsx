@@ -19,7 +19,7 @@ import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, FREQUENCY_TITLES, hasFixedDue, 
 
 type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; company_permissions?:string|null; is_department_head?:number };
 type Company = { id:number; name:string; voen:string|null; manager:string|null; active:number; created_at:string };
-// Versiya 2.104: up to 10 files where one used to be (db/attachments.ts); the single attachment_* fields hold the first of them.
+// Versiya 3.04: up to 10 files where one used to be (db/attachments.ts); the single attachment_* fields hold the first of them.
 type FileRef = { key:string; name:string; size:number; type:string };
 const MAX_FILES=10;
 const MAX_FILE_SIZE=25*1024*1024;
@@ -43,7 +43,7 @@ function FileLinks({files,empty,onRemove,busy}:{files:FileRef[];empty?:React.Rea
   if(!files.length)return <>{empty??null}</>;
   return <span className="filelinks">{files.map(f=><span key={f.key} className="filelinkitem"><a className="filelink" href={fileHref(f)}>{f.name}{f.size?<small>{formatFileSize(f.size)}</small>:null}</a>{onRemove&&<button type="button" className="checklistremove" title="Faylı sil" disabled={busy} onClick={()=>onRemove(f)}>✕</button>}</span>)}</span>;
 }
-// Several files to choose (Versiya 2.104): each choice adds to the list, ✕ takes one out; at most MAX_FILES with the kept ones.
+// Several files to choose (Versiya 3.04): each choice adds to the list, ✕ takes one out; at most MAX_FILES with the kept ones.
 function FilePicker({label,files,onChange,kept=0}:{label:string;files:File[];onChange:(next:File[])=>void;kept?:number}){
   const left=MAX_FILES-kept-files.length;
   return <label className="field filefield">{label}<Input type="file" multiple disabled={left<=0} onChange={e=>{const chosen=[...(e.target.files||[])];e.target.value="";if(chosen.length>left)window.alert(`Ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl seçilə bilər.`);onChange([...files,...chosen.slice(0,Math.max(left,0))])}}/>{files.length>0&&<span className="filelinks">{files.map((f,i)=><span key={`${f.name}-${i}`} className="filelinkitem"><small>{f.name} • {formatFileSize(f.size)}</small><button type="button" className="checklistremove" title="Siyahıdan çıxar" onClick={e=>{e.preventDefault();onChange(files.filter((_,j)=>j!==i))}}>✕</button></span>)}</span>}<small className="filepickernote">Bir neçə fayl seçmək olar — ən çox {MAX_FILES}, hər biri 25 MB-a qədər.</small></label>;
@@ -321,7 +321,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.104</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.04</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -710,7 +710,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const openDetail=(item:PersonalWork)=>{setDetailItem(item);setEditingWork(false);setNote("");setNoteError("")};
   const startEditWork=(item:PersonalWork)=>{setForm({id:String(item.id),title:item.title,description:item.description||"",companyId:item.company_id?String(item.company_id):"",dueAt:item.due_at?toDateTimeLocal(item.due_at):""});setEditFiles([]);setEditKept(rowFiles(item.files,item.attachment_key,item.attachment_name,item.attachment_size));setEditingWork(true)};
   const cancelEditWork=()=>{setEditingWork(false);setEditFiles([])};
-  // Versiya 2.102: a completed work's files are still changed (its other details stay fixed); 2.104: several files.
+  // Versiya 3.02: a completed work's files are still changed (its other details stay fixed); 3.04: several files.
   const changeWorkFiles=async(work:PersonalWork,keep:FileRef[],add:File[])=>{
     setBusy(true);setError("");
     try{
@@ -823,7 +823,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
       void reloadItems();
     }catch(e){setChecklistError(e instanceof Error?e.message:"Həvalə edilmədi.")}
   };
-  // Versiya 2.104: a step keeps up to 10 files — the chosen ones are added, ✕ removes one.
+  // Versiya 3.04: a step keeps up to 10 files — the chosen ones are added, ✕ removes one.
   const attachChecklistFile=async(item:ChecklistLikeItem,files:File[])=>{
     const left=MAX_FILES-rowFiles(item.files,item.attachment_key,item.attachment_name).length;
     if(files.length>left){setChecklistError(`Bir addıma ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl seçilə bilər.`);return}
@@ -947,7 +947,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
     setSubmitBusy(true);
     try{
       let extra:Record<string,unknown>={};
-      // Versiya 2.104: the work is submitted with up to 10 files.
+      // Versiya 3.04: the work is submitted with up to 10 files.
       const uploaded=await uploadFiles(submitFiles);
       if(uploaded.length)extra={submissionFiles:uploaded};
       // A request-linked task's answer text goes back to whoever sent the request (Sorğular and their İşlərim step).
@@ -983,7 +983,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
       if(response.ok)setChecklist(body.items||[]);
     }catch{}
   };
-  // Versiya 2.104: a step keeps up to 10 files — the chosen ones are added, ✕ removes one.
+  // Versiya 3.04: a step keeps up to 10 files — the chosen ones are added, ✕ removes one.
   const attachChecklistFile=async(item:ChecklistLikeItem,files:File[])=>{
     const left=MAX_FILES-rowFiles(item.files,item.attachment_key,item.attachment_name).length;
     if(files.length>left){setChecklistError(`Bir addıma ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl seçilə bilər.`);return}
@@ -2263,7 +2263,7 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
     if(!formCompanyId||!form.toDepartment||!(form.title||"").trim())return;
     setBusy(true);setError("");
     try{
-      // Versiya 2.104: up to 10 files go with the request (and on to its task when accepted).
+      // Versiya 3.04: up to 10 files go with the request (and on to its task when accepted).
       const files=await uploadFiles(requestFiles);
       const response=await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({companyId:formCompanyId,toDepartment:form.toDepartment,title:form.title,description:form.description,desiredDueAt:form.desiredDueAt,files})});
       const body=await response.json();
@@ -2351,7 +2351,7 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
 // "Giriş icazələri": which menu sections an employee sees and, in the sections with rights (Versiya 2.62: Baxış, Əlavə et,
 // Dəyişiklik et, Sil), what they may do there. Format: lib/permission-model.ts. Locked items cannot be closed; the admin always
 // may do everything.
-// Versiya 2.100: the user's firms are listed one under another and every section is given per firm (no "Ümumi" part), so in a
+// Versiya 3.00: the user's firms are listed one under another and every section is given per firm (no "Ümumi" part), so in a
 // firm one may, say, open only Kadrlar. In Çıxan / Daxil olan sənədlər the work in a firm can be narrowed to some document types
 // (the firm's templates). A firm newly added to the user starts fully closed.
 type SectionNode={key:string;label:string;locked?:boolean};
@@ -2401,7 +2401,7 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
     if(!current)return;
     setFirmEntry(companyId,section,types?{actions:current.actions,types}:{actions:current.actions});
   };
-  // Versiya 2.101: "Başqa firmadan köçür..." — this user's rights in another of their firms, copied into this firm (types do not carry over).
+  // Versiya 3.01: "Başqa firmadan köçür..." — this user's rights in another of their firms, copied into this firm (types do not carry over).
   const copyFromFirm=(sourceId:number,targetId:number)=>{
     const source=firms[String(sourceId)]||{};
     onFirmsChange({...firms,[String(targetId)]:Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions]}]))});

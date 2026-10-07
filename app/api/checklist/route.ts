@@ -49,7 +49,7 @@ export async function PATCH(request: Request) {
     if (body.action === "delegate" && user.role === "admin") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     const items = body.action === "delegate"
       ? await delegateTaskChecklistItem({ id, isAdmin: user.role === "admin", actorEmployeeId: user.employeeId, actorName: user.name, employeeId: Number(body.employeeId), comment: body.comment })
-      // Versiya 2.104: files are added to a step (addFiles) or one is removed (removeFileKey).
+      // Versiya 3.04: files are added to a step (addFiles) or one is removed (removeFileKey).
       : body.addFiles || body.removeFileKey
       ? await setChecklistItemAttachment({ id, add: parseFiles(body.addFiles), removeKey: body.removeFileKey ? String(body.removeFileKey) : undefined })
       : await toggleChecklistItem({ id, done: Boolean(body.done) });

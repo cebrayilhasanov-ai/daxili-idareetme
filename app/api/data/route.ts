@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit";
 async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
   if (user.role === "admin") return { ...data, approvals: [] };
-  // Versiya 2.93: one "Sabit işlər" permission for every frequency; since 2.100 it is given per firm.
+  // Versiya 2.93: one "Sabit işlər" permission for every frequency; since 3.00 it is given per firm.
   const fixedFirms = (await firmAccess(user, "tasks.fixed")).firms("view");
   const fixedVisible = (companyId: unknown) => !fixedFirms || fixedFirms.includes(Number(companyId));
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
@@ -74,7 +74,7 @@ export async function PATCH(request: Request) {
     if (user.role !== "admin") {
       if (body.action === "work-completion" || body.action === "work-uncompletion") {
         await requireSection(user, "tasks.fixed");
-        // Only a work of a firm where Sabit işlər is open (Versiya 2.100).
+        // Only a work of a firm where Sabit işlər is open (Versiya 3.00).
         const assignment = await env.DB.prepare("SELECT company_id FROM work_assignments WHERE id = ?").bind(Number(body.assignmentId)).first<{ company_id: number }>();
         if (!assignment || !(await firmAccess(user, "tasks.fixed")).firm(assignment.company_id).view) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
         if (body.action === "work-uncompletion") {

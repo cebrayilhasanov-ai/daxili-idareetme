@@ -298,7 +298,7 @@ async function ensureSchema() {
       await db().prepare("UPDATE employees SET company_permissions = ? WHERE id = ?").bind(JSON.stringify(companyPermissionsFromStored(parseHiddenSections(row.hidden_sections), companyIds)), row.id).run();
     }
   }
-  // Versiya 2.100: Şəxsi işlərim, Sabit işlər, Müştərilər and Çat moved from "Ümumi" into every firm — once, each user's old choice
+  // Versiya 3.00: Şəxsi işlərim, Sabit işlər, Müştərilər and Çat moved from "Ümumi" into every firm — once, each user's old choice
   // there is written into all of their firms.
   if (!(await db().prepare("SELECT 1 AS ok FROM app_settings WHERE key = 'permissions_general_per_firm'").first())) {
     const linked = await db().prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'employee_companies'").first();
@@ -935,7 +935,7 @@ export async function updateTask(input: { id: number; actorName?: string; status
       employeeStatusChanged,
       input.id,
     ).run();
-  // Versiya 2.104: the work is submitted with up to 10 files; submitting again replaces them.
+  // Versiya 3.04: the work is submitted with up to 10 files; submitting again replaces them.
   if (submissionFiles.length) await setFiles("task_submission", input.id, submissionFiles);
   if (status === "Təsdiqlənib") {
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
@@ -1326,7 +1326,7 @@ export async function createPersonalWork(input: { userId: number; actorName?: st
     VALUES (?, ?, ?, ?, ?, 'Yeni', ?)`)
     .bind(input.userId, title, input.description?.trim() || null, input.companyId || null, input.dueAt || null, new Date().toISOString()).run();
   const workId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
-  // Versiya 2.104: up to 10 files (db/attachments.ts).
+  // Versiya 3.04: up to 10 files (db/attachments.ts).
   if (input.files?.length) await setFiles("personal_work", workId, input.files);
   await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", `${title}${input.files?.length ? `\nFayl: ${fileNames(input.files)}` : ""}`);
 }
@@ -1340,8 +1340,8 @@ function filesChange(before: FileRef[], after: FileRef[]) {
   return [added.length ? `Əlavə edildi: ${fileNames(added)}` : "", removed.length ? `Silindi: ${fileNames(removed)}` : ""].filter(Boolean).join("\n");
 }
 
-// Versiya 2.102: the files of one's own work may be changed in every status — a completed work too (its other details stay
-// fixed once it is completed). Since 2.104 the whole list is sent: the files kept, plus the new ones. The change goes into the history.
+// Versiya 3.02: the files of one's own work may be changed in every status — a completed work too (its other details stay
+// fixed once it is completed). Since 3.04 the whole list is sent: the files kept, plus the new ones. The change goes into the history.
 export async function updatePersonalWorkFile(input: { id: number; userId: number; actorName?: string; files: FileRef[] }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
@@ -1415,7 +1415,7 @@ export async function getPersonalWorkChecklist(personalWorkId: number) {
     LEFT JOIN tasks AS req_task ON req_task.id = req.task_id
     WHERE personal_work_id = ? ORDER BY personal_work_checklist_items.id`).bind(personalWorkId).all<Record<string, unknown>>()).results;
   // The pending score is the other department's matter; for the requester the request is simply closed.
-  // Versiya 2.104: every file — the step's own, what the person it was handed to submitted, the request's answer.
+  // Versiya 3.04: every file — the step's own, what the person it was handed to submitted, the request's answer.
   const withOwn = await withFiles(rows, "personal_work_item");
   const withDelegated = await withFiles(withOwn, "task_submission", "delegated_submission_files", "delegated_task_id");
   const withAnswer = await withFiles(withDelegated, "task_submission", "request_answer_files", "request_task_id");
@@ -1532,7 +1532,7 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   return getPersonalWorkChecklist(Number(item.personal_work_id));
 }
 
-// Versiya 2.104: a step keeps up to 10 files — new ones are added to the list, one is removed by its key.
+// Versiya 3.04: a step keeps up to 10 files — new ones are added to the list, one is removed by its key.
 export type StepFilesChange = { add?: FileRef[]; removeKey?: string };
 async function changeStepFiles(kind: "personal_work_item" | "task_item", id: number, change: StepFilesChange) {
   const current = await filesOf(kind, id);

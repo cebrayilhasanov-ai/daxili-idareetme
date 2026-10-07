@@ -1,6 +1,6 @@
 import { env } from "@/lib/runtime";
 
-// Versiya 2.104: several files (up to 10) wherever one file used to be — a personal work and its steps, a task's steps, the
+// Versiya 3.04: several files (up to 10) wherever one file used to be — a personal work and its steps, a task's steps, the
 // file a task comes with and the files it is submitted with, a request. All of them live in one table; the old single-file
 // columns of each table keep a copy of the FIRST file, so everything that only asks "is there a file" keeps working. Files of
 // the server-folder documents (Çıxan / Daxil olan sənədlər) and templates are not here — they stay one file each.

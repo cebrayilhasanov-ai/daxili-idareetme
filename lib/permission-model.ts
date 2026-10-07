@@ -85,7 +85,7 @@ export function deniedFromStored(stored: string[]): Set<string> {
 // Nothing is flipped from a default here: a firm or a section that is not listed is closed (a firm newly added to a user starts
 // fully closed). In Çıxan / Daxil olan sənədlər "types" narrows the registrar's work in that firm to the listed document types
 // (templates of the firm); without it every type is covered.
-// Since Versiya 2.100 every section is given per firm (the dialog lists the firms one under another, no "Ümumi" part): Şəxsi işlərim,
+// Since Versiya 3.00 every section is given per firm (the dialog lists the firms one under another, no "Ümumi" part): Şəxsi işlərim,
 // Sabit işlər and Çat are plain on/off (stored as ["view"]); Müştərilər and Çat do not belong to a firm and are open when any firm opens them.
 export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "documents.incoming", "documents.outgoing", "dashboard.customers", "hr.personnel", "hr.orders", "hr.violations", "chat"] as const;
 export type FirmSection = (typeof FIRM_SECTIONS)[number];

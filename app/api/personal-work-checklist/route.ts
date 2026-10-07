@@ -68,7 +68,7 @@ export async function PATCH(request: Request) {
     }
     const items = body.delegateEmployeeId
       ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, actorName: user.name, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
-      // Versiya 2.104: files are added to a step (addFiles) or one is removed (removeFileKey).
+      // Versiya 3.04: files are added to a step (addFiles) or one is removed (removeFileKey).
       : body.addFiles || body.removeFileKey
         ? await setPersonalWorkChecklistItemAttachment({ id, actorName: user.name, add: parseFiles(body.addFiles), removeKey: body.removeFileKey ? String(body.removeFileKey) : undefined })
         : await togglePersonalWorkChecklistItem({ id, actorName: user.name, done: Boolean(body.done) });

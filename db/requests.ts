@@ -228,7 +228,7 @@ async function allRows() {
 }
 
 // The accepted request becomes a task of the assignee. The task gets its own copies of the request's files (all of them, since
-// Versiya 2.104), so removing either one never orphans the other (same as when a checklist step is handed over).
+// Versiya 3.04), so removing either one never orphans the other (same as when a checklist step is handed over).
 async function createLinkedTask(row: RequestRow, employeeId: number, dueDate: string) {
   const files = await copyFiles(await filesOf("request", row.id));
   const sender = await db().prepare("SELECT name FROM app_users WHERE id = ?").bind(row.from_user_id).first<{ name: string }>();
@@ -291,7 +291,7 @@ async function userCompanyIds(user: SessionUser): Promise<number[]> {
 export async function listRequests(user: SessionUser) {
   await ensureRequestSchema();
   const structure = await loadStructure();
-  // Versiya 2.104: the request's files and the files its task was submitted with.
+  // Versiya 3.04: the request's files and the files its task was submitted with.
   const rows = await withFiles(await withFiles(await allRows(), "request"), "task_submission", "submission_files", "task_id");
   const items = rows.flatMap((row) => {
     const r = roles(row, user, structure);
