@@ -292,7 +292,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.100</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.101</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -2391,6 +2391,11 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
     if(!current)return;
     setFirmEntry(companyId,section,types?{actions:current.actions,types}:{actions:current.actions});
   };
+  // Versiya 2.101: "Başqa firmadan köçür..." — this user's rights in another of their firms, copied into this firm (types do not carry over).
+  const copyFromFirm=(sourceId:number,targetId:number)=>{
+    const source=firms[String(sourceId)]||{};
+    onFirmsChange({...firms,[String(targetId)]:Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions]}]))});
+  };
   const copyFirmToAll=(companyId:number)=>{
     const source=firms[String(companyId)]||{};
     // Document types are templates of one firm, so a narrowed list cannot be carried over: the other firms get every type.
@@ -2473,7 +2478,7 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
         </div>
         {expanded&&<div className="permissionfirmbody">
           <div className="permissiongroups">{FIRM_TREE.map(group=>renderGroup(c.id,group))}</div>
-          {companies.length>1&&<button type="button" className="permissioncopyfirm" onClick={()=>{if(window.confirm(`“${c.name}” firmasının icazələri istifadəçinin bütün firmalarına köçürülsün? Digər firmalarda seçilmiş sənəd növləri “Bütün növlər” olacaq.`))copyFirmToAll(c.id)}}>Bu firmanın icazələrini bütün firmalara köçür</button>}
+          {companies.length>1&&<div className="permissionfirmcopy"><select value="" onChange={e=>{const source=companies.find(x=>String(x.id)===e.target.value);if(source&&window.confirm(`“${source.name}” firmasındakı icazələr “${c.name}” firmasına köçürülsün? “${c.name}” firmasındakı indiki icazələr əvəz olunacaq, seçilmiş sənəd növləri “Bütün növlər” olacaq.`))copyFromFirm(source.id,c.id)}}><option value="">Başqa firmadan köçür...</option>{companies.filter(x=>x.id!==c.id).map(x=><option key={x.id} value={x.id}>{x.name} ({firmOpenCount(x.id)}/{FIRM_SECTIONS.length} açıq)</option>)}</select><button type="button" className="permissioncopyfirm" onClick={()=>{if(window.confirm(`“${c.name}” firmasının icazələri istifadəçinin bütün firmalarına köçürülsün? Digər firmalarda seçilmiş sənəd növləri “Bütün növlər” olacaq.`))copyFirmToAll(c.id)}}>Bu firmanın icazələrini bütün firmalara köçür</button></div>}
         </div>}
       </div>;
     })}</div>
