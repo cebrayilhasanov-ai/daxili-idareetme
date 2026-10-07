@@ -19,7 +19,36 @@ import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, FREQUENCY_TITLES, hasFixedDue, 
 
 type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; company_permissions?:string|null; is_department_head?:number };
 type Company = { id:number; name:string; voen:string|null; manager:string|null; active:number; created_at:string };
-type Task = { id:number; request_id?:number|null; request_from?:string|null; request_status?:string|null; employee_id:number; employee_name:string; employee_position:string; company_id:number|null; company_name:string|null; title:string; description:string|null; due_at:string; original_due_at:string|null; status:string; evaluation:number|null; evaluation_note:string|null; employee_status_changed:number; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; submission_attachment_type:string|null; recurring_task_id:number|null; period_key:string|null; created_at:string; completed_at?:string|null; assigned_by:string|null };
+// Versiya 2.104: up to 10 files where one used to be (db/attachments.ts); the single attachment_* fields hold the first of them.
+type FileRef = { key:string; name:string; size:number; type:string };
+const MAX_FILES=10;
+const MAX_FILE_SIZE=25*1024*1024;
+// Uploads the chosen files one by one (each up to 25 MB) and returns their references.
+async function uploadFiles(files:File[]):Promise<FileRef[]>{
+  const uploaded:FileRef[]=[];
+  for(const file of files){
+    if(file.size>MAX_FILE_SIZE)throw new Error(`“${file.name}”: faylın həcmi 25 MB-dan çox ola bilməz.`);
+    const upload=new FormData();upload.append("file",file);
+    const response=await fetch("/api/file",{method:"POST",body:upload});
+    const result=await response.json().catch(()=>({error:`“${file.name}” yüklənmədi.`}));
+    if(!response.ok)throw new Error(result.error||`“${file.name}” yüklənmədi.`);
+    uploaded.push({key:result.key,name:result.name,size:result.size,type:result.type});
+  }
+  return uploaded;
+}
+// The files of a row: the list, or — for a row read before the list existed — its single file.
+const rowFiles=(files:FileRef[]|undefined,key?:string|null,name?:string|null,size?:number|null):FileRef[]=>files?.length?files:key?[{key,name:name||"fayl",size:size||0,type:""}]:[];
+const fileHref=(f:FileRef)=>`/api/file?key=${encodeURIComponent(f.key)}`;
+function FileLinks({files,empty,onRemove,busy}:{files:FileRef[];empty?:React.ReactNode;onRemove?:(f:FileRef)=>void;busy?:boolean}){
+  if(!files.length)return <>{empty??null}</>;
+  return <span className="filelinks">{files.map(f=><span key={f.key} className="filelinkitem"><a className="filelink" href={fileHref(f)}>{f.name}{f.size?<small>{formatFileSize(f.size)}</small>:null}</a>{onRemove&&<button type="button" className="checklistremove" title="Faylı sil" disabled={busy} onClick={()=>onRemove(f)}>✕</button>}</span>)}</span>;
+}
+// Several files to choose (Versiya 2.104): each choice adds to the list, ✕ takes one out; at most MAX_FILES with the kept ones.
+function FilePicker({label,files,onChange,kept=0}:{label:string;files:File[];onChange:(next:File[])=>void;kept?:number}){
+  const left=MAX_FILES-kept-files.length;
+  return <label className="field filefield">{label}<Input type="file" multiple disabled={left<=0} onChange={e=>{const chosen=[...(e.target.files||[])];e.target.value="";if(chosen.length>left)window.alert(`Ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl seçilə bilər.`);onChange([...files,...chosen.slice(0,Math.max(left,0))])}}/>{files.length>0&&<span className="filelinks">{files.map((f,i)=><span key={`${f.name}-${i}`} className="filelinkitem"><small>{f.name} • {formatFileSize(f.size)}</small><button type="button" className="checklistremove" title="Siyahıdan çıxar" onClick={e=>{e.preventDefault();onChange(files.filter((_,j)=>j!==i))}}>✕</button></span>)}</span>}<small className="filepickernote">Bir neçə fayl seçmək olar — ən çox {MAX_FILES}, hər biri 25 MB-a qədər.</small></label>;
+}
+type Task = { files?:FileRef[]; submission_files?:FileRef[]; id:number; request_id?:number|null; request_from?:string|null; request_status?:string|null; employee_id:number; employee_name:string; employee_position:string; company_id:number|null; company_name:string|null; title:string; description:string|null; due_at:string; original_due_at:string|null; status:string; evaluation:number|null; evaluation_note:string|null; employee_status_changed:number; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; submission_attachment_type:string|null; recurring_task_id:number|null; period_key:string|null; created_at:string; completed_at?:string|null; assigned_by:string|null };
 type DateRequest = { id:number; task_id:number; task_title:string; employee_id:number; employee_name:string; proposed_due_at:string; reason:string|null; status:string; admin_note:string|null; created_at:string; resolved_at:string|null };
 type Recurring = { id:number; employee_id:number; employee_name:string; title:string; description:string|null; due_day:number; frequency:"monthly"|"weekly"|"daily"; weekday:number|null; due_time:string; active:number };
 type WorkItem = { id:number; title:string; description:string|null; frequency:FixedFrequency|"daily"; due_month?:number|null; company_ids:string|null; due_day:number|null };
@@ -41,18 +70,18 @@ type ChatMessage = { id:number; thread_id:number; sender_user_id:number; sender_
 type ChatUser = { id:number; name:string; email:string; avatar_key:string|null };
 type FormerStaff = { customer_id:number; hr_employee_id:number; last_name:string; first_name:string; patronymic:string|null; prior_position:string; start_date:string; end_date:string; prior_termination_reason:string|null; current_position:string|null; company_name:string|null; termination_date:string|null };
 type Customer = { id:number; entity_type:string|null; country:string|null; voen:string|null; name:string; legal_address:string|null; legal_address2:string|null; manager:string|null; phone?:string|null; created_at:string; usage_count?:number };
-type ChecklistItem = { id:number; task_id:number; title:string; done:number; created_at:string; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
+type ChecklistItem = { files?:FileRef[]; delegated_submission_files?:FileRef[]; id:number; task_id:number; title:string; done:number; created_at:string; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
 type StepRequest = { request_id?:number|null; request_status?:string|null; request_department?:string|null; request_reject_reason?:string|null; request_due_at?:string|null; request_agreed_due_at?:string|null; request_assignee_name?:string|null; request_answer?:string|null; request_answer_key?:string|null; request_answer_name?:string|null; request_answer_size?:number|null };
-type StepRequestInput = { department:string; title:string; description:string; dueDate:string; file:File|null };
-type ChecklistLikeItem = StepRequest & { id:number; title:string; done:number; delegated_task_id?:number|null; delegated_employee_name?:string|null; delegated_task_status?:string|null; attachment_key?:string|null; attachment_name?:string|null; attachment_size?:number|null; delegated_submission_attachment_key?:string|null; delegated_submission_attachment_name?:string|null; delegated_submission_attachment_size?:number|null };
-type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
+type StepRequestInput = { department:string; title:string; description:string; dueDate:string; files:File[] };
+type ChecklistLikeItem = StepRequest & { files?:FileRef[]; delegated_submission_files?:FileRef[]; request_answer_files?:FileRef[]; id:number; title:string; done:number; delegated_task_id?:number|null; delegated_employee_name?:string|null; delegated_task_status?:string|null; attachment_key?:string|null; attachment_name?:string|null; attachment_size?:number|null; delegated_submission_attachment_key?:string|null; delegated_submission_attachment_name?:string|null; delegated_submission_attachment_size?:number|null };
+type PersonalWork = { files?:FileRef[]; id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
 // Versiya 2.99: where the user registers documents — per firm, every type (null) or only these template names.
 type RegisterTarget = { companyId:number; types:string[]|null };
 type DocumentTemplate = { id:number; name:string; departments?:string|null; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; draft_folder_missing?:boolean; final_folder_missing?:boolean; incoming_folder_missing?:boolean; created_at:string };
 type OutgoingDocument = { informed_departments?:string[]; return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
-type WorkRequest = { id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
+type WorkRequest = { files?:FileRef[]; submission_files?:FileRef[]; id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { canAdd?:boolean; items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
 type ChatData = { threads:ChatThread[]; users:ChatUser[]; messages:ChatMessage[]; selectedThreadId:number; totalUnread:number; readUpTo:number };
 
@@ -292,7 +321,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.103</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.104</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -616,12 +645,12 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const [error,setError]=useState("");
   const [creating,setCreating]=useState(false);
   const [form,setForm]=useState<Record<string,string>>({title:"",description:"",companyId:"",dueAt:""});
-  const [file,setFile]=useState<File|null>(null);
+  const [newFiles,setNewFiles]=useState<File[]>([]);
   const [busy,setBusy]=useState(false);
   const [detailItem,setDetailItem]=useState<PersonalWork|null>(null);
   const [editingWork,setEditingWork]=useState(false);
-  const [editFile,setEditFile]=useState<File|null>(null);
-  const [editRemoveAttachment,setEditRemoveAttachment]=useState(false);
+  const [editFiles,setEditFiles]=useState<File[]>([]);
+  const [editKept,setEditKept]=useState<FileRef[]>([]);
   const [checklist,setChecklist]=useState<PersonalWorkChecklistItem[]>([]);
   const [delegateCandidates,setDelegateCandidates]=useState<DelegateCandidate[]>([]);
   const [requestDepartments,setRequestDepartments]=useState<string[]>([]);
@@ -648,19 +677,11 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     if(!form.title.trim())return;
     setBusy(true);setError("");
     try{
-      let attachment:Record<string,unknown>={};
-      if(file){
-        if(file.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
-        const upload=new FormData();upload.append("file",file);
-        const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-        const uploadResult=await uploadResponse.json();
-        if(!uploadResponse.ok)throw new Error(uploadResult.error||"Fayl yüklənmədi.");
-        attachment={attachmentKey:uploadResult.key,attachmentName:uploadResult.name,attachmentSize:uploadResult.size,attachmentType:uploadResult.type};
-      }
-      const response=await fetch(worksUrl(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,...attachment})});
+      const files=await uploadFiles(newFiles);
+      const response=await fetch(worksUrl(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
-      setItems(body.items||[]);setForm({title:"",description:"",companyId:"",dueAt:""});setFile(null);setCreating(false);
+      setItems(body.items||[]);setForm({title:"",description:"",companyId:"",dueAt:""});setNewFiles([]);setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"İş əlavə olunmadı.")}
     finally{setBusy(false)}
   };
@@ -687,23 +708,14 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const statusTone=(s:string)=>s==="Tamamlanıb"?"done":s==="İcradadır"?"inprogress":"";
   const isOwn=(item:PersonalWork)=>item.user_id===currentUserId;
   const openDetail=(item:PersonalWork)=>{setDetailItem(item);setEditingWork(false);setNote("");setNoteError("")};
-  const startEditWork=(item:PersonalWork)=>{setForm({id:String(item.id),title:item.title,description:item.description||"",companyId:item.company_id?String(item.company_id):"",dueAt:item.due_at?toDateTimeLocal(item.due_at):""});setEditFile(null);setEditRemoveAttachment(false);setEditingWork(true)};
-  const cancelEditWork=()=>{setEditingWork(false);setEditFile(null);setEditRemoveAttachment(false)};
-  // Versiya 2.102: a completed work's file is still replaced or removed (its other details stay fixed).
-  const changeWorkFile=async(work:PersonalWork,file:File|null)=>{
-    if(!file&&!window.confirm("İşin faylı silinsin?"))return;
+  const startEditWork=(item:PersonalWork)=>{setForm({id:String(item.id),title:item.title,description:item.description||"",companyId:item.company_id?String(item.company_id):"",dueAt:item.due_at?toDateTimeLocal(item.due_at):""});setEditFiles([]);setEditKept(rowFiles(item.files,item.attachment_key,item.attachment_name,item.attachment_size));setEditingWork(true)};
+  const cancelEditWork=()=>{setEditingWork(false);setEditFiles([])};
+  // Versiya 2.102: a completed work's files are still changed (its other details stay fixed); 2.104: several files.
+  const changeWorkFiles=async(work:PersonalWork,keep:FileRef[],add:File[])=>{
     setBusy(true);setError("");
     try{
-      let attachment:Record<string,unknown>={removeAttachment:true};
-      if(file){
-        if(file.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
-        const upload=new FormData();upload.append("file",file);
-        const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-        const uploadResult=await uploadResponse.json();
-        if(!uploadResponse.ok)throw new Error(uploadResult.error||"Fayl yüklənmədi.");
-        attachment={attachmentKey:uploadResult.key,attachmentName:uploadResult.name,attachmentSize:uploadResult.size,attachmentType:uploadResult.type};
-      }
-      const response=await fetch(worksUrl(),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:work.id,action:"file",...attachment})});
+      const files=[...keep,...await uploadFiles(add)];
+      const response=await fetch(worksUrl(),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:work.id,action:"file",files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setItems(body.items||[]);
@@ -715,24 +727,14 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     if(!detailItem||!form.title.trim())return;
     setBusy(true);setError("");
     try{
-      let attachment:Record<string,unknown>={};
-      if(editFile){
-        if(editFile.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
-        const upload=new FormData();upload.append("file",editFile);
-        const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-        const uploadResult=await uploadResponse.json();
-        if(!uploadResponse.ok)throw new Error(uploadResult.error||"Fayl yüklənmədi.");
-        attachment={attachmentKey:uploadResult.key,attachmentName:uploadResult.name,attachmentSize:uploadResult.size,attachmentType:uploadResult.type};
-      }else if(editRemoveAttachment){
-        attachment={removeAttachment:true};
-      }
-      const response=await fetch(worksUrl(),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:Number(form.id),title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,...attachment})});
+      const files=[...editKept,...await uploadFiles(editFiles)];
+      const response=await fetch(worksUrl(),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:Number(form.id),title:form.title,description:form.description,companyId:form.companyId||undefined,dueAt:form.dueAt?new Date(form.dueAt).toISOString():undefined,files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setItems(body.items||[]);
       const updated=(body.items||[]).find((i:PersonalWork)=>i.id===Number(form.id));
       if(updated)setDetailItem(updated);
-      setEditingWork(false);setEditFile(null);setEditRemoveAttachment(false);setForm({title:"",description:"",companyId:"",dueAt:""});
+      setEditingWork(false);setEditFiles([]);setForm({title:"",description:"",companyId:"",dueAt:""});
     }catch(e){setError(e instanceof Error?e.message:"İş yenilənmədi.")}
     finally{setBusy(false)}
   };
@@ -742,7 +744,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     {key:"company",label:"Firma",width:140,search:i=>i.company_name||"",render:i=><b>{i.company_name||"—"}</b>},
     {key:"title",label:"İş",width:170,search:i=>i.title,render:i=><button className="taskdetailbtn" onClick={()=>openDetail(i)}>{i.title}</button>},
     {key:"description",label:"Açıqlama",width:220,search:i=>i.description||"—",render:i=><>{i.description||"—"}</>},
-    {key:"document",label:"Əlavə olunan sənəd",width:150,search:i=>i.attachment_name||"Sənəd yoxdur",render:i=>i.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(i.attachment_key)}`}>{i.attachment_name}<small>{formatFileSize(i.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
+    {key:"document",label:"Əlavə olunan sənəd",width:150,search:i=>rowFiles(i.files,i.attachment_key,i.attachment_name).map(f=>f.name).join(", ")||"Sənəd yoxdur",render:i=><FileLinks files={rowFiles(i.files,i.attachment_key,i.attachment_name,i.attachment_size)} empty={<span className="nodocument">Sənəd yoxdur</span>}/>},
     {key:"created",label:"Yaranma tarixi",width:140,search:i=>formatDate(i.created_at),sort:i=>new Date(i.created_at).getTime(),render:i=><time>{formatDate(i.created_at)}</time>},
     {key:"due",label:"Son tarix",width:150,search:i=>i.due_at?formatDate(i.due_at):"—",sort:i=>i.due_at?new Date(i.due_at).getTime():null,render:i=>i.due_at?<time>{formatDate(i.due_at)}</time>:"—"},
     {key:"shared",label:"İcraçılar",width:200,search:i=>workExecutors(i).map(x=>x.label).join(", ")||"—",values:i=>workExecutors(i).map(x=>x.label),render:i=>{const people=workExecutors(i);return people.length?<div className="sharedlist">{people.map(x=><span key={x.key} className={`sharedname${x.own?" own":""}${x.done>=x.total?" done":""}`} title={x.done>=x.total?"Bütün addımlar tamamlanıb":"İcra edir"}>{x.name}{x.own&&<em> (özüm)</em>}{x.dept&&<em> (şöbə)</em>}<small> {x.done}/{x.total}</small></span>)}</div>:<span className="nodocument">—</span>}},
@@ -821,25 +823,25 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
       void reloadItems();
     }catch(e){setChecklistError(e instanceof Error?e.message:"Həvalə edilmədi.")}
   };
-  const attachChecklistFile=async(item:ChecklistLikeItem,file:File)=>{
-    if(file.size>25*1024*1024){setChecklistError("Faylın həcmi 25 MB-dan çox ola bilməz.");return}
+  // Versiya 2.104: a step keeps up to 10 files — the chosen ones are added, ✕ removes one.
+  const attachChecklistFile=async(item:ChecklistLikeItem,files:File[])=>{
+    const left=MAX_FILES-rowFiles(item.files,item.attachment_key,item.attachment_name).length;
+    if(files.length>left){setChecklistError(`Bir addıma ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl seçilə bilər.`);return}
     setChecklistError("");setChecklistAttachBusy(item.id);
     try{
-      const upload=new FormData();upload.append("file",file);
-      const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-      const uploaded=await uploadResponse.json();
-      if(!uploadResponse.ok)throw new Error(uploaded.error||"Fayl yüklənmədi.");
-      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,attachmentKey:uploaded.key,attachmentName:uploaded.name,attachmentSize:uploaded.size,attachmentType:uploaded.type})});
+      const addFiles=await uploadFiles(files);
+      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,addFiles})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
     }catch(e){setChecklistError(e instanceof Error?e.message:"Fayl əlavə olunmadı.")}
     finally{setChecklistAttachBusy(null)}
   };
-  const detachChecklistFile=async(item:ChecklistLikeItem)=>{
+  const detachChecklistFile=async(item:ChecklistLikeItem,file:FileRef)=>{
+    if(!window.confirm(`“${file.name}” faylı silinsin?`))return;
     setChecklistError("");
     try{
-      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,removeAttachment:true})});
+      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,removeFileKey:file.key})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
@@ -851,15 +853,8 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const requestChecklistItem=async(item:ChecklistLikeItem,input:StepRequestInput)=>{
     setChecklistError("");
     try{
-      let uploaded:{key:string;name:string;size:number;type:string;error?:string}|null=null;
-      if(input.file){
-        if(input.file.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
-        const upload=new FormData();upload.append("file",input.file);
-        const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-        uploaded=await uploadResponse.json();
-        if(!uploadResponse.ok)throw new Error(uploaded?.error||"Fayl yüklənmədi.");
-      }
-      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,requestDepartment:input.department,title:input.title,description:input.description,desiredDueAt:input.dueDate,...(uploaded?{attachmentKey:uploaded.key,attachmentName:uploaded.name,attachmentSize:uploaded.size,attachmentType:uploaded.type}:{})})});
+      const files=await uploadFiles(input.files);
+      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,requestDepartment:input.department,title:input.title,description:input.description,desiredDueAt:input.dueDate,files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
@@ -882,13 +877,13 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   return <section className="panel pagepanel">
     <div className="pageactions"><div><h2>{team?"Əməkdaşlarımın işləri":"Şəxsi işlərim"}</h2><p>{team?`Tabeliyinizdəki əməkdaşların öz işləri — yalnız baxış və qeyd. ${filtered.length} iş göstərilir`:viewAsEmployeeId?`${employees.find(e=>e.id===viewAsEmployeeId)?.name||"Personal"} adına ${filtered.length} iş göstərilir`:`${filtered.length} iş göstərilir`}</p></div>{!team&&(isAdmin?<small className="adminnote" title="Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin.">Admin hesabı iş əlavə etmir</small>:<Button onClick={()=>{if(!creating&&activeCompanyId)setForm(f=>({...f,companyId:f.companyId||String(activeCompanyId)}));setCreating(v=>!v)}}><Plus/>Yeni iş</Button>)}</div>
     {hasTeam&&<div className="fixedsubtabs"><button className={!team?"on":""} onClick={()=>setTab("mine")}>Mənim işlərim ({items.filter(inScope).length})</button><button className={team&&!onlyLate?"on":""} onClick={()=>{setTab("team");setOnlyLate(false);setCreating(false);void loadTeam()}}>Əməkdaşlarımın işləri ({teamScoped.length})</button>{teamLate>0&&<button className={team&&onlyLate?"on":""} onClick={()=>{setTab("team");setOnlyLate(true);setCreating(false);void loadTeam()}}>Gecikənlər<em className="requestbadge">{teamLate}</em></button>}</div>}
-    {!team&&creating&&<div className="inlinetaskrow personalworkrow"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/><label className="field filefield">Əlavə fayl (istəyə bağlı, maks. 25 MB)<Input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file&&<small>{file.name} • {formatFileSize(file.size)}</small>}</label><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
+    {!team&&creating&&<div className="inlinetaskrow personalworkrow"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/><FilePicker label="Əlavə fayllar (istəyə bağlı)" files={newFiles} onChange={setNewFiles}/><div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>setCreating(false)}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable personalworktable"><ColGroup order={visibleOrder} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{visibleOrder.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
       {visibleOrder.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
       <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(item)}>Aç</button></td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={team?(teamItems.length?"Axtarışa uyğun iş tapılmadı.":"Əməkdaşlarınız hələ öz işini əlavə etməyib."):items.length?"Axtarışa uyğun iş tapılmadı.":"Hələ öz işinizi əlavə etməmisiniz."}/>}</div>}
-    <Dialog open={Boolean(current)} onOpenChange={v=>{if(!v){setDetailItem(null);setEditingWork(false)}}}><DialogContent className="businessdialog" resizable>{current&&<FormShell title={current.title} desc={currentOwn?"Öz işim":current.owner_name} formClass="taskdetailform"><div className="taskdetailleft">{editingWork?<div className="taskdetailinfo edititem"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/><label className="field filefield">Əlavə fayl (istəyə bağlı, maks. 25 MB){current.attachment_key&&!editFile&&!editRemoveAttachment&&<span className="checklistfile"><a className="checklistfilelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}</a><button type="button" className="checklistremove" title="Sənədi sil" onClick={()=>setEditRemoveAttachment(true)}>✕</button></span>}<Input type="file" onChange={e=>{setEditFile(e.target.files?.[0]||null);setEditRemoveAttachment(false)}}/>{editFile&&<small>{editFile.name} • {formatFileSize(editFile.size)}</small>}</label>{error&&<div className="errorbox">{error}</div>}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={cancelEditWork}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void saveWorkEdit()}>{busy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div>:<div className="taskdetailinfo"><p><b>Açıqlama</b><span>{current.description||"—"}</span></p><p><b>Firma</b><span>{current.company_name||"—"}</span></p><p><b>Yaranma tarixi</b><span>{formatDate(current.created_at)}</span></p><p><b>Son tarix</b><span>{current.due_at?formatDate(current.due_at):"—"}</span></p>{current.attachment_key&&<p><b>Əlavə olunan sənəd</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}<small>{formatFileSize(current.attachment_size||0)}</small></a></span></p>}{currentOwn&&current.status==="Tamamlanıb"&&<p><b>{current.attachment_key?"Faylı dəyiş":"Fayl əlavə et"}</b><span className="workfilechange"><label className="workfilepick">{busy?"Yüklənir...":current.attachment_key?"Yeni fayl seçin":"Fayl seçin"}<input type="file" hidden disabled={busy} onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void changeWorkFile(current,file)}}/></label>{current.attachment_key&&<button type="button" className="checklistremove" disabled={busy} onClick={()=>void changeWorkFile(current,null)}>Faylı sil</button>}</span></p>}</div>}<div className="field"><span>Status</span>{workLate(current)?<><strong className="detailstatus late">Gecikib</strong><LateDays due={current.due_at}/></>:<strong className={`detailstatus ${statusTone(current.status)}`}>{current.status}</strong>}{!editingWork&&currentOwn&&current.status!=="Tamamlanıb"&&<Button disabled={current.status==="İcradadır"&&(checklistLoading||unfinishedSteps>0)} onClick={()=>void advance(current)}>{current.status==="Yeni"?"İcraya al":"Tamamla"}</Button>}{currentOwn&&current.status==="İcradadır"&&!checklistLoading&&unfinishedSteps>0&&<small className="completehint">Tamamlamaq üçün iş axınındakı bütün addımlarda ✓ olmalıdır ({unfinishedSteps} addım qalıb).</small>}</div>{!editingWork&&currentOwn&&current.status!=="Tamamlanıb"&&<button type="button" className="editcompanybtn" onClick={()=>startEditWork(current)}>Redaktə et</button>}{!editingWork&&currentOwn&&current.status==="Yeni"&&<button className="deletetaskbtn detaildelete" onClick={()=>{setDetailItem(null);void remove(current)}}>İşi sil</button>}</div><div className="taskdetailright"><ChecklistSection heading={currentOwn?undefined:"İş axını"} onReview={reviewDelegated} employeeView={currentOwn} checklist={checklist} loading={checklistLoading} title={checklistTitle} setTitle={setChecklistTitle} busy={checklistBusy} error={checklistError} onAdd={()=>void addChecklistItem()} onToggle={item=>void toggleChecklistDone(item)} onRemove={item=>void removeChecklistItem(item)} locked={current.status==="Tamamlanıb"} stepsActionable={current.status==="İcradadır"} canDelegate={currentOwn} delegateEmployees={delegateCandidates} onDelegate={(item,employeeId,comment)=>void delegateChecklistItem(item,employeeId,comment)} onAttach={(item,file)=>void attachChecklistFile(item,file)} onDetach={item=>void detachChecklistFile(item)} attachBusyId={checklistAttachBusy} request={currentOwn?{departments:requestDepartments,workTitle:current.title,workDueAt:current.due_at,hasCompany:Boolean(current.company_id),onSend:requestChecklistItem,onAct:actOnStepRequest}:undefined}/><WorkHistory events={history?.workId===current.id?history.events:null}/>{!currentOwn&&<div className="worknote"><b>Rəhbərin qeydi</b><small>Qeyd işin tarixçəsinə yazılır, əməkdaş onu “Aç” pəncərəsində görür.</small><textarea value={note} maxLength={2000} placeholder="Məsələn: bu işi cümə gününədək bitirin" onChange={e=>setNote(e.target.value)}/>{noteError&&<div className="errorbox">{noteError}</div>}<div className="inlineactions"><Button disabled={noteBusy||!note.trim()} onClick={()=>void addNote()}>{noteBusy?"Yazılır...":"Qeydi yaz"}</Button></div></div>}</div></FormShell>}</DialogContent></Dialog>
+    <Dialog open={Boolean(current)} onOpenChange={v=>{if(!v){setDetailItem(null);setEditingWork(false)}}}><DialogContent className="businessdialog" resizable>{current&&<FormShell title={current.title} desc={currentOwn?"Öz işim":current.owner_name} formClass="taskdetailform"><div className="taskdetailleft">{editingWork?<div className="taskdetailinfo edititem"><Field label="İşin adı" value={form.title||""} set={v=>setForm({...form,title:v})}/><SelectCompany companies={companies.filter(c=>Boolean(c.active))} value={form.companyId||""} set={v=>setForm({...form,companyId:v})}/><Field label="Açıqlama (istəyə bağlı)" value={form.description||""} set={v=>setForm({...form,description:v})}/><DateTimeField label="Son tarix (istəyə bağlı)" value={form.dueAt||""} set={v=>setForm({...form,dueAt:v})}/>{editKept.length>0&&<div className="field"><span>Əlavə olunan fayllar</span><FileLinks files={editKept} onRemove={f=>setEditKept(list=>list.filter(x=>x.key!==f.key))}/></div>}<FilePicker label="Yeni fayllar (istəyə bağlı)" files={editFiles} onChange={setEditFiles} kept={editKept.length}/>{error&&<div className="errorbox">{error}</div>}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={cancelEditWork}>Ləğv et</button><Button disabled={busy||!form.title.trim()} onClick={()=>void saveWorkEdit()}>{busy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div>:<div className="taskdetailinfo"><p><b>Açıqlama</b><span>{current.description||"—"}</span></p><p><b>Firma</b><span>{current.company_name||"—"}</span></p><p><b>Yaranma tarixi</b><span>{formatDate(current.created_at)}</span></p><p><b>Son tarix</b><span>{current.due_at?formatDate(current.due_at):"—"}</span></p>{(()=>{const files=rowFiles(current.files,current.attachment_key,current.attachment_name,current.attachment_size);const completedOwn=currentOwn&&current.status==="Tamamlanıb";return <>{(files.length>0||completedOwn)&&<p><b>Əlavə olunan sənədlər</b><span><FileLinks files={files} empty={<span className="nodocument">Sənəd yoxdur</span>} busy={busy} onRemove={completedOwn?f=>{if(window.confirm(`“${f.name}” faylı silinsin?`))void changeWorkFiles(current,files.filter(x=>x.key!==f.key),[])}:undefined}/></span></p>}{completedOwn&&files.length<MAX_FILES&&<p><b>Fayl əlavə et</b><span className="workfilechange"><label className="workfilepick">{busy?"Yüklənir...":"Fayl seçin"}<input type="file" multiple hidden disabled={busy} onChange={e=>{const chosen=[...(e.target.files||[])];e.target.value="";const left=MAX_FILES-files.length;if(chosen.length>left)window.alert(`Ən çox ${MAX_FILES} fayl olar — ${left} fayl əlavə edilə bilər.`);if(chosen.length)void changeWorkFiles(current,files,chosen.slice(0,left))}}/></label></span></p>}</>})()}</div>}<div className="field"><span>Status</span>{workLate(current)?<><strong className="detailstatus late">Gecikib</strong><LateDays due={current.due_at}/></>:<strong className={`detailstatus ${statusTone(current.status)}`}>{current.status}</strong>}{!editingWork&&currentOwn&&current.status!=="Tamamlanıb"&&<Button disabled={current.status==="İcradadır"&&(checklistLoading||unfinishedSteps>0)} onClick={()=>void advance(current)}>{current.status==="Yeni"?"İcraya al":"Tamamla"}</Button>}{currentOwn&&current.status==="İcradadır"&&!checklistLoading&&unfinishedSteps>0&&<small className="completehint">Tamamlamaq üçün iş axınındakı bütün addımlarda ✓ olmalıdır ({unfinishedSteps} addım qalıb).</small>}</div>{!editingWork&&currentOwn&&current.status!=="Tamamlanıb"&&<button type="button" className="editcompanybtn" onClick={()=>startEditWork(current)}>Redaktə et</button>}{!editingWork&&currentOwn&&current.status==="Yeni"&&<button className="deletetaskbtn detaildelete" onClick={()=>{setDetailItem(null);void remove(current)}}>İşi sil</button>}</div><div className="taskdetailright"><ChecklistSection heading={currentOwn?undefined:"İş axını"} onReview={reviewDelegated} employeeView={currentOwn} checklist={checklist} loading={checklistLoading} title={checklistTitle} setTitle={setChecklistTitle} busy={checklistBusy} error={checklistError} onAdd={()=>void addChecklistItem()} onToggle={item=>void toggleChecklistDone(item)} onRemove={item=>void removeChecklistItem(item)} locked={current.status==="Tamamlanıb"} stepsActionable={current.status==="İcradadır"} canDelegate={currentOwn} delegateEmployees={delegateCandidates} onDelegate={(item,employeeId,comment)=>void delegateChecklistItem(item,employeeId,comment)} onAttach={(item,files)=>void attachChecklistFile(item,files)} onDetach={(item,file)=>void detachChecklistFile(item,file)} attachBusyId={checklistAttachBusy} request={currentOwn?{departments:requestDepartments,workTitle:current.title,workDueAt:current.due_at,hasCompany:Boolean(current.company_id),onSend:requestChecklistItem,onAct:actOnStepRequest}:undefined}/><WorkHistory events={history?.workId===current.id?history.events:null}/>{!currentOwn&&<div className="worknote"><b>Rəhbərin qeydi</b><small>Qeyd işin tarixçəsinə yazılır, əməkdaş onu “Aç” pəncərəsində görür.</small><textarea value={note} maxLength={2000} placeholder="Məsələn: bu işi cümə gününədək bitirin" onChange={e=>setNote(e.target.value)}/>{noteError&&<div className="errorbox">{noteError}</div>}<div className="inlineactions"><Button disabled={noteBusy||!note.trim()} onClick={()=>void addNote()}>{noteBusy?"Yazılır...":"Qeydi yaz"}</Button></div></div>}</div></FormShell>}</DialogContent></Dialog>
   </section>;
 }
 function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,onRequestDate,onResolveDateRequest,employees,isAdmin}:{tasks:Task[];employeeView:boolean;onStatus:(t:Task,s:string,extra?:Record<string,unknown>)=>void;onEvaluate:(t:Task)=>void;onDelete:(t:Task)=>void;dateRequests:DateRequest[];onRequestDate:(taskId:number,proposedDueAt:string,reason:string)=>void;onResolveDateRequest:(id:number,approve:boolean,adminNote:string,finalDueAt:string)=>void;employees:Employee[];isAdmin:boolean}){
@@ -897,7 +892,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const [resolveNote,setResolveNote]=useState("");
   const [resolveDate,setResolveDate]=useState("");
   const [detailTask,setDetailTask]=useState<Task|null>(null);
-  const [submitFile,setSubmitFile]=useState<File|null>(null);
+  const [submitFiles,setSubmitFiles]=useState<File[]>([]);
   const [submitNote,setSubmitNote]=useState("");
   const [submitBusy,setSubmitBusy]=useState(false);
   const [submitError,setSubmitError]=useState("");
@@ -911,7 +906,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const hasPendingRequest=(t:Task)=>dateRequests.some(r=>r.task_id===t.id&&r.status==="Gözləyir");
   const rowStatusLabel=(t:Task)=>hasPendingRequest(t)?"Dəyişiklik tələb olunur":displayStatus(t);
   const rowStatusClass=(t:Task)=>hasPendingRequest(t)?"changerequested":statusClass(t);
-  const openDetail=(t:Task)=>{setSubmitFile(null);setSubmitError("");setDateOpen(false);setDateForm({proposedDueAt:"",reason:""});setResolveNote("");setResolveDate("");setDetailTask(t)};
+  const openDetail=(t:Task)=>{setSubmitFiles([]);setSubmitError("");setDateOpen(false);setDateForm({proposedDueAt:"",reason:""});setResolveNote("");setResolveDate("");setDetailTask(t)};
   const taskColumns:Array<{key:string;label:string;width:number;search:(t:Task)=>string;sort?:(t:Task)=>string|number|null;render:(t:Task)=>React.ReactNode}>=[
     {key:"status",label:"Status",width:120,search:t=>rowStatusLabel(t),render:t=><><button className={`tablestatus statusopen ${rowStatusClass(t)}`} onClick={()=>openDetail(t)}>{rowStatusLabel(t)}</button>{statusClass(t)==="late"&&<LateDays due={t.due_at}/>}</>},
     {key:"company",label:"Firma",width:140,search:t=>t.company_name||"",render:t=><b>{t.company_name||"—"}</b>},
@@ -921,7 +916,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
     {key:"position",label:"Vəzifəsi",width:140,search:t=>t.employee_position,render:t=><>{t.employee_position}</>},
     {key:"title",label:"Tapşırıq",width:170,search:t=>t.title,render:t=><button className="taskdetailbtn" onClick={()=>openDetail(t)}>{t.title}</button>},
     {key:"description",label:"Tapşırığın açıqlaması",width:220,search:t=>t.description||"",render:t=><>{t.description||"—"}</>},
-    {key:"document",label:"Əlavə olunan sənəd",width:150,search:t=>t.attachment_name||"Sənəd yoxdur",render:t=>t.attachment_key?<a className="filelink" href={`/api/file?key=${encodeURIComponent(t.attachment_key)}`}>{t.attachment_name}<small>{formatFileSize(t.attachment_size||0)}</small></a>:<span className="nodocument">Sənəd yoxdur</span>},
+    {key:"document",label:"Əlavə olunan sənəd",width:150,search:t=>rowFiles(t.files,t.attachment_key,t.attachment_name).map(f=>f.name).join(", ")||"Sənəd yoxdur",render:t=><FileLinks files={rowFiles(t.files,t.attachment_key,t.attachment_name,t.attachment_size)} empty={<span className="nodocument">Sənəd yoxdur</span>}/>},
     {key:"created",label:"Yaranma tarixi",width:140,search:t=>formatDate(t.created_at),sort:t=>new Date(t.created_at).getTime(),render:t=><time>{formatDate(t.created_at)}</time>},
     {key:"due",label:"Tapşırığın son tarixi",width:150,search:t=>formatDate(t.due_at),sort:t=>new Date(t.due_at).getTime(),render:t=><time>{formatDate(t.due_at)}</time>},
     {key:"evaluation",label:"Qiymətləndirmə",width:160,search:t=>t.evaluation?`${t.evaluation} bal`:displayStatus(t),sort:t=>t.evaluation??null,render:t=><div className="tableactions"><RatingCell evaluation={t.evaluation} note={t.evaluation_note} compact twoRows/>{!employeeView&&t.status==="Təqdim edilib"?<button className="evaluatebtn" onClick={()=>onEvaluate(t)}>Qiymətləndir</button>:!t.evaluation&&!t.evaluation_note&&<span>—</span>}{!employeeView&&t.status==="Yeni"&&<button className="deletetaskbtn" onClick={()=>onDelete(t)}>Sil</button>}</div>},
@@ -948,25 +943,18 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
   const submitTask=async()=>{
     if(!current)return;
     setSubmitError("");
-    if(needsSubmissionFile&&!submitFile){setSubmitError("Doldurulmuş faylı yükləyin.");return}
+    if(needsSubmissionFile&&!submitFiles.length){setSubmitError("Doldurulmuş faylı yükləyin.");return}
     setSubmitBusy(true);
     try{
       let extra:Record<string,unknown>={};
-      let uploaded:{key:string;name:string;size:number;type:string}|null=null;
-      if(submitFile){
-        if(submitFile.size>25*1024*1024)throw new Error("Faylın həcmi 25 MB-dan çox ola bilməz.");
-        const upload=new FormData();upload.append("file",submitFile);
-        const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-        const uploadResult=await uploadResponse.json();
-        if(!uploadResponse.ok)throw new Error(uploadResult.error||"Fayl yüklənmədi.");
-        uploaded=uploadResult;
-        extra={submissionAttachmentKey:uploadResult.key,submissionAttachmentName:uploadResult.name,submissionAttachmentSize:uploadResult.size,submissionAttachmentType:uploadResult.type};
-      }
+      // Versiya 2.104: the work is submitted with up to 10 files.
+      const uploaded=await uploadFiles(submitFiles);
+      if(uploaded.length)extra={submissionFiles:uploaded};
       // A request-linked task's answer text goes back to whoever sent the request (Sorğular and their İşlərim step).
       if(current.request_id&&submitNote.trim())extra={...extra,submissionNote:submitNote.trim()};
       onStatus(current,"Təqdim edilib",extra);
-      setDetailTask({...current,status:"Təqdim edilib",employee_status_changed:Number(current.employee_status_changed)+1,...(uploaded?{submission_attachment_key:uploaded.key,submission_attachment_name:uploaded.name,submission_attachment_size:uploaded.size,submission_attachment_type:uploaded.type}:{})});
-      setSubmitFile(null);setSubmitNote("");
+      setDetailTask({...current,status:"Təqdim edilib",employee_status_changed:Number(current.employee_status_changed)+1,...(uploaded.length?{submission_files:uploaded,submission_attachment_key:uploaded[0].key,submission_attachment_name:uploaded[0].name,submission_attachment_size:uploaded[0].size,submission_attachment_type:uploaded[0].type}:{})});
+      setSubmitFiles([]);setSubmitNote("");
     }catch(e){setSubmitError(e instanceof Error?e.message:"Fayl yüklənmədi.")}
     finally{setSubmitBusy(false)}
   };
@@ -995,25 +983,25 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
       if(response.ok)setChecklist(body.items||[]);
     }catch{}
   };
-  const attachChecklistFile=async(item:ChecklistLikeItem,file:File)=>{
-    if(file.size>25*1024*1024){setChecklistError("Faylın həcmi 25 MB-dan çox ola bilməz.");return}
+  // Versiya 2.104: a step keeps up to 10 files — the chosen ones are added, ✕ removes one.
+  const attachChecklistFile=async(item:ChecklistLikeItem,files:File[])=>{
+    const left=MAX_FILES-rowFiles(item.files,item.attachment_key,item.attachment_name).length;
+    if(files.length>left){setChecklistError(`Bir addıma ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl seçilə bilər.`);return}
     setChecklistError("");setChecklistAttachBusy(item.id);
     try{
-      const upload=new FormData();upload.append("file",file);
-      const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});
-      const uploaded=await uploadResponse.json();
-      if(!uploadResponse.ok)throw new Error(uploaded.error||"Fayl yüklənmədi.");
-      const response=await fetch("/api/checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,attachmentKey:uploaded.key,attachmentName:uploaded.name,attachmentSize:uploaded.size,attachmentType:uploaded.type})});
+      const addFiles=await uploadFiles(files);
+      const response=await fetch("/api/checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,addFiles})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
     }catch(e){setChecklistError(e instanceof Error?e.message:"Fayl əlavə olunmadı.")}
     finally{setChecklistAttachBusy(null)}
   };
-  const detachChecklistFile=async(item:ChecklistLikeItem)=>{
+  const detachChecklistFile=async(item:ChecklistLikeItem,file:FileRef)=>{
+    if(!window.confirm(`“${file.name}” faylı silinsin?`))return;
     setChecklistError("");
     try{
-      const response=await fetch("/api/checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,removeAttachment:true})});
+      const response=await fetch("/api/checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,removeFileKey:file.key})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
@@ -1035,7 +1023,7 @@ function TaskGrid({tasks,employeeView,onStatus,onEvaluate,onDelete,dateRequests,
       {shownOrder.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(t)}</td>})}
       <td data-label="Əməliyyat"><button type="button" className="openbtn" onClick={()=>openDetail(t)}>Aç</button></td>
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={tasks.length?"Axtarışa uyğun tapşırıq tapılmadı.":"Hələ tapşırıq yaradılmayıb."}/>}</div>
-    <Dialog open={Boolean(current)} onOpenChange={v=>!v&&setDetailTask(null)}><DialogContent className="businessdialog" resizable>{current&&<FormShell title={current.title} desc={`${current.employee_name} • ${current.company_name||"Firma qeyd edilməyib"}`} formClass="taskdetailform"><div className="taskdetailleft"><div className="taskdetailinfo"><p><b>Tapşırıq</b><span>{current.description||"—"}</span></p><p><b>Yaranma tarixi</b><span>{formatDate(current.created_at)}</span></p><p><b>Son icra tarixi</b><span>{formatDate(current.due_at)}{current.original_due_at&&current.original_due_at!==current.due_at&&<small className="daterequestnote"> (ilkin tarix: {formatDate(current.original_due_at)})</small>}</span></p>{current.attachment_key&&<p><b>Tapşırıqla göndərilən fayl</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}<small>{formatFileSize(current.attachment_size||0)}</small></a></span></p>}{current.submission_attachment_key&&<p><b>İşlənib təqdim olunan fayl</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.submission_attachment_key)}`}>{current.submission_attachment_name}<small>{formatFileSize(current.submission_attachment_size||0)}</small></a></span></p>}</div>{employeeView?<div className="field"><span>Status</span><strong className={`detailstatus ${pendingRequest?"changerequested":statusClass(current)}`}>{pendingRequest?"Dəyişiklik tələb olunur":displayStatus(current)}</strong><RatingCell evaluation={current.evaluation} note={current.evaluation_note} twoRows/>{nextStatus&&Number(current.employee_status_changed)<2&&<>{nextStatus==="Təqdim edilib"&&current.request_id&&<label className="field">Cavab mətni (sorğunu göndərənə göstəriləcək, istəyə bağlı)<Textarea placeholder="Nə edildiyini, nəticəni və ya əlavə izahı yazın" value={submitNote} onChange={e=>setSubmitNote(e.target.value)}/></label>}{nextStatus==="Təqdim edilib"&&<label className="field filefield">İşlənmiş fayl{needsSubmissionFile?" (mütləqdir)":" (istəyə bağlı)"}<Input type="file" onChange={e=>setSubmitFile(e.target.files?.[0]||null)}/>{submitFile&&<small>{submitFile.name} • {formatFileSize(submitFile.size)}</small>}</label>}{submitError&&<div className="errorbox">{submitError}</div>}<Button disabled={submitBusy} onClick={()=>nextStatus==="İcradadır"?(onStatus(current,nextStatus),setDetailTask({...current,status:nextStatus,employee_status_changed:Number(current.employee_status_changed)+1})):void submitTask()}>{submitBusy?"Göndərilir...":nextStatus==="İcradadır"?"İcraya al":"Təqdim et"}</Button></>}</div>:<div className="field"><span>Status</span><strong className={`detailstatus ${pendingRequest?"changerequested":statusClass(current)}`}>{pendingRequest?"Dəyişiklik tələb olunur":displayStatus(current)}</strong><RatingCell evaluation={current.evaluation} note={current.evaluation_note} twoRows/></div>}<DateRequestSection employeeView={employeeView} current={current} pendingRequest={pendingRequest} taskRequest={taskRequest} dateOpen={dateOpen} setDateOpen={setDateOpen} dateForm={dateForm} setDateForm={setDateForm} onSubmit={submitDateRequest} resolveNote={resolveNote} setResolveNote={setResolveNote} resolveDate={resolveDate} setResolveDate={setResolveDate} onResolve={resolveDateRequest}/>{!employeeView&&current.status==="Təqdim edilib"&&<Button onClick={()=>onEvaluate(current)}>Qiymətləndir</Button>}{!employeeView&&current.status==="Yeni"&&<button className="deletetaskbtn detaildelete" onClick={()=>{setDetailTask(null);onDelete(current)}}>Tapşırığı sil</button>}</div><div className="taskdetailright"><ChecklistSection onReview={reviewDelegated} employeeView={employeeView} checklist={checklist} loading={checklistLoading} title={checklistTitle} setTitle={setChecklistTitle} busy={checklistBusy} error={checklistError} onAdd={()=>void addChecklistItem()} onToggle={item=>void toggleChecklistDone(item)} onRemove={item=>void removeChecklistItem(item)} locked={current.status==="Təqdim edilib"||current.status==="Təsdiqlənib"} canDelegate={canDelegateTask} delegateEmployees={delegateCandidates} onDelegate={(item,employeeId,comment)=>void delegateChecklistItem(item,employeeId,comment)} onAttach={(item,file)=>void attachChecklistFile(item,file)} onDetach={item=>void detachChecklistFile(item)} attachBusyId={checklistAttachBusy}/></div></FormShell>}</DialogContent></Dialog>
+    <Dialog open={Boolean(current)} onOpenChange={v=>!v&&setDetailTask(null)}><DialogContent className="businessdialog" resizable>{current&&<FormShell title={current.title} desc={`${current.employee_name} • ${current.company_name||"Firma qeyd edilməyib"}`} formClass="taskdetailform"><div className="taskdetailleft"><div className="taskdetailinfo"><p><b>Tapşırıq</b><span>{current.description||"—"}</span></p><p><b>Yaranma tarixi</b><span>{formatDate(current.created_at)}</span></p><p><b>Son icra tarixi</b><span>{formatDate(current.due_at)}{current.original_due_at&&current.original_due_at!==current.due_at&&<small className="daterequestnote"> (ilkin tarix: {formatDate(current.original_due_at)})</small>}</span></p>{current.attachment_key&&<p><b>Tapşırıqla göndərilən fayllar</b><span><FileLinks files={rowFiles(current.files,current.attachment_key,current.attachment_name,current.attachment_size)}/></span></p>}{current.submission_attachment_key&&<p><b>İşlənib təqdim olunan fayllar</b><span><FileLinks files={rowFiles(current.submission_files,current.submission_attachment_key,current.submission_attachment_name,current.submission_attachment_size)}/></span></p>}</div>{employeeView?<div className="field"><span>Status</span><strong className={`detailstatus ${pendingRequest?"changerequested":statusClass(current)}`}>{pendingRequest?"Dəyişiklik tələb olunur":displayStatus(current)}</strong><RatingCell evaluation={current.evaluation} note={current.evaluation_note} twoRows/>{nextStatus&&Number(current.employee_status_changed)<2&&<>{nextStatus==="Təqdim edilib"&&current.request_id&&<label className="field">Cavab mətni (sorğunu göndərənə göstəriləcək, istəyə bağlı)<Textarea placeholder="Nə edildiyini, nəticəni və ya əlavə izahı yazın" value={submitNote} onChange={e=>setSubmitNote(e.target.value)}/></label>}{nextStatus==="Təqdim edilib"&&<FilePicker label={`İşlənmiş fayllar${needsSubmissionFile?" (ən azı bir fayl mütləqdir)":" (istəyə bağlı)"}`} files={submitFiles} onChange={setSubmitFiles}/>}{submitError&&<div className="errorbox">{submitError}</div>}<Button disabled={submitBusy} onClick={()=>nextStatus==="İcradadır"?(onStatus(current,nextStatus),setDetailTask({...current,status:nextStatus,employee_status_changed:Number(current.employee_status_changed)+1})):void submitTask()}>{submitBusy?"Göndərilir...":nextStatus==="İcradadır"?"İcraya al":"Təqdim et"}</Button></>}</div>:<div className="field"><span>Status</span><strong className={`detailstatus ${pendingRequest?"changerequested":statusClass(current)}`}>{pendingRequest?"Dəyişiklik tələb olunur":displayStatus(current)}</strong><RatingCell evaluation={current.evaluation} note={current.evaluation_note} twoRows/></div>}<DateRequestSection employeeView={employeeView} current={current} pendingRequest={pendingRequest} taskRequest={taskRequest} dateOpen={dateOpen} setDateOpen={setDateOpen} dateForm={dateForm} setDateForm={setDateForm} onSubmit={submitDateRequest} resolveNote={resolveNote} setResolveNote={setResolveNote} resolveDate={resolveDate} setResolveDate={setResolveDate} onResolve={resolveDateRequest}/>{!employeeView&&current.status==="Təqdim edilib"&&<Button onClick={()=>onEvaluate(current)}>Qiymətləndir</Button>}{!employeeView&&current.status==="Yeni"&&<button className="deletetaskbtn detaildelete" onClick={()=>{setDetailTask(null);onDelete(current)}}>Tapşırığı sil</button>}</div><div className="taskdetailright"><ChecklistSection onReview={reviewDelegated} employeeView={employeeView} checklist={checklist} loading={checklistLoading} title={checklistTitle} setTitle={setChecklistTitle} busy={checklistBusy} error={checklistError} onAdd={()=>void addChecklistItem()} onToggle={item=>void toggleChecklistDone(item)} onRemove={item=>void removeChecklistItem(item)} locked={current.status==="Təqdim edilib"||current.status==="Təsdiqlənib"} canDelegate={canDelegateTask} delegateEmployees={delegateCandidates} onDelegate={(item,employeeId,comment)=>void delegateChecklistItem(item,employeeId,comment)} onAttach={(item,files)=>void attachChecklistFile(item,files)} onDetach={(item,file)=>void detachChecklistFile(item,file)} attachBusyId={checklistAttachBusy}/></div></FormShell>}</DialogContent></Dialog>
   </>
 }
 function EmployeesPage({employees,companies,tasks,onNew,onEdit,onView,onDelete}:{employees:Employee[];companies:Company[];tasks:Task[];onNew:()=>void;onEdit:(e:Employee)=>void;onView:(e:Employee)=>void;onToggle:(e:Employee)=>void;onDelete:(e:Employee)=>void}){
@@ -2250,7 +2238,7 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const [box,setBox]=useState<"incoming"|"outgoing"|"oversight">("incoming");
   const [creating,setCreating]=useState(false);
   const [form,setForm]=useState<Record<string,string>>({});
-  const [file,setFile]=useState<File|null>(null);
+  const [requestFiles,setRequestFiles]=useState<File[]>([]);
   const [busy,setBusy]=useState(false);
   const [openId,setOpenId]=useState<number|null>(null);
   const [events,setEvents]=useState<WorkHistoryEvent[]|null>(null);
@@ -2275,12 +2263,12 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
     if(!formCompanyId||!form.toDepartment||!(form.title||"").trim())return;
     setBusy(true);setError("");
     try{
-      let attachment:Record<string,unknown>={};
-      if(file){const upload=new FormData();upload.append("file",file);const uploadResponse=await fetch("/api/file",{method:"POST",body:upload});const uploaded=await uploadResponse.json();if(!uploadResponse.ok)throw new Error(uploaded.error||"Fayl yüklənmədi.");attachment={attachmentKey:uploaded.key,attachmentName:uploaded.name,attachmentSize:uploaded.size,attachmentType:uploaded.type}}
-      const response=await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({companyId:formCompanyId,toDepartment:form.toDepartment,title:form.title,description:form.description,desiredDueAt:form.desiredDueAt,...attachment})});
+      // Versiya 2.104: up to 10 files go with the request (and on to its task when accepted).
+      const files=await uploadFiles(requestFiles);
+      const response=await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({companyId:formCompanyId,toDepartment:form.toDepartment,title:form.title,description:form.description,desiredDueAt:form.desiredDueAt,files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
-      apply(body);setForm({});setFile(null);setCreating(false);setBox("outgoing");
+      apply(body);setForm({});setRequestFiles([]);setCreating(false);setBox("outgoing");
     }catch(e){setError(e instanceof Error?e.message:"Sorğu göndərilmədi.")}
     finally{setBusy(false)}
   };
@@ -2313,9 +2301,9 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
       <Field label="Mövzu" value={form.title||""} set={v=>setForm({...form,title:v})}/>
       <label className="field">İstədiyiniz tarix (istəyə bağlı)<Input type="date" value={form.desiredDueAt||""} onChange={e=>setForm({...form,desiredDueAt:e.target.value})}/></label>
       <label className="field requestdesc">Təsvir<Textarea value={form.description||""} onChange={e=>setForm({...form,description:e.target.value})}/></label>
-      <label className="field filefield">Fayl (istəyə bağlı, maks. 25 MB)<Input type="file" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file&&<small>{file.name} • {formatFileSize(file.size)}</small>}</label>
+      <FilePicker label="Fayllar (istəyə bağlı)" files={requestFiles} onChange={setRequestFiles}/>
       {!loading&&!departmentOptions.length&&<small className="requestsub">Bu firmanın strukturunda şöbə tapılmadı — admin əvvəlcə firmanın strukturunu doldurmalıdır.</small>}
-      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setFile(null)}}>Ləğv et</button><Button disabled={busy||!form.toDepartment||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Göndərilir...":"Göndər"}</Button></div>
+      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setRequestFiles([])}}>Ləğv et</button><Button disabled={busy||!form.toDepartment||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Göndərilir...":"Göndər"}</Button></div>
     </div>}
     {error&&<div className="errorbox">{error}</div>}
     <div className="fixedsubtabs"><button className={box==="incoming"?"on":""} onClick={()=>setBox("incoming")}>Gələnlər ({counts.incoming}){pending.incoming>0&&<em className="requestbadge">{pending.incoming}</em>}</button><button className={box==="outgoing"?"on":""} onClick={()=>setBox("outgoing")}>Göndərdiklərim ({counts.outgoing}){pending.outgoing>0&&<em className="requestbadge">{pending.outgoing}</em>}</button>{counts.oversight>0&&<button className={box==="oversight"?"on":""} onClick={()=>setBox("oversight")}>Şöbəmin sorğuları ({counts.oversight})</button>}</div>
@@ -2349,10 +2337,10 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
         <p><b>Kimə</b><span>{current.to_department}{current.assignee_name?` — icraçı: ${current.assignee_name}`:""}</span></p>
         {current.description&&<p><b>Təsvir</b><span className="requesttext">{current.description}</span></p>}
         <p><b>İstənilən tarix</b><span>{formatDateOnly(current.desired_due_at)}{current.agreed_due_at&&current.agreed_due_at!==current.desired_due_at?` → razılaşdırılmış: ${formatDateOnly(current.agreed_due_at)}`:""}</span></p>
-        {current.attachment_key&&<p><b>Əlavə olunan fayl</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.attachment_key)}`}>{current.attachment_name}<small>{formatFileSize(current.attachment_size||0)}</small></a></span></p>}
+        {current.attachment_key&&<p><b>Əlavə olunan fayllar</b><span><FileLinks files={rowFiles(current.files,current.attachment_key,current.attachment_name,current.attachment_size)}/></span></p>}
         {current.task_id&&<p><b>İcraçının tapşırığı</b><span>{current.assignee_name} — {current.task_status||"—"}</span></p>}
         {current.task_evaluation?<p><b>Qiymət</b><span><RatingCell evaluation={current.task_evaluation} note={current.task_evaluation_note}/></span></p>:null}
-        {current.submission_attachment_key&&<p><b>Cavab faylı</b><span><a className="filelink" href={`/api/file?key=${encodeURIComponent(current.submission_attachment_key)}`}>{current.submission_attachment_name}<small>{formatFileSize(current.submission_attachment_size||0)}</small></a></span></p>}
+        {current.submission_attachment_key&&<p><b>Cavab faylları</b><span><FileLinks files={rowFiles(current.submission_files,current.submission_attachment_key,current.submission_attachment_name,current.submission_attachment_size)}/></span></p>}
         {current.reject_reason&&<p><b>İmtinanın səbəbi</b><span className="requesttext">{current.reject_reason}</span></p>}
         <p><b>Göndərilib</b><span>{formatDate(current.created_at)}</span></p>
       </div>
@@ -2671,9 +2659,9 @@ function EvaluationSection({employees,tasks}:{employees:Employee[];tasks:Task[]}
     </>}
   </section>;
 }
-function ChecklistFileButton({busy,onPick}:{busy:boolean;onPick:(file:File)=>void}){
+function ChecklistFileButton({busy,onPick}:{busy:boolean;onPick:(files:File[])=>void}){
   const input=useRef<HTMLInputElement>(null);
-  return <span className="checklistattach"><button type="button" className="checklistattachbtn" title="Fayl əlavə et (maks. 25 MB)" disabled={busy} onClick={()=>input.current?.click()}><Paperclip/>{busy?"Yüklənir...":"Fayl"}</button><input ref={input} type="file" hidden onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)onPick(file)}}/></span>;
+  return <span className="checklistattach"><button type="button" className="checklistattachbtn" title={`Fayl əlavə et — bir neçə fayl seçmək olar (ən çox ${MAX_FILES}, hər biri 25 MB-a qədər)`} disabled={busy} onClick={()=>input.current?.click()}><Paperclip/>{busy?"Yüklənir...":"Fayl"}</button><input ref={input} type="file" multiple hidden onChange={e=>{const files=[...(e.target.files||[])];e.target.value="";if(files.length)onPick(files)}}/></span>;
 }
 function historyTone(action:string){
   const a=action.toLocaleLowerCase("az-AZ");
@@ -2777,13 +2765,13 @@ function DateRequestSection({employeeView,current,pendingRequest,taskRequest,dat
 type StepRequestOptions={departments:string[];workTitle:string;workDueAt:string|null;hasCompany:boolean;onSend:(item:ChecklistLikeItem,input:StepRequestInput)=>Promise<boolean>;onAct:(item:ChecklistLikeItem,action:"close"|"reopen"|"withdraw",text?:string)=>Promise<boolean>};
 const STEP_REQUEST_CLOSED=["Bağlandı","İmtina edildi"];
 const stepRequestTone=(status:string|null|undefined)=>status==="Cavablandı"?"answered":status==="Bağlandı"?"closed":status==="İmtina edildi"?"rejected":status==="Yeni"?"new":"progress";
-function ChecklistSection({heading="Mənim iş axınım",onReview,employeeView,checklist,loading,title,setTitle,busy,error,onAdd,onToggle,onRemove,canDelegate=false,delegateEmployees=[],onDelegate,onAttach,onDetach,attachBusyId=null,locked=false,stepsActionable=true,request}:{onReview?:(item:ChecklistLikeItem,approve:boolean,score:number,note:string)=>Promise<boolean>;employeeView:boolean;checklist:ChecklistLikeItem[];loading:boolean;title:string;setTitle:(v:string)=>void;busy:boolean;error:string;onAdd:()=>void;onToggle:(item:ChecklistLikeItem)=>void;onRemove:(item:ChecklistLikeItem)=>void;canDelegate?:boolean;delegateEmployees?:DelegateCandidate[];onDelegate?:(item:ChecklistLikeItem,employeeId:string,comment:string)=>void;onAttach?:(item:ChecklistLikeItem,file:File)=>void;onDetach?:(item:ChecklistLikeItem)=>void;attachBusyId?:number|null;locked?:boolean;stepsActionable?:boolean;request?:StepRequestOptions;heading?:string}){
+function ChecklistSection({heading="Mənim iş axınım",onReview,employeeView,checklist,loading,title,setTitle,busy,error,onAdd,onToggle,onRemove,canDelegate=false,delegateEmployees=[],onDelegate,onAttach,onDetach,attachBusyId=null,locked=false,stepsActionable=true,request}:{onReview?:(item:ChecklistLikeItem,approve:boolean,score:number,note:string)=>Promise<boolean>;employeeView:boolean;checklist:ChecklistLikeItem[];loading:boolean;title:string;setTitle:(v:string)=>void;busy:boolean;error:string;onAdd:()=>void;onToggle:(item:ChecklistLikeItem)=>void;onRemove:(item:ChecklistLikeItem)=>void;canDelegate?:boolean;delegateEmployees?:DelegateCandidate[];onDelegate?:(item:ChecklistLikeItem,employeeId:string,comment:string)=>void;onAttach?:(item:ChecklistLikeItem,files:File[])=>void;onDetach?:(item:ChecklistLikeItem,file:FileRef)=>void;attachBusyId?:number|null;locked?:boolean;stepsActionable?:boolean;request?:StepRequestOptions;heading?:string}){
   const [choice,setChoice]=useState<Record<number,string>>({});
   const [pending,setPending]=useState<{itemId:number;employeeId:string}|null>(null);
   const [comment,setComment]=useState("");
   // "Şöbəyə sorğu": the inline form for sending a step to another department, and the "answer is not enough" note.
   const [requestFor,setRequestFor]=useState<number|null>(null);
-  const [requestForm,setRequestForm]=useState<StepRequestInput>({department:"",title:"",description:"",dueDate:"",file:null});
+  const [requestForm,setRequestForm]=useState<StepRequestInput>({department:"",title:"",description:"",dueDate:"",files:[]});
   const [requestBusy,setRequestBusy]=useState(false);
   const [reopenFor,setReopenFor]=useState<number|null>(null);
   const [reopenText,setReopenText]=useState("");
@@ -2793,7 +2781,7 @@ function ChecklistSection({heading="Mənim iş axınım",onReview,employeeView,c
   const reviewOf=(id:number)=>review[id]||{score:"10",note:""};
   const sendReview=async(item:ChecklistLikeItem,approve:boolean)=>{if(!onReview)return;const r=reviewOf(item.id);setReviewBusy(true);const ok=await onReview(item,approve,Number(r.score),r.note.trim());setReviewBusy(false);if(ok)setReview(v=>{const next={...v};delete next[item.id];return next})};
   const workDueDate=request?.workDueAt?new Date(request.workDueAt).toLocaleDateString("sv-SE",{timeZone:"Asia/Baku"}):"";
-  const openRequestForm=(item:ChecklistLikeItem)=>{setPending(null);setReopenFor(null);setRequestFor(item.id);setRequestForm({department:request?.departments.length===1?request.departments[0]:"",title:`${request?.workTitle||""} — ${item.title}`,description:"",dueDate:workDueDate,file:null})};
+  const openRequestForm=(item:ChecklistLikeItem)=>{setPending(null);setReopenFor(null);setRequestFor(item.id);setRequestForm({department:request?.departments.length===1?request.departments[0]:"",title:`${request?.workTitle||""} — ${item.title}`,description:"",dueDate:workDueDate,files:[]})};
   const sendRequest=async(item:ChecklistLikeItem)=>{if(!request)return;setRequestBusy(true);const ok=await request.onSend(item,requestForm);setRequestBusy(false);if(ok)setRequestFor(null)};
   const act=async(item:ChecklistLikeItem,action:"close"|"reopen"|"withdraw",text?:string)=>{if(!request)return;setRequestBusy(true);const ok=await request.onAct(item,action,text);setRequestBusy(false);if(ok&&action==="reopen"){setReopenFor(null);setReopenText("")}};
   const done=checklist.filter(i=>Boolean(i.done)).length;
@@ -2808,8 +2796,8 @@ function ChecklistSection({heading="Mənim iş axınım",onReview,employeeView,c
         return <li key={item.id} className={item.done?"done":""}>
         <label title={requestOpen?"Cavabı qəbul edəndə ✓ avtomatik qoyulacaq":undefined}><input type="checkbox" checked={Boolean(item.done)} disabled={!employeeView||Boolean(item.delegated_task_id)||requestOpen||!stepsActionable} onChange={()=>onToggle(item)}/><span>{item.title}</span></label>
         <div className="checklistitemactions">
-          {item.attachment_key?<span className="checklistfile"><a className="checklistfilelink" href={`/api/file?key=${encodeURIComponent(item.attachment_key)}`} title={item.attachment_name||"Fayl"}><Paperclip/>{item.attachment_name||"Fayl"}</a>{employeeView&&onDetach&&!item.delegated_task_id&&<button type="button" className="checklistremove" title="Faylı sil" onClick={()=>onDetach(item)}>✕</button>}</span>:employeeView&&onAttach&&!item.delegated_task_id&&<ChecklistFileButton busy={attachBusyId===item.id} onPick={file=>onAttach(item,file)}/>}
-          {item.delegated_task_id?<><small className="delegatedtag">Həvalə edilib: {item.delegated_employee_name||"—"} — {item.delegated_task_status||"Yeni"}</small>{item.delegated_submission_attachment_key&&<span className="checklistfile"><a className="checklistfilelink" href={`/api/file?key=${encodeURIComponent(item.delegated_submission_attachment_key)}`} title={item.delegated_submission_attachment_name||"Fayl"}><Paperclip/>{item.delegated_submission_attachment_name||"Fayl"}</a></span>}</>:<>
+          {(()=>{const files=rowFiles(item.files,item.attachment_key,item.attachment_name,item.attachment_size);const editable=employeeView&&!item.delegated_task_id;return <>{files.map(f=><span key={f.key} className="checklistfile"><a className="checklistfilelink" href={fileHref(f)} title={f.name}><Paperclip/>{f.name}</a>{editable&&onDetach&&<button type="button" className="checklistremove" title="Faylı sil" onClick={()=>onDetach(item,f)}>✕</button>}</span>)}{editable&&onAttach&&files.length<MAX_FILES&&<ChecklistFileButton busy={attachBusyId===item.id} onPick={picked=>onAttach(item,picked)}/>}</>})()}
+          {item.delegated_task_id?<><small className="delegatedtag">Həvalə edilib: {item.delegated_employee_name||"—"} — {item.delegated_task_status||"Yeni"}</small>{rowFiles(item.delegated_submission_files,item.delegated_submission_attachment_key,item.delegated_submission_attachment_name).map(f=><span key={f.key} className="checklistfile"><a className="checklistfilelink" href={fileHref(f)} title={f.name}><Paperclip/>{f.name}</a></span>)}</>:<>
           {canDelegate&&!requestOpen&&<span className="checklistdelegate"><select disabled={locked||!stepsActionable} value={choice[item.id]||""} onChange={e=>setChoice({...choice,[item.id]:e.target.value})}><option value="">{delegateEmployees.length?"İşçi seçin":"Tabe işçi yoxdur"}</option>{delegateEmployees.map(emp=><option key={emp.id} value={emp.id}>{emp.name}{emp.position_title?` — ${emp.position_title}`:""}</option>)}</select><button type="button" className="delegatebtn" disabled={locked||!stepsActionable||!choice[item.id]} onClick={()=>{setPending({itemId:item.id,employeeId:choice[item.id]});setComment("")}}>Ver</button></span>}
           {canSendRequest&&<button type="button" className="delegatebtn requestbtn" disabled={locked||!stepsActionable||requestFor===item.id} title="Bu addımı başqa şöbəyə sorğu kimi göndər" onClick={()=>openRequestForm(item)}>Şöbəyə sorğu</button>}
           {employeeView&&!requestOpen&&<button type="button" className="checklistremove" onClick={()=>onRemove(item)}>✕</button>}
@@ -2823,7 +2811,7 @@ function ChecklistSection({heading="Mənim iş axınım",onReview,employeeView,c
           <div className="steprequesthead"><b>Sorğu → {item.request_department}</b><span className={`steprequeststatus ${stepRequestTone(item.request_status)}`}>{item.request_status}</span>{item.request_assignee_name&&<small>İcraçı: {item.request_assignee_name}</small>}{(item.request_agreed_due_at||item.request_due_at)&&<small>Müddət: {formatDateOnly(item.request_agreed_due_at||item.request_due_at||null)}</small>}</div>
           {item.request_status==="İmtina edildi"&&<small className="steprequestnote">Səbəb: {item.request_reject_reason||"—"}. Addımı başqa şöbəyə və ya yenidən göndərə, ya da işçiyə verə bilərsiniz.</small>}
           {item.request_answer&&<p className="steprequestanswer"><b>Cavab:</b> {item.request_answer}</p>}
-          {item.request_answer_key&&<span className="checklistfile"><a className="checklistfilelink" href={`/api/file?key=${encodeURIComponent(item.request_answer_key)}`} title={item.request_answer_name||"Fayl"}><Paperclip/>{item.request_answer_name||"Cavab faylı"}</a></span>}
+          {rowFiles(item.request_answer_files,item.request_answer_key,item.request_answer_name).map(f=><span key={f.key} className="checklistfile"><a className="checklistfilelink" href={fileHref(f)} title={f.name}><Paperclip/>{f.name}</a></span>)}
           {item.request_status==="Cavablandı"&&employeeView&&request&&<small className="steprequestnote">Cavabı yoxlayın: kifayətdirsə qəbul edin — addıma ✓ avtomatik qoyulacaq.</small>}
           {employeeView&&request&&<div className="steprequestactions">
             {item.request_status==="Yeni"&&<button type="button" className="inlinecancel" disabled={requestBusy} onClick={()=>void act(item,"withdraw")}>Sorğunu geri çağır</button>}
@@ -2837,10 +2825,10 @@ function ChecklistSection({heading="Mənim iş axınım",onReview,employeeView,c
           <label>İstənilən müddət<Input type="date" value={requestForm.dueDate} onChange={e=>setRequestForm({...requestForm,dueDate:e.target.value})}/></label>
           {workDueDate&&requestForm.dueDate>workDueDate&&<small className="steprequestwarn">⚠ Bu tarix işin son tarixindən ({formatDateOnly(workDueDate)}) gecdir — cavab gec gələrsə, iş gecikə bilər.</small>}
           <label>İzah<Textarea placeholder="Nə lazımdır, hansı formada və nə üçün (istəyə bağlı)" value={requestForm.description} onChange={e=>setRequestForm({...requestForm,description:e.target.value})}/></label>
-          <label>Fayl (istəyə bağlı, maks. 25 MB)<Input type="file" onChange={e=>setRequestForm({...requestForm,file:e.target.files?.[0]||null})}/>{!requestForm.file&&item.attachment_key&&<small>Fayl seçilməsə, addımın faylı ({item.attachment_name||"fayl"}) sorğuya əlavə olunacaq.</small>}</label>
+          <FilePicker label="Fayllar (istəyə bağlı)" files={requestForm.files} onChange={files=>setRequestForm({...requestForm,files})}/>{!requestForm.files.length&&item.attachment_key&&<small>Fayl seçilməsə, addımın faylları ({rowFiles(item.files,item.attachment_key,item.attachment_name).map(f=>f.name).join(", ")}) sorğuya əlavə olunacaq.</small>}
           <div className="checklistcommentactions"><button type="button" className="inlinecancel" disabled={requestBusy} onClick={()=>setRequestFor(null)}>Ləğv et</button><Button type="button" disabled={requestBusy||!requestForm.department||!requestForm.title.trim()} onClick={()=>void sendRequest(item)}>{requestBusy?"Göndərilir...":"Sorğunu göndər"}</Button></div>
         </div>}
-        {pending?.itemId===item.id&&<div className="checklistcomment"><b>Şərh — {delegateEmployees.find(emp=>String(emp.id)===pending.employeeId)?.name||"işçi"} üçün əlavə məlumat</b><Textarea autoFocus placeholder="İşçiyə çatdırmaq istədiyiniz əlavə məlumatı yazın (istəyə bağlı). Bu mətn tapşırığın açıqlaması olacaq." value={comment} onChange={e=>setComment(e.target.value)}/><div className="checklistcommentactions"><button type="button" className="inlinecancel" onClick={()=>setPending(null)}>Ləğv et</button><small className="delegatefilenote">{item.attachment_key?<>İşçiyə yalnız bu addımın faylı göndəriləcək: <b>{item.attachment_name||"fayl"}</b></>:"Bu addımda fayl yoxdur — işçiyə fayl getməyəcək."}</small><Button type="button" onClick={()=>{onDelegate?.(item,pending.employeeId,comment);setChoice({...choice,[item.id]:""});setPending(null);setComment("")}}>Tapşırıq kimi göndər</Button></div></div>}
+        {pending?.itemId===item.id&&<div className="checklistcomment"><b>Şərh — {delegateEmployees.find(emp=>String(emp.id)===pending.employeeId)?.name||"işçi"} üçün əlavə məlumat</b><Textarea autoFocus placeholder="İşçiyə çatdırmaq istədiyiniz əlavə məlumatı yazın (istəyə bağlı). Bu mətn tapşırığın açıqlaması olacaq." value={comment} onChange={e=>setComment(e.target.value)}/><div className="checklistcommentactions"><button type="button" className="inlinecancel" onClick={()=>setPending(null)}>Ləğv et</button><small className="delegatefilenote">{item.attachment_key?<>İşçiyə yalnız bu addımın faylları göndəriləcək: <b>{rowFiles(item.files,item.attachment_key,item.attachment_name).map(f=>f.name).join(", ")}</b></>:"Bu addımda fayl yoxdur — işçiyə fayl getməyəcək."}</small><Button type="button" onClick={()=>{onDelegate?.(item,pending.employeeId,comment);setChoice({...choice,[item.id]:""});setPending(null);setComment("")}}>Tapşırıq kimi göndər</Button></div></div>}
       </li>})}</ul>:<small className="checklistempty">{employeeView?"Bu tapşırığı icra etmək üçün öz addımlarınızı əlavə edin.":"Personal hələ iş axını yaratmayıb."}</small>}
       {employeeView&&<div className="checklistadd"><Input disabled={locked} placeholder={locked?"Bu mərhələdə yeni addım əlavə etmək olmaz":"Yeni addım yazın"} value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();onAdd()}}}/><Button type="button" disabled={locked||busy||!title.trim()} onClick={onAdd}><Plus/>Əlavə et</Button></div>}
       {error&&<div className="errorbox">{error}</div>}

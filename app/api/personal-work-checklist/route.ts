@@ -2,6 +2,7 @@ import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, del
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireAction, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
+import { parseFiles } from "@/db/attachments";
 
 async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
   if (!personalWorkId) throw new Error("İş seçilməyib.");
@@ -62,17 +63,14 @@ export async function PATCH(request: Request) {
     if (body.requestDepartment) {
       await requireAction(user, "tasks.requests", "add");
       if (!(await mayRequestFrom(user, existing.personal_work_id))) throw new Error("FORBIDDEN");
-      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, attachmentKey: body.attachmentKey, attachmentName: body.attachmentName, attachmentSize: body.attachmentSize, attachmentType: body.attachmentType });
+      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, files: parseFiles(body.files, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }) });
       return Response.json({ items });
     }
     const items = body.delegateEmployeeId
       ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, actorName: user.name, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
-      : body.removeAttachment || body.attachmentKey
-        ? await setPersonalWorkChecklistItemAttachment({
-            id,
-            actorName: user.name,
-            attachment: body.removeAttachment ? null : { key: String(body.attachmentKey), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") },
-          })
+      // Versiya 2.104: files are added to a step (addFiles) or one is removed (removeFileKey).
+      : body.addFiles || body.removeFileKey
+        ? await setPersonalWorkChecklistItemAttachment({ id, actorName: user.name, add: parseFiles(body.addFiles), removeKey: body.removeFileKey ? String(body.removeFileKey) : undefined })
         : await togglePersonalWorkChecklistItem({ id, actorName: user.name, done: Boolean(body.done) });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım yenilənmədi." }, { status: 500 }); }

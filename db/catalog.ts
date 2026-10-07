@@ -5,6 +5,7 @@ import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadI
 import { firmAccess, parseHiddenSections, rightsForType, typeKey, type FirmAccess } from "@/lib/permissions";
 import { companyPermissionsFromStored, parseCompanyPermissions } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
+import { copyFiles, fileNames, filesOf, filesOfMany, parseFiles, removeFiles, setFiles, withFiles, type FileRef } from "@/db/attachments";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -612,7 +613,7 @@ export async function getAllData() {
     const currentPeriod = periodKey({ frequency: String(item.frequency) });
     return { ...item, period_key: currentPeriod, is_completed: Number(completedKeys.has(`${item.id}:${currentPeriod}`)) };
   });
-  return { fixedWorksStart: await getFixedWorksStart(), employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), dateRequests: dateRequests.results };
+  return { fixedWorksStart: await getFixedWorksStart(), employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await withFiles(await withFiles(await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), "task"), "task_submission", "submission_files"), dateRequests: dateRequests.results };
 }
 
 const FREQUENCIES: readonly string[] = [...FIXED_FREQUENCIES, "daily"];
@@ -898,7 +899,8 @@ export async function resolveDateChangeRequest(input: { id: number; approve: boo
   }
 }
 
-export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionAttachmentKey?: string; submissionAttachmentName?: string; submissionAttachmentSize?: number; submissionAttachmentType?: string; submissionNote?: string }) {
+export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionFiles?: unknown; submissionNote?: string }) {
+  const submissionFiles = parseFiles(input.submissionFiles);
   const current = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Tapşırıq tapılmadı.");
   const linkedRequest = await requestForTask(input.id);
@@ -908,7 +910,7 @@ export async function updateTask(input: { id: number; actorName?: string; status
     const validTransition = (current.status === "Yeni" && input.status === "İcradadır") ||
       ((current.status === "İcradadır" || current.status === "Geri qaytarılıb") && input.status === "Təqdim edilib");
     if (!validTransition) throw new Error("Status yalnız “Yeni” → “İcradadır” → “Təqdim edilib” ardıcıllığı ilə dəyişə bilər.");
-    if (input.status === "Təqdim edilib" && current.attachment_key && !linkedRequest && !input.submissionAttachmentKey && !current.submission_attachment_key)
+    if (input.status === "Təqdim edilib" && current.attachment_key && !linkedRequest && !submissionFiles.length && !current.submission_attachment_key)
       throw new Error("Tapşırıqla göndərilən faylı doldurub yükləməlisiniz.");
   } else if (input.status === "Təsdiqlənib") {
     const score = Number(input.evaluation);
@@ -924,27 +926,24 @@ export async function updateTask(input: { id: number; actorName?: string; status
   const employeeStatusChanged = input.userMode
     ? Number(current.employee_status_changed || 0) + 1
     : status === "Geri qaytarılıb" ? 1 : Number(current.employee_status_changed || 0);
-  await db().prepare(`UPDATE tasks SET status = ?, evaluation = ?, evaluation_note = ?, completed_at = ?, employee_status_changed = ?,
-    submission_attachment_key = ?, submission_attachment_name = ?, submission_attachment_size = ?, submission_attachment_type = ? WHERE id = ?`)
+  await db().prepare(`UPDATE tasks SET status = ?, evaluation = ?, evaluation_note = ?, completed_at = ?, employee_status_changed = ? WHERE id = ?`)
     .bind(
       status,
       input.evaluation ?? current.evaluation,
       input.evaluationNote ?? current.evaluation_note,
       completedAt,
       employeeStatusChanged,
-      input.submissionAttachmentKey ?? current.submission_attachment_key,
-      input.submissionAttachmentName ?? current.submission_attachment_name,
-      input.submissionAttachmentSize ?? current.submission_attachment_size,
-      input.submissionAttachmentType ?? current.submission_attachment_type,
       input.id,
     ).run();
+  // Versiya 2.104: the work is submitted with up to 10 files; submitting again replaces them.
+  if (submissionFiles.length) await setFiles("task_submission", input.id, submissionFiles);
   if (status === "Təsdiqlənib") {
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
     await db().prepare("UPDATE task_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
   }
   if (linkedRequest && input.status && input.status !== current.status) {
     // On submission the answer text written by the assignee (and the file name) becomes the request's answer, shown in Sorğular and on the requester's step.
-    const submittedFile = input.submissionAttachmentName || current.submission_attachment_name;
+    const submittedFile = submissionFiles.length ? fileNames(submissionFiles) : current.submission_attachment_name;
     const detail = status === "Təqdim edilib" ? [input.submissionNote?.trim(), submittedFile ? `Fayl: ${submittedFile}` : ""].filter(Boolean).join("\n") || null
       : status === "Geri qaytarılıb" ? input.evaluationNote?.trim() || null
       : status === "Təsdiqlənib" ? `${input.evaluation}/10${input.evaluationNote?.trim() ? `\n${input.evaluationNote.trim()}` : ""}` : null;
@@ -1003,17 +1002,19 @@ export async function deleteTask(id: number, actorName?: string) {
   await db().prepare("UPDATE task_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(id).run();
   await db().prepare("DELETE FROM tasks WHERE id = ?").bind(id).run();
   if (linked) await recordPersonalWorkEvent(linked.personal_work_id, actorName, "Həvalə ləğv edildi (tapşırıq silindi)", linked.title);
-  if (task.attachment_key && env.FILES) await env.FILES.delete(task.attachment_key);
+  await removeFiles("task", id);
+  await removeFiles("task_submission", id);
 }
 
 export async function getChecklistItems(taskId: number) {
   await ensureSchema();
-  return (await db().prepare(`SELECT task_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
+  const rows = (await db().prepare(`SELECT task_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
     delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size
     FROM task_checklist_items
     LEFT JOIN employees AS delegated_employee ON delegated_employee.id = task_checklist_items.delegated_employee_id
     LEFT JOIN tasks AS delegated_task ON delegated_task.id = task_checklist_items.delegated_task_id
-    WHERE task_id = ? ORDER BY id`).bind(taskId).all()).results;
+    WHERE task_id = ? ORDER BY id`).bind(taskId).all<Record<string, unknown>>()).results;
+  return withFiles(await withFiles(rows, "task_item"), "task_submission", "delegated_submission_files", "delegated_task_id");
 }
 
 export async function createChecklistItem(input: { taskId: number; title: string }) {
@@ -1094,20 +1095,13 @@ export async function delegateTaskChecklistItem(input: { id: number; isAdmin: bo
   if (!task.company_id) throw new Error("Həvalə etmək üçün əvvəlcə tapşırığın firması təyin olunmalıdır.");
   const candidates = await getDelegateCandidates(Number(task.company_id), Number(task.employee_id));
   if (!candidates.some((c) => c.id === input.employeeId)) throw new Error("Bu işçi firmanın strukturuna görə sizə tabe deyil.");
-  // The new task gets its own copy of the step's file so deleting either one never orphans the other.
-  let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
-  if (item.attachment_key && env.FILES) {
-    const source = await env.FILES.get(String(item.attachment_key));
-    if (source) {
-      const copyKey = `${crypto.randomUUID()}-${String(item.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
-      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
-      attachment = { key: copyKey, name: (item.attachment_name as string | null) ?? null, size: (item.attachment_size as number | null) ?? null, type: (item.attachment_type as string | null) ?? null };
-    }
-  }
+  // The new task gets its own copies of the step's files so deleting either side never orphans the other.
+  const files = await copyFiles(await filesOf("task_item", input.id));
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
-    .bind(input.employeeId, task.company_id, `${task.title} — ${item.title}`, input.comment?.trim() || null, task.due_at, task.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
+    .bind(input.employeeId, task.company_id, `${task.title} — ${item.title}`, input.comment?.trim() || null, task.due_at, task.due_at, new Date().toISOString()).run();
   const newTaskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  if (files.length) await setFiles("task", newTaskId, files);
   await db().prepare("UPDATE task_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(newTaskId, input.employeeId, input.id).run();
   return getChecklistItems(Number(item.task_id));
 }
@@ -1117,16 +1111,16 @@ export async function deleteChecklistItem(input: { id: number }) {
   const item = await db().prepare("SELECT task_id FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   await db().prepare("DELETE FROM task_checklist_items WHERE id = ?").bind(input.id).run();
+  await removeFiles("task_item", input.id);
   return getChecklistItems(item.task_id);
 }
 
-export async function setChecklistItemAttachment(input: { id: number; attachment: { key: string; name: string; size: number; type: string } | null }) {
+export async function setChecklistItemAttachment(input: { id: number } & StepFilesChange) {
   await ensureSchema();
-  const item = await db().prepare("SELECT task_id, attachment_key FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number; attachment_key: string | null }>();
+  const item = await db().prepare("SELECT task_id, delegated_task_id FROM task_checklist_items WHERE id = ?").bind(input.id).first<{ task_id: number; delegated_task_id: number | null }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
-  await db().prepare("UPDATE task_checklist_items SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
-    .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
-  if (item.attachment_key && item.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(item.attachment_key);
+  if (item.delegated_task_id) throw new Error("Həvalə edilmiş addımın faylı dəyişdirilə bilməz.");
+  await changeStepFiles("task_item", input.id, input);
   return getChecklistItems(item.task_id);
 }
 
@@ -1257,7 +1251,8 @@ async function withPersonalWorkProgress(works: Array<Record<string, unknown> & {
     own.done += row.done ? 1 : 0;
     ownByWork.set(row.work_id, own);
   }
-  return works.map((work) => ({ ...work, shared: Array.from(sharedByWork.get(work.id)?.values() ?? []), departments: Array.from(departmentsByWork.get(work.id)?.values() ?? []), own: ownByWork.get(work.id) ?? null }));
+  const filesByWork = await filesOfMany("personal_work", works.length <= 50 ? works.map((w) => w.id) : undefined);
+  return works.map((work) => ({ ...work, files: filesByWork.get(work.id) ?? [], shared: Array.from(sharedByWork.get(work.id)?.values() ?? []), departments: Array.from(departmentsByWork.get(work.id)?.values() ?? []), own: ownByWork.get(work.id) ?? null }));
 }
 
 // Per-work history shown in the "Aç" dialog. Purely informational, so a failed write never blocks the action itself.
@@ -1323,35 +1318,41 @@ export async function getPersonalWorkHistory(personalWorkId: number) {
   });
 }
 
-export async function createPersonalWork(input: { userId: number; actorName?: string; title: string; description?: string; companyId?: number; dueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function createPersonalWork(input: { userId: number; actorName?: string; title: string; description?: string; companyId?: number; dueAt?: string; files?: FileRef[] }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("İşin adını yazın.");
-  const result = await db().prepare(`INSERT INTO personal_works (user_id, title, description, company_id, due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type)
-    VALUES (?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
-    .bind(input.userId, title, input.description?.trim() || null, input.companyId || null, input.dueAt || null, new Date().toISOString(), input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null).run();
+  const result = await db().prepare(`INSERT INTO personal_works (user_id, title, description, company_id, due_at, status, created_at)
+    VALUES (?, ?, ?, ?, ?, 'Yeni', ?)`)
+    .bind(input.userId, title, input.description?.trim() || null, input.companyId || null, input.dueAt || null, new Date().toISOString()).run();
   const workId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
-  await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", title);
+  // Versiya 2.104: up to 10 files (db/attachments.ts).
+  if (input.files?.length) await setFiles("personal_work", workId, input.files);
+  await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", `${title}${input.files?.length ? `\nFayl: ${fileNames(input.files)}` : ""}`);
 }
 
-// Versiya 2.102: the file attached to one's own work may be replaced or removed in every status — a completed work too (its other
-// details stay fixed once it is completed). The change goes into the work's history.
-export async function updatePersonalWorkFile(input: { id: number; userId: number; actorName?: string; attachment: { key: string; name: string; size: number; type: string } | null }) {
+// What changed in a list of files, for the history.
+function filesChange(before: FileRef[], after: FileRef[]) {
+  const kept = new Set(after.map((f) => f.key));
+  const had = new Set(before.map((f) => f.key));
+  const removed = before.filter((f) => !kept.has(f.key));
+  const added = after.filter((f) => !had.has(f.key));
+  return [added.length ? `Əlavə edildi: ${fileNames(added)}` : "", removed.length ? `Silindi: ${fileNames(removed)}` : ""].filter(Boolean).join("\n");
+}
+
+// Versiya 2.102: the files of one's own work may be changed in every status — a completed work too (its other details stay
+// fixed once it is completed). Since 2.104 the whole list is sent: the files kept, plus the new ones. The change goes into the history.
+export async function updatePersonalWorkFile(input: { id: number; userId: number; actorName?: string; files: FileRef[] }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("İş tapılmadı.");
   if (Number(current.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
-  if (!input.attachment && !current.attachment_key) throw new Error("İşdə fayl yoxdur.");
-  if (input.attachment && !input.attachment.key) throw new Error("Fayl seçilməyib.");
-  await db().prepare("UPDATE personal_works SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
-    .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
-  if (current.attachment_key && current.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(String(current.attachment_key));
-  const before = current.attachment_name ? String(current.attachment_name) : null;
-  await recordPersonalWorkEvent(input.id, input.actorName, input.attachment ? (before ? "Fayl dəyişdirildi" : "Fayl əlavə edildi") : "Fayl silindi",
-    input.attachment ? (before ? `${before} → ${input.attachment.name}` : input.attachment.name) : before);
+  const { before, after } = await setFiles("personal_work", input.id, input.files);
+  const change = filesChange(before, after);
+  if (change) await recordPersonalWorkEvent(input.id, input.actorName, "Fayllar dəyişdirildi", change);
 }
 
-export async function updatePersonalWork(input: { id: number; userId: number; actorName?: string; title: string; description?: string; companyId?: number | null; dueAt?: string | null; removeAttachment?: boolean; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function updatePersonalWork(input: { id: number; userId: number; actorName?: string; title: string; description?: string; companyId?: number | null; dueAt?: string | null; files?: FileRef[] }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("İş tapılmadı.");
@@ -1359,14 +1360,14 @@ export async function updatePersonalWork(input: { id: number; userId: number; ac
   if (current.status === "Tamamlanıb") throw new Error("Tamamlanmış iş redaktə edilə bilməz.");
   const title = input.title?.trim();
   if (!title) throw new Error("İşin adını yazın.");
-  const attachmentKey = input.removeAttachment ? null : input.attachmentKey ?? current.attachment_key;
-  const attachmentName = input.removeAttachment ? null : input.attachmentName ?? current.attachment_name;
-  const attachmentSize = input.removeAttachment ? null : input.attachmentSize ?? current.attachment_size;
-  const attachmentType = input.removeAttachment ? null : input.attachmentType ?? current.attachment_type;
-  await db().prepare(`UPDATE personal_works SET title = ?, description = ?, company_id = ?, due_at = ?, attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?`)
-    .bind(title, input.description?.trim() || null, input.companyId ?? null, input.dueAt ?? null, attachmentKey, attachmentName, attachmentSize, attachmentType, input.id).run();
-  if (current.attachment_key && current.attachment_key !== attachmentKey && env.FILES) await env.FILES.delete(String(current.attachment_key));
-  await recordPersonalWorkEvent(input.id, input.actorName, "İş məlumatları redaktə edildi", title);
+  await db().prepare(`UPDATE personal_works SET title = ?, description = ?, company_id = ?, due_at = ? WHERE id = ?`)
+    .bind(title, input.description?.trim() || null, input.companyId ?? null, input.dueAt ?? null, input.id).run();
+  let change = "";
+  if (input.files) {
+    const { before, after } = await setFiles("personal_work", input.id, input.files);
+    change = filesChange(before, after);
+  }
+  await recordPersonalWorkEvent(input.id, input.actorName, "İş məlumatları redaktə edildi", `${title}${change ? `\n${change}` : ""}`);
 }
 
 export async function updatePersonalWorkStatus(input: { id: number; userId: number; actorName?: string; status: string }) {
@@ -1391,7 +1392,10 @@ export async function deletePersonalWork(input: { id: number; userId: number }) 
   if (!current) throw new Error("İş tapılmadı.");
   if (current.user_id !== input.userId) throw new Error("Bu iş sizə aid deyil.");
   if (current.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu iş silinə bilər.");
+  const steps = (await db().prepare("SELECT id FROM personal_work_checklist_items WHERE personal_work_id = ?").bind(input.id).all<{ id: number }>()).results;
   await db().prepare("DELETE FROM personal_works WHERE id = ?").bind(input.id).run();
+  await removeFiles("personal_work", input.id);
+  for (const step of steps) await removeFiles("personal_work_item", step.id);
 }
 
 export async function getPersonalWorkChecklist(personalWorkId: number) {
@@ -1401,7 +1405,7 @@ export async function getPersonalWorkChecklist(personalWorkId: number) {
   const rows = (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
     delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size,
     req.id AS request_id, req.status AS request_status, req.to_department AS request_department, req.reject_reason AS request_reject_reason, req.desired_due_at AS request_due_at, req.agreed_due_at AS request_agreed_due_at,
-    req_assignee.name AS request_assignee_name, req_task.submission_attachment_key AS request_answer_key, req_task.submission_attachment_name AS request_answer_name, req_task.submission_attachment_size AS request_answer_size,
+    req_assignee.name AS request_assignee_name, req.task_id AS request_task_id, req_task.submission_attachment_key AS request_answer_key, req_task.submission_attachment_name AS request_answer_name, req_task.submission_attachment_size AS request_answer_size,
     (SELECT detail FROM work_request_events WHERE request_id = req.id AND action = 'Sorğu cavablandı' ORDER BY id DESC LIMIT 1) AS request_answer
     FROM personal_work_checklist_items
     LEFT JOIN employees AS delegated_employee ON delegated_employee.id = personal_work_checklist_items.delegated_employee_id
@@ -1411,7 +1415,11 @@ export async function getPersonalWorkChecklist(personalWorkId: number) {
     LEFT JOIN tasks AS req_task ON req_task.id = req.task_id
     WHERE personal_work_id = ? ORDER BY personal_work_checklist_items.id`).bind(personalWorkId).all<Record<string, unknown>>()).results;
   // The pending score is the other department's matter; for the requester the request is simply closed.
-  return rows.map((row) => (row.request_status === AWAITING_EVALUATION ? { ...row, request_status: "Bağlandı" } : row));
+  // Versiya 2.104: every file — the step's own, what the person it was handed to submitted, the request's answer.
+  const withOwn = await withFiles(rows, "personal_work_item");
+  const withDelegated = await withFiles(withOwn, "task_submission", "delegated_submission_files", "delegated_task_id");
+  const withAnswer = await withFiles(withDelegated, "task_submission", "request_answer_files", "request_task_id");
+  return withAnswer.map((row) => (row.request_status === AWAITING_EVALUATION ? { ...row, request_status: "Bağlandı" } : row));
 }
 
 // A step's request is "open" until it is closed or rejected; while open the step cannot be deleted, handed to an employee or re-sent.
@@ -1433,7 +1441,7 @@ export async function getPersonalWorkRequestTargets(personalWorkId: number, empl
 
 // Sends a step of "İşlərim" as a request to another department of the work's firm. It is an ordinary request (Sorğular);
 // the step only keeps the link, shows the progress and the answer, and the owner ticks it off once satisfied.
-export async function requestPersonalWorkChecklistItem(user: SessionUser, input: { id: number; toDepartment: string; title?: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
+export async function requestPersonalWorkChecklistItem(user: SessionUser, input: { id: number; toDepartment: string; title?: string; description?: string; desiredDueAt?: string; files?: FileRef[] }) {
   await ensureSchema();
   const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!item) throw new Error("İş addımı tapılmadı.");
@@ -1446,23 +1454,15 @@ export async function requestPersonalWorkChecklistItem(user: SessionUser, input:
   if (item.delegated_task_id) throw new Error("Bu addım artıq işçiyə həvalə edilib.");
   const open = await openRequestOfItem(input.id);
   if (open) throw new Error(`Bu addım üzrə ${open.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır (${open.status}).`);
-  // Without a new file the step's own file goes along, as a copy, so deleting either one never orphans the other.
-  let attachment = input.attachmentKey ? { key: input.attachmentKey, name: input.attachmentName ?? null, size: input.attachmentSize ?? null, type: input.attachmentType ?? null } : null;
-  if (!attachment && item.attachment_key && env.FILES) {
-    const source = await env.FILES.get(String(item.attachment_key));
-    if (source) {
-      const copyKey = `${crypto.randomUUID()}-${String(item.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
-      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
-      attachment = { key: copyKey, name: (item.attachment_name as string | null) ?? null, size: (item.attachment_size as number | null) ?? null, type: (item.attachment_type as string | null) ?? null };
-    }
-  }
+  // Without new files the step's own files go along, as copies, so deleting either side never orphans the other.
+  const files = input.files?.length ? input.files : await copyFiles(await filesOf("personal_work_item", input.id));
   await createRequest(user, {
     companyId: Number(work.company_id),
     toDepartment: input.toDepartment,
     title: input.title?.trim() || `${work.title} — ${item.title}`,
     description: input.description,
     desiredDueAt: input.desiredDueAt,
-    attachmentKey: attachment?.key, attachmentName: attachment?.name ?? undefined, attachmentSize: attachment?.size ?? undefined, attachmentType: attachment?.type ?? undefined,
+    files,
     personalWorkItemId: input.id,
   });
   return getPersonalWorkChecklist(Number(item.personal_work_id));
@@ -1518,36 +1518,37 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   if (!work.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
   if (!work.due_at) throw new Error("Həvalə etmək üçün əvvəlcə işin son tarixini təyin edin.");
   if (!(await getPersonalWorkDelegateCandidates(Number(work.id))).some((c) => c.id === input.employeeId)) throw new Error("Bu işçi firmanın strukturuna görə sizə tabe deyil.");
-  // The task gets its own copy of the step's file so deleting either one never orphans the other.
-  let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
-  if (item.attachment_key && env.FILES) {
-    const source = await env.FILES.get(String(item.attachment_key));
-    if (source) {
-      const copyKey = `${crypto.randomUUID()}-${String(item.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
-      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
-      attachment = { key: copyKey, name: (item.attachment_name as string | null) ?? null, size: (item.attachment_size as number | null) ?? null, type: (item.attachment_type as string | null) ?? null };
-    }
-  }
+  // The task gets its own copies of the step's files (only the step's — not the work's own) so deleting either side never orphans the other.
+  const files = await copyFiles(await filesOf("personal_work_item", input.id));
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
-    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
+    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString()).run();
   const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  if (files.length) await setFiles("task", taskId, files);
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();
   const employee = await db().prepare("SELECT name FROM employees WHERE id = ?").bind(input.employeeId).first<{ name: string }>();
   const note = input.comment?.trim();
-  await recordPersonalWorkEvent(Number(item.personal_work_id), input.actorName, "Addım işçiyə verildi", `${item.title} → ${employee?.name || "işçi"}${note ? `\nŞərh: ${note}` : ""}${attachment ? `\nFayl: ${attachment.name || "əlavə"}` : ""}`);
+  await recordPersonalWorkEvent(Number(item.personal_work_id), input.actorName, "Addım işçiyə verildi", `${item.title} → ${employee?.name || "işçi"}${note ? `\nŞərh: ${note}` : ""}${files.length ? `\nFayl: ${fileNames(files)}` : ""}`);
   return getPersonalWorkChecklist(Number(item.personal_work_id));
 }
 
-export async function setPersonalWorkChecklistItemAttachment(input: { id: number; actorName?: string; attachment: { key: string; name: string; size: number; type: string } | null }) {
+// Versiya 2.104: a step keeps up to 10 files — new ones are added to the list, one is removed by its key.
+export type StepFilesChange = { add?: FileRef[]; removeKey?: string };
+async function changeStepFiles(kind: "personal_work_item" | "task_item", id: number, change: StepFilesChange) {
+  const current = await filesOf(kind, id);
+  const removed = change.removeKey ? current.filter((f) => f.key === change.removeKey) : [];
+  const next = [...current.filter((f) => f.key !== change.removeKey), ...(change.add ?? [])];
+  await setFiles(kind, id, next);
+  return { added: change.add ?? [], removed };
+}
+export async function setPersonalWorkChecklistItemAttachment(input: { id: number; actorName?: string } & StepFilesChange) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key, attachment_name, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null; attachment_name: string | null; title: string }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; title: string }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
   if (item.delegated_task_id) throw new Error("Həvalə edilmiş addımın faylı dəyişdirilə bilməz.");
-  await db().prepare("UPDATE personal_work_checklist_items SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
-    .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
-  if (item.attachment_key && item.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(item.attachment_key);
-  await recordPersonalWorkEvent(item.personal_work_id, input.actorName, input.attachment ? "Fayl əlavə edildi" : "Fayl silindi", `${item.title} — ${input.attachment ? input.attachment.name : item.attachment_name || "fayl"}`);
+  const { added, removed } = await changeStepFiles("personal_work_item", input.id, input);
+  if (added.length) await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "Fayl əlavə edildi", `${item.title} — ${fileNames(added)}`);
+  if (removed.length) await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "Fayl silindi", `${item.title} — ${fileNames(removed)}`);
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
@@ -1559,7 +1560,7 @@ export async function deletePersonalWorkChecklistItem(input: { id: number; actor
   const openRequest = await openRequestOfItem(input.id);
   if (openRequest) throw new Error(`Bu addım üzrə ${openRequest.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır (${openRequest.status}). Addım sorğu bağlanandan və ya rədd ediləndən sonra silinə bilər; “Yeni” statusda sorğunu geri çağırmaq olar.`);
   await db().prepare("DELETE FROM personal_work_checklist_items WHERE id = ?").bind(input.id).run();
-  if (item.attachment_key && env.FILES) await env.FILES.delete(item.attachment_key);
+  await removeFiles("personal_work_item", input.id);
   await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "Addım silindi", item.title);
   return getPersonalWorkChecklist(item.personal_work_id);
 }

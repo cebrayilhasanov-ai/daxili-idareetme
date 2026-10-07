@@ -1,6 +1,7 @@
 import { createChecklistItem, delegateTaskChecklistItem, deleteChecklistItem, getChecklistItems, getTaskDelegateCandidates, setChecklistItemAttachment, toggleChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/runtime";
+import { parseFiles } from "@/db/attachments";
 
 async function assertTaskAccess(user: Awaited<ReturnType<typeof requireUser>>, taskId: number) {
   if (!taskId) throw new Error("Tapşırıq seçilməyib.");
@@ -48,11 +49,9 @@ export async function PATCH(request: Request) {
     if (body.action === "delegate" && user.role === "admin") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     const items = body.action === "delegate"
       ? await delegateTaskChecklistItem({ id, isAdmin: user.role === "admin", actorEmployeeId: user.employeeId, actorName: user.name, employeeId: Number(body.employeeId), comment: body.comment })
-      : body.removeAttachment || body.attachmentKey
-      ? await setChecklistItemAttachment({
-          id,
-          attachment: body.removeAttachment ? null : { key: String(body.attachmentKey), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") },
-        })
+      // Versiya 2.104: files are added to a step (addFiles) or one is removed (removeFileKey).
+      : body.addFiles || body.removeFileKey
+      ? await setChecklistItemAttachment({ id, add: parseFiles(body.addFiles), removeKey: body.removeFileKey ? String(body.removeFileKey) : undefined })
       : await toggleChecklistItem({ id, done: Boolean(body.done) });
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Addım yenilənmədi." }, { status: 500 }); }

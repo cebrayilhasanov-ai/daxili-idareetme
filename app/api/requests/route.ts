@@ -2,6 +2,7 @@ import { createRequest, deleteRequest, getRequestEvents, listRequests, updateReq
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireAction, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
+import { parseFiles } from "@/db/attachments";
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -61,10 +62,7 @@ export async function POST(request: Request) {
       title: String(body.title || ""),
       description: body.description,
       desiredDueAt: body.desiredDueAt,
-      attachmentKey: body.attachmentKey,
-      attachmentName: body.attachmentName,
-      attachmentSize: body.attachmentSize,
-      attachmentType: body.attachmentType,
+      files: parseFiles(body.files, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }),
     });
     return Response.json(await listFor(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Sorğu göndərilmədi." }, { status: 400 }); }

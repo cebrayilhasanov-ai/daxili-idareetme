@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 2.100; “Başqa firmadan köçür” — 2.101; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 2.102): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 2.100; “Başqa firmadan köçür” — 2.101; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 2.102; bir neçə fayl (ən çox 10) — 2.104): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -33,7 +33,7 @@ const GUIDES: Guide[] = [
       { audience: "all", title: "Statuslar və icra ardıcıllığı", blocks: [
         { steps: [
           "Yeni — tapşırıq sizə düşüb. İşə başlayanda “İcraya al” basın → İcradadır.",
-          "İş bitəndə “Təqdim et” basın → Təqdim edilib. Tapşırıqla doldurulmalı fayl göndərilibsə, işlənmiş faylı yükləmədən təqdim etmək olmur.",
+          "İş bitəndə “Təqdim et” basın → Təqdim edilib. Tapşırıqla doldurulmalı fayl göndərilibsə, işlənmiş faylı yükləmədən təqdim etmək olmur. Təqdim edərkən bir neçə fayl seçmək olar (ən çox 10, hər biri 25 MB-a qədər); hər seçim siyahıya əlavə olunur, ✕ ilə siyahıdan çıxarılır.",
           "Tapşırığı verən şəxs işi qəbul edirsə, 1–10 bal verir → Təsdiqlənib. Qəbul etmirsə, səbəbini yazıb geri qaytarır → Geri qaytarılıb; düzəldib yenidən “Təqdim et” basırsınız.",
         ] },
         { note: "Status yalnız bu ardıcıllıqla dəyişir; təqdim edilmiş tapşırığı geri çəkmək olmur. Son tarixi keçmiş aktiv tapşırıq gecikən sayılır və zəngdə (🔔) göstərilir." },
@@ -64,8 +64,8 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "İş addımları və həvalə", blocks: [
         { list: [
-          "Tapşırığın içində iş addımları yazıb hər birini ✓ edə, addıma fayl əlavə edə bilərsiniz.",
-          "Rəhbərsinizsə, addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basa bilərsiniz (həvalə) — o addım həmin əməkdaşa ayrıca tapşırıq kimi düşür (addımın faylı ilə). Əməkdaşa yalnız həmin addıma (iş axınına) yüklənmiş fayl gedir — işin özünə əlavə olunmuş fayl göndərilmir; göndərməzdən əvvəl şərh pəncərəsində hansı faylın gedəcəyi yazılır. Kimə həvalə etmək olar — firmanın strukturu göstərir; boş vəzifə atlanır və onun tabeliyindəkilər təklif olunur.",
+          "Tapşırığın içində iş addımları yazıb hər birini ✓ edə, addıma fayl əlavə edə bilərsiniz — 📎 “Fayl” ilə bir dəfəyə bir neçə fayl seçilir (bir addımda ən çox 10), hər faylın yanındakı ✕ onu silir.",
+          "Rəhbərsinizsə, addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basa bilərsiniz (həvalə) — o addım həmin əməkdaşa ayrıca tapşırıq kimi düşür (addımın faylları ilə). Əməkdaşa yalnız həmin addıma (iş axınına) yüklənmiş fayllar — hamısı — gedir — işin özünə əlavə olunmuş fayl göndərilmir; göndərməzdən əvvəl şərh pəncərəsində hansı faylın gedəcəyi yazılır. Kimə həvalə etmək olar — firmanın strukturu göstərir; boş vəzifə atlanır və onun tabeliyindəkilər təklif olunur.",
           "Həvalə üçün tapşırığın firması təyin olunmalıdır.",
           "Həvalə edilmiş addımın ✓-u əl ilə qoyulmur — əməkdaşın tapşırığını siz təsdiqləyəndə avtomatik qoyulur. Əsas sütunda həvalə zənciri (kim kimə verib) görünür.",
         ] },
@@ -89,14 +89,14 @@ const GUIDES: Guide[] = [
     parts: [
       { audience: "all", title: "İşin gedişi", blocks: [
         { steps: [
-          "“Əlavə et”: işin adı, açıqlaması, firması, son tarixi (istəyə bağlı), fayl.",
+          "“Əlavə et”: işin adı, açıqlaması, firması, son tarixi (istəyə bağlı), fayllar (bir neçə fayl seçmək olar — ən çox 10, hər biri 25 MB-a qədər).",
           "İş axınına addımlar əlavə edin.",
           "İşə başlayanda “İcraya al” → İcradadır. Addımlar yalnız icradakı işdə ✓ edilir.",
           "Bütün addımlar ✓ olanda iş avtomatik “Tamamlanıb” olur. Addımı olmayan işi “Tamamla” ilə bitirirsiniz.",
         ] },
         { list: [
           "Yalnız “Yeni” statuslu iş silinir; tamamlanmış işin adı, açıqlaması, firması və son tarixi dəyişmir və ona addım əlavə olunmur.",
-          "İşin faylını istənilən statusda dəyişmək olar: “Yeni” və “İcradadır”da “Redaktə et” ilə, tamamlanmış işdə isə “Aç” pəncərəsindəki “Faylı dəyiş” (yeni fayl seçin) və ya “Faylı sil” ilə. Dəyişiklik işin tarixçəsinə yazılır.",
+          "İşin fayllarını istənilən statusda dəyişmək olar: “Yeni” və “İcradadır”da “Redaktə et” ilə (köhnə faylı ✕ ilə silin, yenilərini seçin), tamamlanmış işdə isə “Aç” pəncərəsində — faylın yanındakı ✕ və “Fayl əlavə et”. Dəyişiklik işin tarixçəsinə yazılır.",
           "“Aç” pəncərəsində işin tarixçəsi var: yaradılma, addımlar, həvalələr, sorğular, təsdiqlər, rəhbərin qeydləri.",
         ] },
         { note: "Admin hesabı bu bölməni görür, amma iş əlavə etmir, addımı həvalə etmir və şöbəyə sorğu göndərmir — bunu öz istifadəçi hesabınızdan edin." },
@@ -140,7 +140,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Sorğu göndərmək və cavabı qəbul etmək", blocks: [
         { steps: [
-          "“Yeni sorğu”: firmanı, şöbəni, mövzunu, təsviri, istədiyiniz tarixi yazın, lazım olsa fayl əlavə edin, “Göndər”.",
+          "“Yeni sorğu”: firmanı, şöbəni, mövzunu, təsviri, istədiyiniz tarixi yazın, lazım olsa fayllar əlavə edin (ən çox 10), “Göndər”. Sorğu qəbul ediləndə bütün fayllar icraçının tapşırığına keçir; addımdan göndərilən sorğuya fayl seçilməsə, addımın bütün faylları gedir.",
           "Hələ “Yeni” ikən sorğunu silə (geri çağıra) bilərsiniz.",
           "Cavab gələndə (Cavablandı) ya “Cavabı təsdiqlə ✓”, ya da nəyin çatışmadığını yazıb “Yenidən aç” — iş icraçıya geri qayıdır.",
           "Sorğu bağlanana qədər hər iki tərəf şərh yaza bilər.",

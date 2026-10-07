@@ -1,5 +1,6 @@
 import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
+import { copyFiles, filesOf, removeFiles, setFiles, withFiles, type FileRef } from "@/db/attachments";
 
 // "Sorğular": horizontal requests between departments (e.g. Təchizat → Mühasibatlıq). Unlike tasks, which go down the
 // hierarchy, a request goes to a department of a company; that department's head accepts it (and picks who handles it)
@@ -226,18 +227,10 @@ async function allRows() {
     ORDER BY r.created_at DESC, r.id DESC`).all<RequestRow>()).results;
 }
 
-// The accepted request becomes a task of the assignee. The task gets its own copy of the request's file, so removing
-// either one never orphans the other (same as when a checklist step is handed over).
+// The accepted request becomes a task of the assignee. The task gets its own copies of the request's files (all of them, since
+// Versiya 2.104), so removing either one never orphans the other (same as when a checklist step is handed over).
 async function createLinkedTask(row: RequestRow, employeeId: number, dueDate: string) {
-  let attachment: { key: string; name: string | null; size: number | null; type: string | null } | null = null;
-  if (row.attachment_key && env.FILES) {
-    const source = await env.FILES.get(String(row.attachment_key));
-    if (source) {
-      const copyKey = `${crypto.randomUUID()}-${String(row.attachment_name || "fayl").replace(/[^\p{L}\p{N}._-]+/gu, "_")}`;
-      await env.FILES.put(copyKey, await source.arrayBuffer(), { httpMetadata: source.httpMetadata, customMetadata: source.customMetadata });
-      attachment = { key: copyKey, name: (row.attachment_name as string | null) ?? null, size: (row.attachment_size as number | null) ?? null, type: (row.attachment_type as string | null) ?? null };
-    }
-  }
+  const files = await copyFiles(await filesOf("request", row.id));
   const sender = await db().prepare("SELECT name FROM app_users WHERE id = ?").bind(row.from_user_id).first<{ name: string }>();
   const from = `${sender?.name || "—"}${row.from_department ? ` (${row.from_department})` : ""}`;
   const origin = await originOf(row.id);
@@ -245,9 +238,11 @@ async function createLinkedTask(row: RequestRow, employeeId: number, dueDate: st
   // End of the agreed day, Baku time (UTC+4).
   const dueAt = new Date(`${dueDate}T18:00:00+04:00`).toISOString();
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, attachment_key, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
-    .bind(employeeId, row.company_id, `Sorğu №${row.id}: ${row.title}`, description, dueAt, dueAt, new Date().toISOString(), attachment?.key ?? null, attachment?.name ?? null, attachment?.size ?? null, attachment?.type ?? null).run();
-  return Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
+    .bind(employeeId, row.company_id, `Sorğu №${row.id}: ${row.title}`, description, dueAt, dueAt, new Date().toISOString()).run();
+  const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  if (files.length) await setFiles("task", taskId, files);
+  return taskId;
 }
 
 async function dropLinkedTask(taskId: number | null) {
@@ -257,7 +252,8 @@ async function dropLinkedTask(taskId: number | null) {
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(taskId).run();
   await db().prepare("UPDATE task_checklist_items SET delegated_task_id = NULL, delegated_employee_id = NULL WHERE delegated_task_id = ?").bind(taskId).run();
   await db().prepare("DELETE FROM tasks WHERE id = ?").bind(taskId).run();
-  if (env.FILES) for (const key of [task.attachment_key, task.submission_attachment_key]) if (key) await env.FILES.delete(key);
+  await removeFiles("task", taskId);
+  await removeFiles("task_submission", taskId);
 }
 
 export async function requestForTask(taskId: number) {
@@ -295,7 +291,9 @@ async function userCompanyIds(user: SessionUser): Promise<number[]> {
 export async function listRequests(user: SessionUser) {
   await ensureRequestSchema();
   const structure = await loadStructure();
-  const items = (await allRows()).flatMap((row) => {
+  // Versiya 2.104: the request's files and the files its task was submitted with.
+  const rows = await withFiles(await withFiles(await allRows(), "request"), "task_submission", "submission_files", "task_id");
+  const items = rows.flatMap((row) => {
     const r = roles(row, user, structure);
     if (!r.visible) return [];
     if (r.seesEvaluation) return [{ ...row, box: r.box, can: r.can, actionable: r.actionable }];
@@ -365,7 +363,7 @@ const dateOnly = (value: unknown) => {
   return text;
 };
 
-export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string; personalWorkItemId?: number; incomingId?: number }) {
+export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; files?: FileRef[]; personalWorkItemId?: number; incomingId?: number }) {
   await ensureRequestSchema();
   const title = input.title?.trim();
   const toDepartment = input.toDepartment?.trim();
@@ -379,11 +377,12 @@ export async function createRequest(user: SessionUser, input: { companyId: numbe
   if (input.personalWorkItemId && fromDepartment === toDepartment) throw new Error("Öz şöbənizə sorğu göndərmək olmaz — addımı “İşçiyə həvalə et” ilə verin.");
   const now = new Date().toISOString();
   const result = await db().prepare(`INSERT INTO work_requests
-    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, attachment_key, attachment_name, attachment_size, attachment_type, created_at, updated_at, personal_work_item_id, incoming_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?, ?, ?, ?)`)
+    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, created_at, updated_at, personal_work_item_id, incoming_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?)`)
     .bind(input.companyId, user.id, user.employeeId, fromDepartment, toDepartment, title, input.description?.trim() || null, dateOnly(input.desiredDueAt),
-      input.attachmentKey || null, input.attachmentName || null, input.attachmentSize || null, input.attachmentType || null, now, now, input.personalWorkItemId || null, input.incomingId || null).run();
+      now, now, input.personalWorkItemId || null, input.incomingId || null).run();
   const id = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  if (input.files?.length) await setFiles("request", id, input.files);
   await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə`);
   return id;
 }
@@ -487,5 +486,5 @@ export async function deleteRequest(user: SessionUser, id: number) {
   await logOriginEvent(row.id, user.name, "Sorğu geri çağırıldı");
   await db().prepare("DELETE FROM work_request_events WHERE request_id = ?").bind(row.id).run();
   await db().prepare("DELETE FROM work_requests WHERE id = ?").bind(row.id).run();
-  if (row.attachment_key && env.FILES) await env.FILES.delete(String(row.attachment_key));
+  await removeFiles("request", row.id);
 }

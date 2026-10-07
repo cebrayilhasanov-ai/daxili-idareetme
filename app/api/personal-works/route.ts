@@ -2,6 +2,7 @@ import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPerson
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
+import { parseFiles } from "@/db/attachments";
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -64,10 +65,7 @@ export async function POST(request: Request) {
       description: body.description,
       companyId: body.companyId ? Number(body.companyId) : undefined,
       dueAt: body.dueAt || undefined,
-      attachmentKey: body.attachmentKey,
-      attachmentName: body.attachmentName,
-      attachmentSize: body.attachmentSize,
-      attachmentType: body.attachmentType,
+      files: parseFiles(body.files, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }),
     });
     const items = await ownWorks(user, request);
     return Response.json({ items });
@@ -80,8 +78,8 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     if (!body.status) await requireWorkFirm(user, body.companyId);
     if (body.action === "file") {
-      // Versiya 2.102: only the work's file — allowed in every status, a completed work too.
-      await updatePersonalWorkFile({ id: Number(body.id), userId: user.id, actorName: user.name, attachment: body.removeAttachment ? null : { key: String(body.attachmentKey || ""), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") } });
+      // Versiya 2.102: only the work's files — allowed in every status, a completed work too (2.104: the whole list).
+      await updatePersonalWorkFile({ id: Number(body.id), userId: user.id, actorName: user.name, files: parseFiles(body.files) });
     } else if (body.status) {
       await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
     } else {
@@ -93,11 +91,7 @@ export async function PATCH(request: Request) {
         description: body.description,
         companyId: body.companyId ? Number(body.companyId) : null,
         dueAt: body.dueAt || null,
-        removeAttachment: body.removeAttachment,
-        attachmentKey: body.attachmentKey,
-        attachmentName: body.attachmentName,
-        attachmentSize: body.attachmentSize,
-        attachmentType: body.attachmentType,
+        files: Array.isArray(body.files) ? parseFiles(body.files) : undefined,
       });
     }
     const items = await ownWorks(user, request);
