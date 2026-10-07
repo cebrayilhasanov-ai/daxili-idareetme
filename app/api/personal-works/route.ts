@@ -1,6 +1,6 @@
 import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPersonalWorks, updatePersonalWork, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
-import { requireSection } from "@/lib/permissions";
+import { firmAccess, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 function authError(error: unknown) {
@@ -29,11 +29,23 @@ async function teamViewer(user: Awaited<ReturnType<typeof requireUser>>, request
   return { userId: account?.id ?? -1, employeeId, isAdmin: false };
 }
 
+// Versiya 2.100: Şəxsi işlərim is given per firm — only the works of the firms where it is open (a work without a firm stays).
+async function ownWorks(user: Awaited<ReturnType<typeof requireUser>>, request: Request) {
+  const items = await getPersonalWorks(await scopeUserId(user, request));
+  const firms = (await firmAccess(user, "tasks.mine")).firms("view");
+  return firms ? items.filter((work) => { const companyId = (work as { company_id?: unknown }).company_id; return !companyId || firms.includes(Number(companyId)); }) : items;
+}
+async function requireWorkFirm(user: Awaited<ReturnType<typeof requireUser>>, companyId: unknown) {
+  if (!Number(companyId)) return;
+  const firms = (await firmAccess(user, "tasks.mine")).firms("view");
+  if (firms && !firms.includes(Number(companyId))) throw new Error("FORBIDDEN");
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     if (new URL(request.url).searchParams.get("scope") === "team") return Response.json(await getTeamPersonalWorks(await teamViewer(user, request)));
-    const items = await getPersonalWorks(await scopeUserId(user, request));
+    const items = await ownWorks(user, request);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
 }
@@ -44,6 +56,7 @@ export async function POST(request: Request) {
     // Versiya 2.97: the admin account keeps no personal works.
     if (user.role === "admin") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     const body = await request.json();
+    await requireWorkFirm(user, body.companyId);
     await createPersonalWork({
       userId: user.id,
       actorName: user.name,
@@ -56,7 +69,7 @@ export async function POST(request: Request) {
       attachmentSize: body.attachmentSize,
       attachmentType: body.attachmentType,
     });
-    const items = await getPersonalWorks(await scopeUserId(user, request));
+    const items = await ownWorks(user, request);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "İş əlavə olunmadı." }, { status: 500 }); }
 }
@@ -65,6 +78,7 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     const body = await request.json();
+    if (!body.status) await requireWorkFirm(user, body.companyId);
     if (body.status) {
       await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
     } else {
@@ -83,7 +97,7 @@ export async function PATCH(request: Request) {
         attachmentType: body.attachmentType,
       });
     }
-    const items = await getPersonalWorks(await scopeUserId(user, request));
+    const items = await ownWorks(user, request);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "İş yenilənmədi." }, { status: 500 }); }
 }
@@ -93,7 +107,7 @@ export async function DELETE(request: Request) {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     const params = new URL(request.url).searchParams;
     await deletePersonalWork({ id: Number(params.get("id")), userId: user.id });
-    const items = await getPersonalWorks(await scopeUserId(user, request));
+    const items = await ownWorks(user, request);
     return Response.json({ items });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "İş silinmədi." }, { status: 500 }); }
 }

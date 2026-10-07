@@ -84,8 +84,10 @@ export function deniedFromStored(stored: string[]): Set<string> {
 // works in, the rights granted in each of these sections — { "<companyId>": { "<section>": { actions: [...], types?: [templateId] } } }.
 // Nothing is flipped from a default here: a firm or a section that is not listed is closed (a firm newly added to a user starts
 // fully closed). In Çıxan / Daxil olan sənədlər "types" narrows the registrar's work in that firm to the listed document types
-// (templates of the firm); without it every type is covered. The other sections (Ümumi) stay in hidden_sections as before.
-export const FIRM_SECTIONS = ["tasks.requests", "documents.incoming", "documents.outgoing", "hr.personnel", "hr.orders", "hr.violations"] as const;
+// (templates of the firm); without it every type is covered.
+// Since Versiya 2.100 every section is given per firm (the dialog lists the firms one under another, no "Ümumi" part): Şəxsi işlərim,
+// Sabit işlər and Çat are plain on/off (stored as ["view"]); Müştərilər and Çat do not belong to a firm and are open when any firm opens them.
+export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "documents.incoming", "documents.outgoing", "dashboard.customers", "hr.personnel", "hr.orders", "hr.violations", "chat"] as const;
 export type FirmSection = (typeof FIRM_SECTIONS)[number];
 export const TYPED_SECTIONS: readonly FirmSection[] = ["documents.outgoing", "documents.incoming"];
 export const isFirmSection = (section: string): section is FirmSection => (FIRM_SECTIONS as readonly string[]).includes(section);
@@ -104,7 +106,7 @@ export function parseCompanyPermissions(raw: unknown): CompanyPermissions {
     const firm: Partial<Record<FirmSection, FirmSectionRights>> = {};
     for (const section of FIRM_SECTIONS) {
       const entry = (sections as Record<string, unknown>)[section] as { actions?: unknown; types?: unknown } | undefined;
-      const actions = ACTIONS.filter((a) => Array.isArray(entry?.actions) && entry.actions.includes(a));
+      const actions = ACTIONS.filter((a) => Array.isArray(entry?.actions) && entry.actions.includes(a) && (isLeveled(section) || a === "view"));
       // Any of Əlavə et / Dəyişiklik et / Sil implies Baxış.
       if (actions.length && !actions.includes("view")) actions.unshift("view");
       if (!actions.length) continue;
@@ -128,7 +130,7 @@ export function companyPermissionsFromStored(stored: string[], companyIds: numbe
   const denied = deniedFromStored(stored);
   const firm: Partial<Record<FirmSection, FirmSectionRights>> = {};
   for (const section of FIRM_SECTIONS) {
-    const actions = ACTIONS.filter((a) => !denied.has(section) && !denied.has(actionKey(section, a)));
+    const actions = ACTIONS.filter((a) => !denied.has(section) && !denied.has(actionKey(section, a)) && (isLeveled(section) || a === "view"));
     if (actions.length) firm[section] = { actions };
   }
   return Object.fromEntries(companyIds.map((id) => [String(id), structuredClone(firm)]));
@@ -139,6 +141,10 @@ export function deniedWithFirms(stored: string[], permissions: CompanyPermission
   const denied = deniedFromStored(stored);
   for (const section of FIRM_SECTIONS) {
     denied.delete(section);
+    if (!isLeveled(section)) {
+      if (!companyIds.some((id) => firmSectionRights(permissions, id, section).view)) denied.add(section);
+      continue;
+    }
     for (const action of ACTIONS) {
       if (companyIds.some((id) => firmSectionRights(permissions, id, section)[action])) denied.delete(actionKey(section, action));
       else denied.add(actionKey(section, action));

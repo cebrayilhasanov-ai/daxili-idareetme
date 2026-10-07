@@ -1,21 +1,21 @@
 import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
-import { hiddenSections, requireSection } from "@/lib/permissions";
+import { firmAccess, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
   if (user.role === "admin") return { ...data, approvals: [] };
-  const hidden = await hiddenSections(user);
-  // Versiya 2.93: one "Sabit işlər" permission for every frequency.
-  const frequencyVisible = (_frequency: unknown) => !hidden.has("tasks.fixed");
+  // Versiya 2.93: one "Sabit işlər" permission for every frequency; since 2.100 it is given per firm.
+  const fixedFirms = (await firmAccess(user, "tasks.fixed")).firms("view");
+  const fixedVisible = (companyId: unknown) => !fixedFirms || fixedFirms.includes(Number(companyId));
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
   // Versiya 2.82: the tasks this user gave (handed-on steps, the director's dərkənar) that wait for their approval.
   const given = await tasksGivenBy(user);
   const approvals = data.tasks.filter((item: any) => given.has(Number(item.id)) && item.status === "Təqdim edilib");
   const ownCompanyIds = new Set(((data.employees.find((item: any) => item.id === user.employeeId) as { company_ids?: string } | undefined)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { fixedWorksStart: data.fixedWorksStart, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && frequencyVisible(item.frequency)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId)), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
+  return { fixedWorksStart: data.fixedWorksStart, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
 }
 
 function authError(error: unknown) {
@@ -74,6 +74,9 @@ export async function PATCH(request: Request) {
     if (user.role !== "admin") {
       if (body.action === "work-completion" || body.action === "work-uncompletion") {
         await requireSection(user, "tasks.fixed");
+        // Only a work of a firm where Sabit işlər is open (Versiya 2.100).
+        const assignment = await env.DB.prepare("SELECT company_id FROM work_assignments WHERE id = ?").bind(Number(body.assignmentId)).first<{ company_id: number }>();
+        if (!assignment || !(await firmAccess(user, "tasks.fixed")).firm(assignment.company_id).view) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
         if (body.action === "work-uncompletion") {
           // Versiya 2.89: one's own mark, until the period's deadline.
           const title = await uncompleteWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);

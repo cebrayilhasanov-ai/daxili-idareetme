@@ -297,6 +297,27 @@ async function ensureSchema() {
       await db().prepare("UPDATE employees SET company_permissions = ? WHERE id = ?").bind(JSON.stringify(companyPermissionsFromStored(parseHiddenSections(row.hidden_sections), companyIds)), row.id).run();
     }
   }
+  // Versiya 2.100: Şəxsi işlərim, Sabit işlər, Müştərilər and Çat moved from "Ümumi" into every firm — once, each user's old choice
+  // there is written into all of their firms.
+  if (!(await db().prepare("SELECT 1 AS ok FROM app_settings WHERE key = 'permissions_general_per_firm'").first())) {
+    const linked = await db().prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'employee_companies'").first();
+    const rows = !linked ? [] : (await db().prepare("SELECT id, hidden_sections, company_permissions, (SELECT group_concat(company_id) FROM employee_companies WHERE employee_id = employees.id) AS company_ids FROM employees").all<{ id: number; hidden_sections: string | null; company_permissions: string | null; company_ids: string | null }>()).results;
+    for (const row of rows) {
+      const companyIds = String(row.company_ids || "").split(",").map(Number).filter(Boolean);
+      const legacy = companyPermissionsFromStored(parseHiddenSections(row.hidden_sections), companyIds);
+      const current = parseCompanyPermissions(row.company_permissions);
+      for (const id of companyIds.map(String)) {
+        const firm = { ...(current[id] || {}) };
+        for (const section of ["tasks.mine", "tasks.fixed", "dashboard.customers", "chat"] as const) {
+          const entry = legacy[id]?.[section];
+          if (entry) firm[section] = entry;
+        }
+        current[id] = firm;
+      }
+      await db().prepare("UPDATE employees SET company_permissions = ? WHERE id = ?").bind(JSON.stringify(current), row.id).run();
+    }
+    await db().prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('permissions_general_per_firm', ?)").bind(new Date().toISOString()).run();
+  }
   if (!employeeColumns.results.some((column) => column.name === "authority_type")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN authority_type TEXT DEFAULT 'İşçi' NOT NULL").run();
   }

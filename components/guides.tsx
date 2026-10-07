@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 2.100): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -237,7 +237,7 @@ const GUIDES: Guide[] = [
           "Admin icra qeydini istənilən vaxt geri götürə bilər (son tarix keçəndən sonra da) — İstifadəçi görünüşündə rəngli xanaya basın.",
           "İşi istifadəçiyə yenidən təyin etsəniz (götürüb təzədən vermək), təyin tarixi yenilənir və ondan əvvəlki dövrlər həmin istifadəçi üçün hesablanmır.",
         ] },
-        { note: "Yeni iş yuxarıda seçilmiş növün tabında yaranır — əvvəlcə tabı seçin. İstifadəçidə “Sabit işlər” icazəsi bağlıdırsa, o, təyin edilmiş işləri icra edildi kimi işarələyə bilməz — Giriş icazələrində bu barədə xəbərdarlıq çıxır." },
+        { note: "Yeni iş yuxarıda seçilmiş növün tabında yaranır — əvvəlcə tabı seçin. İstifadəçidə işin firmasında “Sabit işlər” icazəsi bağlıdırsa, o, həmin firmanın işlərini görmür və icra edildi kimi işarələyə bilməz — Giriş icazələrində bu barədə xəbərdarlıq çıxır." },
       ] },
     ],
   },
@@ -456,7 +456,7 @@ const GUIDES: Guide[] = [
           "Sayt önündə deyilsə, brauzerin (Windows-un) bildirişi çıxır; icazəni brauzer 💬-ə ilk basanda soruşur.",
           "Ekranda açıq olan söhbət və öz mesajınız üçün bildiriş çıxmır.",
         ] },
-        { note: "Çat Giriş icazələrində bağlana bilər — onda 💬 düyməsi görünmür." },
+        { note: "Çat Giriş icazələrində bağlana bilər — istifadəçinin heç bir firmasında açıq deyilsə, 💬 düyməsi görünmür." },
       ] },
     ],
   },
@@ -525,15 +525,16 @@ const GUIDES: Guide[] = [
         { list: [
           "İşarəsi götürülən bölmə istifadəçinin menyusunda görünmür və serverdə də bağlanır.",
           "Bəzi bölmələrdə dörd ayrıca hüquq var: Baxış, Əlavə et, Dəyişiklik et, Sil (Sorğular, Daxil olan və Çıxan sənədlər, Müştərilər, Nöqsanlar, Personallar, Əmrlər). Əlavə et / Dəyişiklik et / Sil Baxışı da açır; Baxışı götürmək hamısını götürür.",
-          "Pəncərədə tablar var: “Ümumi” — firmadan asılı olmayan bölmələr (Verilən tapşırıqlar, Şəxsi işlərim, Sabit işlər, Müştərilər, Çat); istifadəçinin hər firması üçün ayrıca tab — həmin firmadakı Sorğular, Daxil olan və Çıxan sənədlər, Personallar, Əmrlər, Nöqsanlar. Tabın yanındakı rəqəm o firmada neçə bölmənin açıq olduğunu göstərir.",
-          "İstifadəçiyə yeni firma əlavə edəndə o firmada hər şey bağlı olur — lazım olanları həmin firmanın tabında açın. Firma istifadəçidən götürüləndə onun icazələri də silinir.",
-          "“Bu firmanın icazələrini bütün firmalara köçür” — açıq tabdakı firmanın icazələrini istifadəçinin digər firmalarına köçürür (seçilmiş sənəd növləri köçmür: digər firmalarda “Bütün növlər” olur).",
+          "İstifadəçinin firmaları alt-alta sıralanır və bütün icazələr hər firma üçün ayrıca verilir: firmanın adına basın — içində Tapşırıqlar (Sorğular, Şəxsi işlərim, Sabit işlər), Sənədlər (Daxil olan, Çıxan, Müştərilər), Kadrlar (Personallar, Əmrlər, Nöqsanlar) və Çat var. Məsələn, bir firmada yalnız Kadrları açıb qalanını bağlı saxlaya bilərsiniz. Firmanın yanındakı rəqəm orada neçə bölmənin açıq olduğunu göstərir; firmanın işarəsi həmin firmanı bütövlükdə açır / bağlayır.",
+          "Şəxsi işlərim və Sabit işlər firma üzrədir: istifadəçi yalnız açıq olan firmaların işlərini görür və işarələyir (firması seçilməmiş şəxsi iş həmişə görünür). Müştərilər və Çat firmaya bağlı deyil — ən azı bir firmada açıq olanda görünür.",
+          "İstifadəçiyə yeni firma əlavə edəndə o firmada hər şey bağlı olur — lazım olanları həmin firmanın içində açın. Firma istifadəçidən götürüləndə onun icazələri də silinir.",
+          "“Bu firmanın icazələrini bütün firmalara köçür” (firmanın içində) — həmin firmanın icazələrini istifadəçinin digər firmalarına köçürür (seçilmiş sənəd növləri köçmür: digər firmalarda “Bütün növlər” olur).",
           "Daxil olan və Çıxan sənədlərdə Baxış açıq olanda “Sənəd növləri” seçimi çıxır: “Bütün növlər” və ya “Seçilmiş növlər” — həmin firmanın şablonlarından işarələnir. Məsələn, mühasibə yalnız “Forma 2” növünü versəniz, o, Forma 2-ni özü qeydə alıb faylını yükləyir, yalnız Forma 2 sənədlərini görür və yalnız özünün qeydə aldıqlarını dəyişə / silə bilir.",
           "🔒 olan bəndlər (Verilən tapşırıqlar) həmişə açıqdır.",
           "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
-          "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini köçürür (firma icazələri — yalnız hər ikisinin ortaq firmaları üçün); “Hamısını aç” — bütün tablarda hamısını açır.",
+          "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini köçürür (firma icazələri — yalnız hər ikisinin ortaq firmaları üçün); “Hamısını aç” — bütün firmalarda hamısını açır.",
           "Daxil olan və Çıxan sənədlər icazəsi “Bütün növlər” ilə verilən istifadəçi həmin firmada qeydiyyatçı sayılır və firmanın BÜTÜN sənədlərini görür — bunu yalnız qeydiyyatı aparan (Ümumi şöbə) əməkdaşlara verin; başqalarına “Seçilmiş növlər” verin.",
-          "Sabit işi olan istifadəçidə “Sabit işlər”i bağlayanda xəbərdarlıq çıxır — o, işlərini icra edildi kimi işarələyə bilməyəcək. Bütün növlər (həftəlik … illik) üçün bir icazədir; əvvəlki “Aylıq” və “Həftəlik” icazələrindən biri açıq olan istifadəçidə o açıqdır.",
+          "Sabit işi olan istifadəçidə həmin firmada “Sabit işlər”i bağlayanda xəbərdarlıq çıxır — o, o firmadakı işlərini icra edildi kimi işarələyə bilməyəcək. Bütün növlər (həftəlik … illik) üçün bir icazədir; əvvəlki “Aylıq” və “Həftəlik” icazələrindən biri açıq olan istifadəçidə o açıqdır.",
           "Şablonlar, Firmalar, İstifadəçilər və Əməliyyat jurnalı yalnız adminindir.",
         ] },
       ] },
