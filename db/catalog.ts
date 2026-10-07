@@ -1334,6 +1334,23 @@ export async function createPersonalWork(input: { userId: number; actorName?: st
   await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", title);
 }
 
+// Versiya 2.102: the file attached to one's own work may be replaced or removed in every status — a completed work too (its other
+// details stay fixed once it is completed). The change goes into the work's history.
+export async function updatePersonalWorkFile(input: { id: number; userId: number; actorName?: string; attachment: { key: string; name: string; size: number; type: string } | null }) {
+  await ensureSchema();
+  const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!current) throw new Error("İş tapılmadı.");
+  if (Number(current.user_id) !== input.userId) throw new Error("Bu iş sizə aid deyil.");
+  if (!input.attachment && !current.attachment_key) throw new Error("İşdə fayl yoxdur.");
+  if (input.attachment && !input.attachment.key) throw new Error("Fayl seçilməyib.");
+  await db().prepare("UPDATE personal_works SET attachment_key = ?, attachment_name = ?, attachment_size = ?, attachment_type = ? WHERE id = ?")
+    .bind(input.attachment?.key ?? null, input.attachment?.name ?? null, input.attachment?.size ?? null, input.attachment?.type ?? null, input.id).run();
+  if (current.attachment_key && current.attachment_key !== input.attachment?.key && env.FILES) await env.FILES.delete(String(current.attachment_key));
+  const before = current.attachment_name ? String(current.attachment_name) : null;
+  await recordPersonalWorkEvent(input.id, input.actorName, input.attachment ? (before ? "Fayl dəyişdirildi" : "Fayl əlavə edildi") : "Fayl silindi",
+    input.attachment ? (before ? `${before} → ${input.attachment.name}` : input.attachment.name) : before);
+}
+
 export async function updatePersonalWork(input: { id: number; userId: number; actorName?: string; title: string; description?: string; companyId?: number | null; dueAt?: string | null; removeAttachment?: boolean; attachmentKey?: string; attachmentName?: string; attachmentSize?: number; attachmentType?: string }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();

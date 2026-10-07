@@ -478,6 +478,9 @@ nav button>em+.navcaret{margin-left:6px}
 .permissionwarning{padding:9px 12px;border:1px solid #fcd9a5;border-radius:8px;background:#fff7e8;color:#9a5b00;font-size:12px;font-weight:700}
 .permissionfirm>.permissionrow .permissiontoggle{font-size:14px}
 .permissionfirmbody{display:grid;gap:8px;padding:6px 12px 12px 36px;border-top:1px solid #eef2f7;background:#fbfdff}
+.workfilechange{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.workfilepick{display:inline-flex;align-items:center;height:28px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:0 10px;font-size:11px;font-weight:800;color:#0C8599;cursor:pointer}
+.delegatefilenote{display:block;color:#64748b;font-size:11px;margin:2px 0 6px}
 .permissionfirmcopy{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .businessform .permissionfirmcopy select{width:240px!important;height:30px!important;padding:0 10px!important;font-size:11px!important}
 .permissioncopyfirm{justify-self:start;height:30px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:0 10px;font-size:11px;font-weight:800;color:#0C8599;cursor:pointer}

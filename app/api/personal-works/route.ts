@@ -1,4 +1,4 @@
-import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPersonalWorks, updatePersonalWork, updatePersonalWorkStatus } from "@/db/catalog";
+import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPersonalWorks, updatePersonalWork, updatePersonalWorkFile, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
@@ -79,7 +79,10 @@ export async function PATCH(request: Request) {
     const user = await requireSection(await requireUser(request), "tasks.mine");
     const body = await request.json();
     if (!body.status) await requireWorkFirm(user, body.companyId);
-    if (body.status) {
+    if (body.action === "file") {
+      // Versiya 2.102: only the work's file — allowed in every status, a completed work too.
+      await updatePersonalWorkFile({ id: Number(body.id), userId: user.id, actorName: user.name, attachment: body.removeAttachment ? null : { key: String(body.attachmentKey || ""), name: String(body.attachmentName || "fayl"), size: Number(body.attachmentSize) || 0, type: String(body.attachmentType || "application/octet-stream") } });
+    } else if (body.status) {
       await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
     } else {
       await updatePersonalWork({
