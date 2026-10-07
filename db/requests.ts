@@ -319,12 +319,6 @@ export async function listRequests(user: SessionUser) {
   return { items, departments, members, myDepartments };
 }
 
-export async function countActionableRequests(user: SessionUser) {
-  await ensureRequestSchema();
-  const structure = await loadStructure();
-  return (await allRows()).filter((row) => roles(row, user, structure).actionable).length;
-}
-
 export async function getRequestEvents(user: SessionUser, id: number) {
   await ensureRequestSchema();
   const { seesEvaluation } = await requireRow(user, id);

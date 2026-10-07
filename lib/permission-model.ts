@@ -79,6 +79,75 @@ export function deniedFromStored(stored: string[]): Set<string> {
   return denied;
 }
 
+// ---------- Per firm (Versiya 2.99) ----------
+// The sections that work inside a firm get their rights per firm: employees.company_permissions holds, for each firm the user
+// works in, the rights granted in each of these sections — { "<companyId>": { "<section>": { actions: [...], types?: [templateId] } } }.
+// Nothing is flipped from a default here: a firm or a section that is not listed is closed (a firm newly added to a user starts
+// fully closed). In Çıxan / Daxil olan sənədlər "types" narrows the registrar's work in that firm to the listed document types
+// (templates of the firm); without it every type is covered. The other sections (Ümumi) stay in hidden_sections as before.
+export const FIRM_SECTIONS = ["tasks.requests", "documents.incoming", "documents.outgoing", "hr.personnel", "hr.orders", "hr.violations"] as const;
+export type FirmSection = (typeof FIRM_SECTIONS)[number];
+export const TYPED_SECTIONS: readonly FirmSection[] = ["documents.outgoing", "documents.incoming"];
+export const isFirmSection = (section: string): section is FirmSection => (FIRM_SECTIONS as readonly string[]).includes(section);
+export type FirmSectionRights = { actions: SectionAction[]; types?: number[] };
+export type CompanyPermissions = Record<string, Partial<Record<FirmSection, FirmSectionRights>>>;
+
+export function parseCompanyPermissions(raw: unknown): CompanyPermissions {
+  let value: unknown = raw;
+  if (typeof raw === "string") {
+    try { value = JSON.parse(raw); } catch { value = null; }
+  }
+  const result: CompanyPermissions = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return result;
+  for (const [companyId, sections] of Object.entries(value as Record<string, unknown>)) {
+    if (!(Number(companyId) > 0) || !sections || typeof sections !== "object") continue;
+    const firm: Partial<Record<FirmSection, FirmSectionRights>> = {};
+    for (const section of FIRM_SECTIONS) {
+      const entry = (sections as Record<string, unknown>)[section] as { actions?: unknown; types?: unknown } | undefined;
+      const actions = ACTIONS.filter((a) => Array.isArray(entry?.actions) && entry.actions.includes(a));
+      // Any of Əlavə et / Dəyişiklik et / Sil implies Baxış.
+      if (actions.length && !actions.includes("view")) actions.unshift("view");
+      if (!actions.length) continue;
+      const types = TYPED_SECTIONS.includes(section) && Array.isArray(entry?.types) ? [...new Set(entry.types.map(Number).filter((id) => id > 0))] : undefined;
+      firm[section] = types ? { actions, types } : { actions };
+    }
+    if (Object.keys(firm).length) result[String(Number(companyId))] = firm;
+  }
+  return result;
+}
+
+// The rights of one firm section; types null = every document type.
+export function firmSectionRights(permissions: CompanyPermissions, companyId: number, section: FirmSection) {
+  const entry = permissions[String(companyId)]?.[section];
+  const has = (action: SectionAction) => Boolean(entry?.actions.includes(action));
+  return { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete"), types: entry?.types ?? null };
+}
+
+// What the old (pre-2.99) one-for-all rights meant, written out for each of the user's firms — the migration, so nobody's rights change.
+export function companyPermissionsFromStored(stored: string[], companyIds: number[]): CompanyPermissions {
+  const denied = deniedFromStored(stored);
+  const firm: Partial<Record<FirmSection, FirmSectionRights>> = {};
+  for (const section of FIRM_SECTIONS) {
+    const actions = ACTIONS.filter((a) => !denied.has(section) && !denied.has(actionKey(section, a)));
+    if (actions.length) firm[section] = { actions };
+  }
+  return Object.fromEntries(companyIds.map((id) => [String(id), structuredClone(firm)]));
+}
+
+// Menus and the coarse locks: a firm section counts as open (and a right as given) when any of the user's firms has it.
+export function deniedWithFirms(stored: string[], permissions: CompanyPermissions, companyIds: number[]): Set<string> {
+  const denied = deniedFromStored(stored);
+  for (const section of FIRM_SECTIONS) {
+    denied.delete(section);
+    for (const action of ACTIONS) {
+      if (companyIds.some((id) => firmSectionRights(permissions, id, section)[action])) denied.delete(actionKey(section, action));
+      else denied.add(actionKey(section, action));
+    }
+    if (denied.has(actionKey(section, "view"))) denied.add(section);
+  }
+  return denied;
+}
+
 // The reverse, for saving the dialog: only the keys that differ from the defaults.
 export function storedFromDenied(denied: Set<string>): string[] {
   const stored: string[] = [];

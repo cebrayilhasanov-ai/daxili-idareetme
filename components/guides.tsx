@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -156,6 +156,9 @@ const GUIDES: Guide[] = [
           "Göndərən cavabı təsdiqləyəndən sonra “Qiymətləndir”: 1–10 bal və istəyə görə rəy — sorğu bağlanır, icraçının tapşırığı təsdiqlənir.",
         ] },
       ] },
+      { audience: "all", title: "Hüquqlar firma üzrədir", blocks: [
+        { note: "Sorğular üzrə hüquqlarınız (Baxış, Əlavə et, Dəyişiklik et, Sil) hər firmada ayrıca verilir. Hansı firmada icazəniz yoxdursa, o firmanın sorğuları sizə görünmür, yeni sorğuda da o firmanın şöbələri çıxmır; şəxsi işin addımından sorğu göndərmək də yalnız işin firmasında “Əlavə et” olanda mümkündür." },
+      ] },
       { audience: "admin", title: "Admin üçün", blocks: [
         { p: "Admin bütün sorğuları görür və istənilən mərhələdə rəhbərin əvəzinə hərəkət edə bilər. Rəhbəri təyin olunmamış şöbəyə gələn sorğular yalnız adminə düşür. Sorğular firmanın strukturundakı şöbələrə gedir — struktur boşdursa, sorğu göndərmək olmur." },
       ] },
@@ -245,7 +248,7 @@ const GUIDES: Guide[] = [
       { audience: "all", title: "Sənədi kim görür (kommersiya sirri)", blocks: [
         { list: [
           "Admin və firmanın rəhbəri (direktor) — firmanın bütün sənədlərini.",
-          "Qeydiyyatçı (Giriş icazələrində “Daxil olan sənədlər” icazəsi olan) — öz firmalarının sənədlərini.",
+          "Qeydiyyatçı (Giriş icazələrində həmin firmada “Daxil olan sənədlər” icazəsi olan) — həmin firmanın sənədlərini; icazəsi yalnız bəzi sənəd növləri üçündürsə — yalnız o növlərin sənədlərini.",
           "Aidiyyatı şöbələrin rəhbərləri.",
           "Məlumatlandırılan şöbələrin rəhbərləri — yalnız baxış üçün.",
           "Sənəd üzrə tapşırıq alan şəxs və rəhbərin tapşırığı həvalə etdiyi əməkdaş.",
@@ -276,7 +279,8 @@ const GUIDES: Guide[] = [
           "Skan şablondakı qaydaya görə adlandırılıb şablonda seçilmiş papkaya yazılır; şablon yoxdursa və ya papka seçilməyibsə, sistemdə saxlanılır.",
           "Şablondakı papka serverdə tapılmasa (silinib və ya adı dəyişib), skan yüklənmir — adminə müraciət edin.",
           "Şöbələrdən biri təsdiq verəndən sonra sənədi dəyişmək və silmək yalnız adminə qalır. Tapşırıq və ya sorğusu olan sənədi də yalnız admin silir.",
-          "Hüquqlarınız Giriş icazələrindən gəlir: Baxış, Əlavə et (qeydiyyat və skanı olmayana skan yükləmək), Dəyişiklik et, Sil.",
+          "Hüquqlarınız Giriş icazələrindən gəlir və hər firmada ayrıdır: Baxış, Əlavə et (qeydiyyat və skanı olmayana skan yükləmək), Dəyişiklik et, Sil. Yeni sənəddə firma siyahısında yalnız qeydiyyat icazəniz olan firmalar görünür.",
+          "İcazəniz bir firmada yalnız bəzi sənəd növləri üçündürsə (məs. yalnız “Forma 2”), “Sənədin tipi” siyahısında yalnız o növlər olur, başqa növü qeydə almaq olmur; sənədi dəyişmək və silmək də yalnız özünüzün qeydə aldığı sənədlərdə mümkündür.",
         ] },
       ] },
       { audience: "director", title: "Rəhbərin baxışı və dərkənar", blocks: [
@@ -311,7 +315,7 @@ const GUIDES: Guide[] = [
       { audience: "all", title: "Sənədi kim görür (kommersiya sirri)", blocks: [
         { list: [
           "Admin və firmanın rəhbəri (direktor) — firmanın bütün sənədlərini.",
-          "Qeydiyyatçı (“Çıxan sənədlər” icazəsi olan) — öz firmalarının sənədlərini.",
+          "Qeydiyyatçı (həmin firmada “Çıxan sənədlər” icazəsi olan) — həmin firmanın sənədlərini; icazəsi yalnız bəzi sənəd növləri üçündürsə (məs. mühasib — “Forma 2”) — yalnız o növlərin sənədlərini.",
           "Əlaqəli (aidiyyatı) şöbələrin rəhbərləri.",
           "Məlumatlandırılan şöbələrin rəhbərləri — yalnız baxış üçün.",
           "Sənədi götürən məsul şəxs — öz sənədlərini.",
@@ -521,10 +525,14 @@ const GUIDES: Guide[] = [
         { list: [
           "İşarəsi götürülən bölmə istifadəçinin menyusunda görünmür və serverdə də bağlanır.",
           "Bəzi bölmələrdə dörd ayrıca hüquq var: Baxış, Əlavə et, Dəyişiklik et, Sil (Sorğular, Daxil olan və Çıxan sənədlər, Müştərilər, Nöqsanlar, Personallar, Əmrlər). Əlavə et / Dəyişiklik et / Sil Baxışı da açır; Baxışı götürmək hamısını götürür.",
+          "Pəncərədə tablar var: “Ümumi” — firmadan asılı olmayan bölmələr (Verilən tapşırıqlar, Şəxsi işlərim, Sabit işlər, Müştərilər, Çat); istifadəçinin hər firması üçün ayrıca tab — həmin firmadakı Sorğular, Daxil olan və Çıxan sənədlər, Personallar, Əmrlər, Nöqsanlar. Tabın yanındakı rəqəm o firmada neçə bölmənin açıq olduğunu göstərir.",
+          "İstifadəçiyə yeni firma əlavə edəndə o firmada hər şey bağlı olur — lazım olanları həmin firmanın tabında açın. Firma istifadəçidən götürüləndə onun icazələri də silinir.",
+          "“Bu firmanın icazələrini bütün firmalara köçür” — açıq tabdakı firmanın icazələrini istifadəçinin digər firmalarına köçürür (seçilmiş sənəd növləri köçmür: digər firmalarda “Bütün növlər” olur).",
+          "Daxil olan və Çıxan sənədlərdə Baxış açıq olanda “Sənəd növləri” seçimi çıxır: “Bütün növlər” və ya “Seçilmiş növlər” — həmin firmanın şablonlarından işarələnir. Məsələn, mühasibə yalnız “Forma 2” növünü versəniz, o, Forma 2-ni özü qeydə alıb faylını yükləyir, yalnız Forma 2 sənədlərini görür və yalnız özünün qeydə aldıqlarını dəyişə / silə bilir.",
           "🔒 olan bəndlər (Verilən tapşırıqlar) həmişə açıqdır.",
           "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
-          "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini olduğu kimi köçürür; “Hamısını aç” — hamısını açır.",
-          "Daxil olan və Çıxan sənədlər icazəsi olan istifadəçi qeydiyyatçı sayılır və öz firmalarının BÜTÜN sənədlərini görür — bu icazəni yalnız qeydiyyatı aparan (Ümumi şöbə) əməkdaşlara verin.",
+          "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini köçürür (firma icazələri — yalnız hər ikisinin ortaq firmaları üçün); “Hamısını aç” — bütün tablarda hamısını açır.",
+          "Daxil olan və Çıxan sənədlər icazəsi “Bütün növlər” ilə verilən istifadəçi həmin firmada qeydiyyatçı sayılır və firmanın BÜTÜN sənədlərini görür — bunu yalnız qeydiyyatı aparan (Ümumi şöbə) əməkdaşlara verin; başqalarına “Seçilmiş növlər” verin.",
           "Sabit işi olan istifadəçidə “Sabit işlər”i bağlayanda xəbərdarlıq çıxır — o, işlərini icra edildi kimi işarələyə bilməyəcək. Bütün növlər (həftəlik … illik) üçün bir icazədir; əvvəlki “Aylıq” və “Həftəlik” icazələrindən biri açıq olan istifadəçidə o açıqdır.",
           "Şablonlar, Firmalar, İstifadəçilər və Əməliyyat jurnalı yalnız adminindir.",
         ] },

@@ -1,7 +1,7 @@
 import { createViolation, deleteViolation, listViolations, listViolationsForEmployee, updateViolation, violationTargets } from "@/db/catalog";
-import { departmentScope, scopeCompanyIds, userScopeTest, type DepartmentScope } from "@/db/department-scope";
+import { departmentScope, narrowScope, scopeCompanyIds, userScopeTest, type DepartmentScope } from "@/db/department-scope";
 import { requireUser } from "@/lib/auth";
-import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
+import { firmAccess, requireAction, requireSection, sectionRights, type SectionAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 // Nöqsanlar (Versiya 2.62): with only Baxış an employee sees the violations recorded on them; with Əlavə et, Dəyişiklik et or
@@ -16,6 +16,13 @@ function authError(error: unknown) {
 }
 
 type User = Awaited<ReturnType<typeof requireUser>>;
+
+// Versiya 2.99: the rights are per firm — managing reaches the people of the firms where the right is given.
+async function violationScope(user: User, actions: SectionAction[]) {
+  const [scope, access] = await Promise.all([departmentScope(user), firmAccess(user, "hr.violations")]);
+  const firms = access.firms("view") === null ? null : [...new Set(actions.flatMap((a) => access.firms(a) ?? []))];
+  return narrowScope(scope, firms);
+}
 type ViolationRow = { id: number; employee_id: number; company_id: number | null };
 
 async function listBody(user: User) {
@@ -24,7 +31,7 @@ async function listBody(user: User) {
   if (user.role === "admin") return { items: await listViolations(), can, manager: true };
   const manager = rights.add || rights.edit || rights.delete;
   if (!manager) return { items: user.employeeId ? await listViolationsForEmployee(user.employeeId) : [], can, manager: false };
-  const scope = await departmentScope(user);
+  const scope = await violationScope(user, ["add", "edit", "delete"]);
   const covers = await userScopeTest(scope);
   const items = ((await listViolations()) as ViolationRow[]).filter((v) => v.employee_id === user.employeeId || covers(v.employee_id, v.company_id));
   const targets = await violationTargets(scopeCompanyIds(scope) ?? []);
@@ -57,7 +64,7 @@ export async function POST(request: Request) {
     const user = await requireAction(await requireUser(request), "hr.violations", "add");
     const body = await request.json();
     const companyId = body.companyId ? Number(body.companyId) : null;
-    await checkTarget(await departmentScope(user), Number(body.employeeId), companyId);
+    await checkTarget(await violationScope(user, ["add"]), Number(body.employeeId), companyId);
     await createViolation({ employeeId: Number(body.employeeId), companyId: companyId ?? undefined, title: String(body.title || ""), note: body.note, createdByName: user.name });
     await logAudit(user, "Nöqsan qeydə alındı", "employee", `#${body.employeeId}`);
     return Response.json(await listBody(user));
@@ -70,7 +77,7 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const id = Number(body.id);
     const companyId = body.companyId ? Number(body.companyId) : null;
-    const scope = await departmentScope(user);
+    const scope = await violationScope(user, ["edit"]);
     const row = await checkExisting(scope, id);
     await checkTarget(scope, row.employee_id, companyId);
     await updateViolation({ id, companyId, title: String(body.title || ""), note: body.note });
@@ -84,7 +91,7 @@ export async function DELETE(request: Request) {
     const user = await requireAction(await requireUser(request), "hr.violations", "delete");
     const id = Number(new URL(request.url).searchParams.get("id"));
     if (!id) return Response.json({ error: "Silinəcək qeyd seçilməyib." }, { status: 400 });
-    await checkExisting(await departmentScope(user), id);
+    await checkExisting(await violationScope(user, ["delete"]), id);
     await deleteViolation(id);
     await logAudit(user, "Nöqsan qeydi silindi", "employee", `#${id}`);
     return Response.json(await listBody(user));

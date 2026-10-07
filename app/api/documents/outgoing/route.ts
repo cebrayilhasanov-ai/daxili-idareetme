@@ -1,4 +1,4 @@
-import { canRegisterOutgoing, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, overdueSignedCopies, recordApproval, updateOutgoingDocument } from "@/db/catalog";
+import { outgoingRegisterTargets, createOutgoingDocument, deleteOutgoingDocument, getOutgoingDocuments, overdueSignedCopies, recordApproval, updateOutgoingDocument } from "@/db/catalog";
 
 // Çıxan sənədlər (Versiya 2.60): registering needs the section permission; seeing, editing and deleting are decided per document
 // (db/catalog.ts, outgoingRights) — department heads, the responsible person and the director see theirs without the permission.
@@ -14,7 +14,8 @@ function authError(error: unknown) {
 }
 
 async function listBody(user: Awaited<ReturnType<typeof requireUser>>) {
-  return { items: await getOutgoingDocuments(user), canRegister: await canRegisterOutgoing(user) };
+  const registerIn = await outgoingRegisterTargets(user);
+  return { items: await getOutgoingDocuments(user), canRegister: registerIn.length > 0, registerIn };
 }
 
 export async function GET(request: Request) {

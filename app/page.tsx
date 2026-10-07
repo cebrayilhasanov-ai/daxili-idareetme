@@ -13,11 +13,11 @@ import { HrPage, type HrSection } from "@/components/hr/hr-page";
 import { OrdersPage } from "@/components/hr/orders-page";
 import { DocumentsOverview, HrOverview, SectionOverview } from "@/components/section-overview";
 import { GuidesPage } from "@/components/guides";
-import { ACTIONS, ACTION_LABELS, LEVELED_SECTIONS, actionKey, deniedFromStored, parseStoredPermissions, storedFromDenied, type SectionAction } from "@/lib/permission-model";
+import { ACTIONS, ACTION_LABELS, FIRM_SECTIONS, LEVELED_SECTIONS, TYPED_SECTIONS, actionKey, deniedFromStored, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions, storedFromDenied, type CompanyPermissions, type FirmSection, type FirmSectionRights, type SectionAction } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
 import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, FREQUENCY_TITLES, hasFixedDue, MONTH_NAMES, MONTH_ORDINALS, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, dueMonth, formatBakuDate, isLongPeriod, overdueDays, periodState, periodWindow, periodsOf, periodsOfYear, type FixedFrequency } from "@/lib/fixed-periods";
 
-type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; is_department_head?:number };
+type Employee = { id:number; name:string; position:string; email:string|null; active:number; created_at:string; company_ids:string|null; company_positions:string|null; main_company_id:number|null; avatar_key:string|null; hidden_sections?:string|null; company_permissions?:string|null; is_department_head?:number };
 type Company = { id:number; name:string; voen:string|null; manager:string|null; active:number; created_at:string };
 type Task = { id:number; request_id?:number|null; request_from?:string|null; request_status?:string|null; employee_id:number; employee_name:string; employee_position:string; company_id:number|null; company_name:string|null; title:string; description:string|null; due_at:string; original_due_at:string|null; status:string; evaluation:number|null; evaluation_note:string|null; employee_status_changed:number; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; submission_attachment_type:string|null; recurring_task_id:number|null; period_key:string|null; created_at:string; completed_at?:string|null; assigned_by:string|null };
 type DateRequest = { id:number; task_id:number; task_title:string; employee_id:number; employee_name:string; proposed_due_at:string; reason:string|null; status:string; admin_note:string|null; created_at:string; resolved_at:string|null };
@@ -48,6 +48,8 @@ type ChecklistLikeItem = StepRequest & { id:number; title:string; done:number; d
 type PersonalWork = { id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null };
 type WorkHistoryEvent = { id:number; actor_name:string; action:string; detail:string|null; created_at:string|null };
 type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:number; title:string; done:number; created_at:string; delegated_task_id:number|null; delegated_employee_id:number|null; delegated_employee_name:string|null; delegated_task_status:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; delegated_submission_attachment_key:string|null; delegated_submission_attachment_name:string|null; delegated_submission_attachment_size:number|null };
+// Versiya 2.99: where the user registers documents — per firm, every type (null) or only these template names.
+type RegisterTarget = { companyId:number; types:string[]|null };
 type DocumentTemplate = { id:number; name:string; departments?:string|null; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; draft_folder_missing?:boolean; final_folder_missing?:boolean; incoming_folder_missing?:boolean; created_at:string };
 type OutgoingDocument = { informed_departments?:string[]; return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
 type WorkRequest = { id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
@@ -178,7 +180,7 @@ export default function Home(){
   const removeOwnAvatar=async()=>{setError("");try{const response=await fetch("/api/data",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"self-avatar",avatarKey:null})});const result=await response.json();if(!response.ok)throw new Error(result.error||"Şəkil silinmədi.");setData(result);setUser(current=>current?{...current,avatarKey:null}:current);setDialog(null);setOwnAvatarFile(null)}catch(e){setError(e instanceof Error?e.message:"Şəkil silinmədi.")}};
   const uploadPhotoIfAny=async()=>{if(!employeePhoto)return undefined;if(employeePhoto.size>5*1024*1024)throw new Error("Şəklin həcmi 5 MB-dan çox ola bilməz.");const upload=new FormData();upload.append("file",employeePhoto);const response=await fetch("/api/file",{method:"POST",body:upload});const result=await response.json();if(!response.ok)throw new Error(result.error||"Şəkil yüklənmədi.");return result.key as string};
   const createPersonnel=async()=>{setError("");setUploadingPhoto(Boolean(employeePhoto));try{const avatarKey=await uploadPhotoIfAny();const response=await fetch("/api/users",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...form,companyIds:(form.companyIds||"").split(",").filter(Boolean).map(Number),companyPositions:JSON.parse(form.companyPositions||"{}"),mainCompanyId:Number(form.mainCompanyId)||null,avatarKey})});const body=await response.json();if(!response.ok)throw new Error(body.error);setDialog(null);setForm({});setEmployeePhoto(null);location.reload()}catch(e){setError(e instanceof Error?e.message:"İstifadəçi yaradılmadı.")}finally{setUploadingPhoto(false)}};
-  const saveEmployeeEdit=async()=>{setError("");setUploadingPhoto(Boolean(employeePhoto));try{const avatarKey=await uploadPhotoIfAny();await request("PATCH",{action:"employee",id:Number(form.id),name:form.name,email:form.email,companyIds:(form.companyIds||"").split(",").filter(Boolean).map(Number),companyPositions:JSON.parse(form.companyPositions||"{}"),mainCompanyId:Number(form.mainCompanyId)||null,hiddenSections:form.hiddenSections||"[]",...(avatarKey?{avatarKey}:{})});setEmployeePhoto(null)}catch(e){setError(e instanceof Error?e.message:"İstifadəçi yenilənmədi.")}finally{setUploadingPhoto(false)}};
+  const saveEmployeeEdit=async()=>{setError("");setUploadingPhoto(Boolean(employeePhoto));try{const avatarKey=await uploadPhotoIfAny();await request("PATCH",{action:"employee",id:Number(form.id),name:form.name,email:form.email,companyIds:(form.companyIds||"").split(",").filter(Boolean).map(Number),companyPositions:JSON.parse(form.companyPositions||"{}"),mainCompanyId:Number(form.mainCompanyId)||null,hiddenSections:form.hiddenSections||"[]",companyPermissions:form.companyPermissions||"{}",...(avatarKey?{avatarKey}:{})});setEmployeePhoto(null)}catch(e){setError(e instanceof Error?e.message:"İstifadəçi yenilənmədi.")}finally{setUploadingPhoto(false)}};
   const request=async(method:"POST"|"PATCH",body:Record<string,unknown>)=>{setError("");try{const response=await fetch("/api/data",{method,headers:{"content-type":"application/json"},body:JSON.stringify(body)});const result=await response.json();if(!response.ok)throw new Error(result.error||"Əməliyyat baş tutmadı.");setData(result);setDialog(null);setForm({})}catch(e){setError(e instanceof Error?e.message:"Əməliyyat baş tutmadı.")}};
   const deleteWorker=async(employee:Employee)=>{if(!window.confirm(`${employee.name} adlı personalı tam silmək istəyirsiniz?`))return;setError("");try{const response=await fetch(`/api/data?employeeId=${employee.id}`,{method:"DELETE"});const result=await response.json();if(!response.ok)throw new Error(result.error||"İstifadəçi silinmədi.");setData(result)}catch(e){setError(e instanceof Error?e.message:"İstifadəçi silinmədi.")}};
   // Versiya 2.90: the admin deletes a fixed work nobody has (the server refuses one that is assigned).
@@ -189,7 +191,7 @@ export default function Home(){
   const employeeSelf=!isAdmin&&data.employees.find(e=>e.id===user?.employeeId)||null;
   const effectiveView=viewAs||employeeSelf;
   // Sections hidden from whoever's view this is: none for the admin, the employee's own set otherwise (an admin in "İstifadəçi görünüşü" previews it).
-  const deniedSections=effectiveView?deniedFromStored(parseHiddenSections(effectiveView.hidden_sections)):new Set<string>();
+  const deniedSections=effectiveView?deniedOf(effectiveView):new Set<string>();
   const can=(key:string)=>!deniedSections.has(key);
   useEffect(()=>{chatSummaryRef.current=(latest)=>{
     // The first answer only sets the starting point, so old unread messages do not ring on opening the site.
@@ -290,7 +292,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.98</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 2.99</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -335,7 +337,7 @@ export default function Home(){
         {tasksSection==="mine"&&<PersonalWorksPage isAdmin={isAdmin} currentUserId={user.id} viewAsEmployeeId={viewAs?.id??null} companies={companyScopeActive?myCompanies:data.companies} employees={activeEmployees} activeCompanyId={activeCompanyId}/>}</>}
         {taskSubTab==="fixed"&&<>{effectiveView&&teamFixed.hasTeam&&<div className="fixedsubtabs"><button className={fixedTeamView?"":"on"} onClick={()=>setFixedScope("mine")}>Mənim sabit işlərim ({ownScopedFixed.length})</button><button className={fixedTeamView?"on":""} onClick={()=>setFixedScope("team")}>Əməkdaşlarımın sabit işləri ({teamFixedScoped.length}){teamFixedOverdue>0&&<em className="requestbadge" title={`${teamFixedOverdue} gecikən`}>{teamFixedOverdue}</em>}</button></div>}<div className="fixedsubtabs fixedfreqtabs">{shownFixedFreqs.map(f=>{const late=shownFixedOverdue(f);const count=effectiveView?scopedFixed.filter(a=>a.frequency===f).length:data.workItems.filter(i=>i.frequency===f).length;return <button key={f} className={activeFixedFreq===f?"on":""} onClick={()=>setFixedFreq(f)}>{FREQUENCY_TITLES[f]} ({count}){late>0&&<em className="requestbadge" title={`${late} gecikən`}>{late}</em>}</button>})}</div>{isAdmin&&!viewAs&&<div className="fixedsubtabs"><button className={fixedTab==="catalog"?"on":""} onClick={()=>setFixedTab("catalog")}>Sabit işlərin siyahısı</button><button className={fixedTab==="assignments"?"on":""} onClick={()=>setFixedTab("assignments")}>Personal sabit işlər</button></div>}<WorkList key={`${activeFixedFreq}-${fixedTeamView?"team":"mine"}`} employeeView={Boolean(effectiveView)} team={fixedTeamView} tab={fixedTab} frequency={activeFixedFreq} items={data.workItems} assignments={scopedFixed} completions={fixedCompletions} employees={activeEmployees} companies={data.companies.filter(c=>Boolean(c.active))} form={form} setForm={setForm} onAdd={()=>void request("POST",{action:"work-item",title:form.workTitle,description:form.workDescription,frequency:activeFixedFreq})} onDue={(item,dueDay,dueMonth)=>void request("PATCH",{action:"work-item",id:item.id,dueDay,dueMonth})} onEditWork={(item,title,description)=>void request("PATCH",{action:"work-item",id:item.id,title,description})} onDeleteWork={item=>void deleteWorkDefinition(item)} onAssign={()=>void request("POST",{action:"work-assignment",workDefinitionId:Number(form.assignWorkId),companyIds:(form.assignCompanyIds||"").split(",").filter(Boolean).map(Number),employeeId:Number(form.assignEmployeeId)})} onCatalogAssign={(workDefinitionId,companyId,employeeId)=>void request("POST",{action:"work-assignment",workDefinitionId,companyIds:[companyId],employeeId})} onCatalogUnassign={(workDefinitionId,companyId,employeeId)=>void request("PATCH",{action:"work-assignment",workDefinitionId,companyId,employeeId,selected:false})} onComplete={(assignmentId,periodKey)=>void request("PATCH",{action:"work-completion",assignmentId,periodKey})} onUncomplete={(assignmentId,periodKey)=>void request("PATCH",{action:"work-uncompletion",assignmentId,periodKey})} isAdmin={isAdmin} fixedStart={data.fixedWorksStart||DEFAULT_FIXED_START} onFixedStart={value=>void request("PATCH",{action:"fixed-works-start",value})}/></>}</>}
         {pageAllowed&&page==="requests"&&<RequestsPage isAdmin={isAdmin} companies={companyScopeActive?myCompanies:data.companies.filter(c=>Boolean(c.active))} activeCompanyId={companyScopeActive?activeCompanyId:null} onActionable={setRequestsPending}/>}
-        {page==="employees"&&<EmployeesPage employees={data.employees} companies={data.companies} tasks={data.tasks} onNew={()=>{setEmployeePhoto(null);open("employee")}} onEdit={e=>{setEmployeePhoto(null);open("employee",{id:String(e.id),name:e.name,email:e.email||"",companyIds:e.company_ids||"",companyPositions:companyPositionsForm(e.company_positions),mainCompanyId:e.main_company_id?String(e.main_company_id):"",hiddenSections:e.hidden_sections||"[]"})}} onView={e=>{setViewAs(e);setPage("dashboard")}} onToggle={e=>void request("PATCH",{action:"employee",id:e.id,active:!Boolean(e.active)})} onDelete={e=>void deleteWorker(e)}/>}
+        {page==="employees"&&<EmployeesPage employees={data.employees} companies={data.companies} tasks={data.tasks} onNew={()=>{setEmployeePhoto(null);open("employee")}} onEdit={e=>{setEmployeePhoto(null);open("employee",{id:String(e.id),name:e.name,email:e.email||"",companyIds:e.company_ids||"",companyPositions:companyPositionsForm(e.company_positions),mainCompanyId:e.main_company_id?String(e.main_company_id):"",hiddenSections:e.hidden_sections||"[]",companyPermissions:e.company_permissions||"{}"})}} onView={e=>{setViewAs(e);setPage("dashboard")}} onToggle={e=>void request("PATCH",{action:"employee",id:e.id,active:!Boolean(e.active)})} onDelete={e=>void deleteWorker(e)}/>}
         {pageAllowed&&page==="chat"&&!viewAs&&<ChatPage key={chatFocus?.nonce??0} currentUser={user} onUnread={setChatUnread} initialThread={chatFocus?.thread??0} onViewing={id=>{viewingThreadRef.current=id}} sound={chatSound} onToggleSound={toggleChatSound} full={chatFull} controls={<span className="chatpagectl"><button title="Yığ" onClick={()=>leaveChat(true)}><Minus/></button><button title={chatFull?"Kiçilt":"Bütün ekrana böyüt"} onClick={()=>setChatFull(v=>!v)}>{chatFull?<Minimize2/>:<Maximize2/>}</button><button title="Bağla" onClick={()=>leaveChat(false)}><X/></button></span>}/>}
         {page==="settings"&&<SectionOverview cards={[
           ...(isAdmin&&!viewAs?[{key:"companies",title:"Firmalar",text:"Firmaların məlumatları və strukturu (şöbələr, vəzifələr, tabeçilik).",stats:[{label:"aktiv firma",value:data.companies.filter(c=>Boolean(c.active)).length}],onOpen:()=>setPage("companies")},
@@ -365,7 +367,7 @@ export default function Home(){
     {chatMini&&page!=="chat"&&!viewAs&&can("chat")&&<div className="chatmini"><button className="chatminiopen" title="Çatı aç" onClick={openChat}><MessageCircle/><b>Çat</b>{chatUnread>0&&<em>{chatUnread}</em>}</button><button className="chatminiclose" title="Bağla" onClick={()=>setChatMini(false)}><X/></button></div>}
     {chatToast&&<div className={chatMini&&page!=="chat"?"chattoast abovemini":"chattoast"} role="status"><button className="chattoastbody" onClick={()=>openChatAt(chatToast.threadId)}><i className={chatToast.senderAvatar?"hasphoto":""}>{chatToast.threadType==="group"?<Users/>:avatarNode(chatToast.senderAvatar,chatToast.senderName)}</i><span><b>{chatToast.threadType==="group"?`${chatToast.threadName} · ${chatToast.senderName}`:chatToast.senderName}</b><small>{chatToast.unread>1?`${chatToast.unread} yeni mesaj · `:""}{chatToast.text}</small></span></button><button className="chattoastclose" title="Bağla" onClick={()=>setChatToast(null)}><X/></button></div>}
     <Dialog open={dialog!==null} onOpenChange={v=>!v&&setDialog(null)}><DialogContent className="businessdialog" resizable>
-      {dialog==="employee"&&<FormShell title={form.id?"İstifadəçi məlumatlarını redaktə et":"Yeni istifadəçi"} desc={form.id?"Ad, e-poçt, firmalar və hər firma üzrə vəzifəni yeniləyin.":"İstifadəçi, giriş hesabı və işləyəcəyi firmalar birlikdə təyin ediləcək."}><Field label="Ad və soyad" value={form.name||""} set={v=>setForm({...form,name:v})}/><Field label="E-poçt" type="email" value={form.email||""} set={v=>setForm({...form,email:v})}/><label className="field filefield">Şəkil (istəyə bağlı, maks. 5 MB)<Input type="file" accept="image/*" onChange={e=>setEmployeePhoto(e.target.files?.[0]||null)}/>{employeePhoto&&<small>{employeePhoto.name}</small>}</label>{!form.id&&<Field label="Müvəqqəti şifrə (ən az 8 simvol)" type="password" value={form.password||""} set={v=>setForm({...form,password:v})}/>}<label className="field">Əsas iş yeri<select value={form.mainCompanyId||""} onChange={e=>{const id=e.target.value;setForm(f=>{const ids=new Set((f.companyIds||"").split(",").filter(Boolean));if(id)ids.add(id);return {...f,mainCompanyId:id,companyIds:[...ids].join(",")}})}}><option value="">Firma seçin</option>{data.companies.filter(c=>Boolean(c.active)||String(c.id)===form.mainCompanyId).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><EmployeeCompanyPicker companies={data.companies.filter(c=>Boolean(c.active))} companyIds={form.companyIds||""} companyPositions={form.companyPositions||"{}"} onChange={(companyIds,companyPositions)=>setForm(f=>({...f,companyIds,companyPositions,mainCompanyId:companyIds.split(",").includes(f.mainCompanyId||"")?f.mainCompanyId:""}))}/><PermissionTree hidden={parseHiddenSections(form.hiddenSections)} onChange={next=>setForm(f=>({...f,hiddenSections:JSON.stringify(next)}))} employee={form.id?data.employees.find(e=>String(e.id)===form.id)||null:null} assignments={data.workAssignments} copyFrom={data.employees.filter(e=>Boolean(e.active)&&String(e.id)!==form.id)}/><Button disabled={uploadingPhoto||(form.id?(!form.name||!form.email):(!form.name||!form.email||(form.password||"").length<8))} onClick={()=>form.id?void saveEmployeeEdit():void createPersonnel()}>{uploadingPhoto?"Şəkil yüklənir...":form.id?"Dəyişiklikləri saxla":"İstifadəçini və giriş hesabını yarat"}</Button></FormShell>}
+      {dialog==="employee"&&<FormShell title={form.id?"İstifadəçi məlumatlarını redaktə et":"Yeni istifadəçi"} desc={form.id?"Ad, e-poçt, firmalar və hər firma üzrə vəzifəni yeniləyin.":"İstifadəçi, giriş hesabı və işləyəcəyi firmalar birlikdə təyin ediləcək."}><Field label="Ad və soyad" value={form.name||""} set={v=>setForm({...form,name:v})}/><Field label="E-poçt" type="email" value={form.email||""} set={v=>setForm({...form,email:v})}/><label className="field filefield">Şəkil (istəyə bağlı, maks. 5 MB)<Input type="file" accept="image/*" onChange={e=>setEmployeePhoto(e.target.files?.[0]||null)}/>{employeePhoto&&<small>{employeePhoto.name}</small>}</label>{!form.id&&<Field label="Müvəqqəti şifrə (ən az 8 simvol)" type="password" value={form.password||""} set={v=>setForm({...form,password:v})}/>}<label className="field">Əsas iş yeri<select value={form.mainCompanyId||""} onChange={e=>{const id=e.target.value;setForm(f=>{const ids=new Set((f.companyIds||"").split(",").filter(Boolean));if(id)ids.add(id);return {...f,mainCompanyId:id,companyIds:[...ids].join(",")}})}}><option value="">Firma seçin</option>{data.companies.filter(c=>Boolean(c.active)||String(c.id)===form.mainCompanyId).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><EmployeeCompanyPicker companies={data.companies.filter(c=>Boolean(c.active))} companyIds={form.companyIds||""} companyPositions={form.companyPositions||"{}"} onChange={(companyIds,companyPositions)=>setForm(f=>({...f,companyIds,companyPositions,mainCompanyId:companyIds.split(",").includes(f.mainCompanyId||"")?f.mainCompanyId:""}))}/><PermissionTree hidden={parseHiddenSections(form.hiddenSections)} onChange={next=>setForm(f=>({...f,hiddenSections:JSON.stringify(next)}))} firms={parseCompanyPermissions(form.companyPermissions||"{}")} onFirmsChange={next=>setForm(f=>({...f,companyPermissions:JSON.stringify(next)}))} companies={data.companies.filter(c=>(form.companyIds||"").split(",").includes(String(c.id)))} employee={form.id?data.employees.find(e=>String(e.id)===form.id)||null:null} assignments={data.workAssignments} copyFrom={data.employees.filter(e=>Boolean(e.active)&&String(e.id)!==form.id)}/><Button disabled={uploadingPhoto||(form.id?(!form.name||!form.email):(!form.name||!form.email||(form.password||"").length<8))} onClick={()=>form.id?void saveEmployeeEdit():void createPersonnel()}>{uploadingPhoto?"Şəkil yüklənir...":form.id?"Dəyişiklikləri saxla":"İstifadəçini və giriş hesabını yarat"}</Button></FormShell>}
       {dialog==="company"&&<FormShell title={form.id?"Firma məlumatlarını redaktə et":"Yeni firma"} desc="Firmanın əsas məlumatlarını daxil edin."><Field label="Firmanın adı" value={form.name||""} set={v=>setForm({...form,name:v})}/><Field label="VÖEN" value={form.voen||""} set={v=>setForm({...form,voen:v})}/><Field label="Rəhbər" value={form.manager||""} set={v=>setForm({...form,manager:v})}/><Button disabled={!form.name} onClick={()=>void request(form.id?"PATCH":"POST",{action:"company",id:form.id?Number(form.id):undefined,name:form.name,voen:form.voen||"",manager:form.manager||""})}>{form.id?"Dəyişiklikləri saxla":"Firmanı əlavə et"}</Button></FormShell>}
       {dialog==="evaluate"&&selectedTask&&<FormShell title="İşi yoxla" desc={`${selectedTask.employee_name} • ${selectedTask.title}`}><label className="field">Qiymət (1–10)<select value={form.evaluation||"10"} onChange={e=>setForm({...form,evaluation:e.target.value})}>{[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>{n} bal</option>)}</select></label><TextField label="Rəy / qeyd" value={form.evaluationNote||""} set={v=>setForm({...form,evaluationNote:v})}/><div className="inlineactions">{selectedTask.status==="Təqdim edilib"&&<button className="inlinecancel" disabled={!(form.evaluationNote||"").trim()} onClick={()=>void request("PATCH",{action:"task",id:selectedTask.id,status:"Geri qaytarılıb",evaluationNote:form.evaluationNote||""})}>Geri qaytar</button>}<Button onClick={()=>void request("PATCH",{action:"task",id:selectedTask.id,status:"Təsdiqlənib",evaluation:Number(form.evaluation||10),evaluationNote:form.evaluationNote||""})}>Təsdiqlə və qiymətləndir</Button></div></FormShell>}
       {dialog==="password"&&<FormShell title="Şifrəni dəyiş" desc="Cari şifrənizi daxil edin və yeni şifrə təyin edin."><Field label="Cari şifrə" type="password" value={form.currentPassword||""} set={v=>setForm({...form,currentPassword:v})}/><Field label="Yeni şifrə (ən az 8 simvol)" type="password" value={form.newPassword||""} set={v=>setForm({...form,newPassword:v})}/><Button disabled={!form.currentPassword||(form.newPassword||"").length<8} onClick={()=>void changeOwnPassword()}>Yeni şifrəni saxla</Button></FormShell>}
@@ -1686,6 +1688,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   const [customers,setCustomers]=useState<Customer[]>([]);
   const [departments,setDepartments]=useState<Record<number,string[]>>({});
   const [canRegister,setCanRegister]=useState(false);
+  const [registerIn,setRegisterIn]=useState<RegisterTarget[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -1707,11 +1710,13 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   // Used once: coming back to Çıxan sənədlər from the menu later shows all documents again.
   useEffect(()=>{if(preset)onPresetUsed?.()},[preset,onPresetUsed]);
   const [members,setMembers]=useState<Record<number,Array<{id:number;name:string;department:string}>>>({});
-  const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse,customerResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents"),fetch("/api/customers")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);setCanRegister(Boolean(outgoingBody.canRegister));const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates((templateBody.items||[]).filter((t:DocumentTemplate)=>templateGroupOf(t)==="outgoing"));const customerBody=await customerResponse.json();if(customerResponse.ok)setCustomers(customerBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
+  const load=async()=>{setLoading(true);setError("");try{const [outgoingResponse,templateResponse,customerResponse]=await Promise.all([fetch("/api/documents/outgoing"),fetch("/api/documents"),fetch("/api/customers")]);const outgoingBody=await outgoingResponse.json();if(!outgoingResponse.ok)throw new Error(outgoingBody.error);setItems(outgoingBody.items||[]);setCanRegister(Boolean(outgoingBody.canRegister));setRegisterIn(outgoingBody.registerIn||[]);const templateBody=await templateResponse.json();if(templateResponse.ok)setTemplates((templateBody.items||[]).filter((t:DocumentTemplate)=>templateGroupOf(t)==="outgoing"));const customerBody=await customerResponse.json();if(customerResponse.ok)setCustomers(customerBody.items||[])}catch(e){setError(e instanceof Error?e.message:"Siyahı açıla bilmədi.")}finally{setLoading(false)}};
   const reloadItems=async()=>{const response=await fetch("/api/documents/outgoing");const body=await response.json();if(response.ok)setItems(body.items||[])};
   useEffect(()=>{void load()},[]);
   // An employee files documents for the firm picked in the sidebar; the admin, or an employee in "Bütün firmalar" (2.88), picks it in the form.
-  const companyOf=(values:Record<string,string>)=>Number(values.companyId||activeCompanyId||(companies.length===1?companies[0].id:0))||0;
+  // Versiya 2.99: a new document goes only to a firm where this user may register, and only with the types allowed there.
+  const createFirms=companies.filter(c=>registerIn.some(r=>r.companyId===c.id));
+  const companyOf=(values:Record<string,string>)=>Number(values.companyId||activeCompanyId||(values!==editForm&&createFirms.length===1?createFirms[0].id:companies.length===1?companies[0].id:0))||0;
   const createCompanyId=companyOf(form);
   const editCompanyId=companyOf(editForm);
   useEffect(()=>{
@@ -1789,6 +1794,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   const copiesOptions=["1","2","3","4","5"];
   // Versiya 2.76: the document types are the Çıxan sənəd templates of the document's own firm.
   const firmTemplates=(companyId:number)=>templates.filter(t=>Number(t.company_id)===companyId);
+  const allowedTemplates=(companyId:number)=>{const allowed=registerIn.find(r=>r.companyId===companyId)?.types;return firmTemplates(companyId).filter(t=>!allowed||allowed.includes(t.name))};
   // Versiya 2.77: a type whose template names its "Aidiyyatı şöbələr" brings them; otherwise the registrar picks.
   const templateDepts=(values:Record<string,string>)=>parseList(templateFor(values)?.departments||"[]");
   const effectiveRelated=(values:Record<string,string>)=>{const fixed=templateDepts(values);return fixed.length?fixed:parseList(values.relatedDepartments)};
@@ -1797,15 +1803,15 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
   // Fields the system fills itself — the numbers at creation, Daxil olma No / tarixi when the signed document is uploaded — are left out of the new-document form.
   const autoFilled=new Set(["incomingNo","incomingDate","documentNumber","outgoingNo","draft","final","returnDue"]);
   const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
-    company:(values,set)=>{const chosen=companyOf(values);return (isAdmin||values===form)&&companies.length>1&&!activeCompanyId
-      ?<label className="field" key="company">Firma<select value={chosen||""} onChange={e=>set({...values,companyId:e.target.value,relatedDepartments:"[]"})}><option value="">Seçin</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+    company:(values,set)=>{const chosen=companyOf(values);const isNew=values!==editForm;const firms=isNew?createFirms:companies;return (isAdmin||isNew)&&firms.length>1&&!activeCompanyId
+      ?<label className="field" key="company">Firma<select value={chosen||""} onChange={e=>set({...values,companyId:e.target.value,relatedDepartments:"[]"})}><option value="">Seçin</option>{firms.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       :<label className="field" key="company">Firma<Input value={chosen?companyName(chosen):""} readOnly/></label>},
     outgoingDate:(values,set)=><Field key="outgoingDate" label="Çıxış tarixi" type="date" value={values.outgoingDate||""} set={v=>set({...values,outgoingDate:v})}/>,
     incomingNo:(values,set)=><Field key="incomingNo" label="Daxil olma No" value={values.incomingNo||""} set={v=>set({...values,incomingNo:v})}/>,
     incomingDate:(values,set)=><Field key="incomingDate" label="Daxil olma tarixi" type="date" value={values.incomingDate||""} set={v=>set({...values,incomingDate:v})}/>,
     // Related departments: the first one is the main department — the {Şöbə} of the folder and file-name rules.
     sendingDepartment:(values,set)=>{const fixed=templateDepts(values);if(fixed.length)return <div className="field incomingdepartments outgoingrelated" key="sendingDepartment"><span>Əlaqəli şöbə(lər) <small>sənədin tipinə görə — şablondan</small></span><div>{fixed.map((d,n)=><label key={d}><b>{d}</b>{n===0&&<em className="incomingrelatedtag">əsas</em>}</label>)}</div></div>;const chosen=companyOf(values);const options=chosen?departments[chosen]||[]:[];const picked=parseList(values.relatedDepartments);const put=(list:string[])=>set({...values,relatedDepartments:JSON.stringify(list)});return <div className="field incomingdepartments outgoingrelated" key="sendingDepartment"><span>Əlaqəli şöbə(lər) * <small>birinci seçilən — əsas şöbə (papka və fayl adındakı {"{Şöbə}"})</small></span><div>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:options.length?options.map(o=>{const at=picked.indexOf(o);return <label key={o}><input type="checkbox" checked={at>=0} onChange={e=>put(e.target.checked?[...picked,o]:picked.filter(d=>d!==o))}/><b>{o}</b>{at===0&&<em className="incomingrelatedtag">əsas</em>}{at>0&&<button type="button" className="hrlink hrlinkok" onClick={ev=>{ev.preventDefault();put([o,...picked.filter(d=>d!==o)])}}>əsas et</button>}</label>}):<small>Firmanın strukturunda şöbə yoxdur (Firmalar → Struktur).</small>}</div></div>},
-    documentType:(values,set)=>{const chosen=companyOf(values);const list=chosen?firmTemplates(chosen):[];return <label className="field" key="documentType">Sənədin tipi<Input list={`documentTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`documentTypeOptions-${chosen}`}>{list.map(t=><option key={t.id} value={t.name}/>)}</datalist>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:!list.length&&<small>Bu firmanın “Çıxan sənəd” şablonu yoxdur (Sənədlər → Şablonlar).</small>}</label>},
+    documentType:(values,set)=>{const chosen=companyOf(values);const list=chosen?allowedTemplates(chosen):[];return <label className="field" key="documentType">Sənədin tipi<Input list={`documentTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`documentTypeOptions-${chosen}`}>{list.map(t=><option key={t.id} value={t.name}/>)}</datalist>{!chosen?<small>Əvvəlcə firmanı seçin.</small>:!list.length&&<small>Bu firmanın “Çıxan sənəd” şablonu yoxdur (Sənədlər → Şablonlar).</small>}</label>},
     sendingMethod:(values,set)=><label className="field" key="sendingMethod">Göndərilmə Şəkli<select value={values.sendingMethod||""} onChange={e=>set({...values,sendingMethod:e.target.value})}><option value="">Seçin</option>{sendingMethodOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     // Versiya 2.75: the person who takes the document out answers for the signed copy coming back — picked from the people
     // of the document's departments. An older document keeps its typed name until someone is picked.
@@ -1894,7 +1900,7 @@ function OutgoingDocumentsPage({isAdmin,companies,activeCompanyId,preset,onPrese
     catch(e){setError(e instanceof Error?e.message:"Təsdiq qeyd olunmadı.")}finally{setBusy(false)}
   };
   const filteredOutgoing=excel.rows;
-  const canCreate=canRegister&&(isAdmin||companies.length>0);
+  const canCreate=canRegister&&createFirms.length>0;
   const showActions=filteredOutgoing.some(item=>item.can?.edit||item.can?.remove||approvalActionable(item.approval));
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Çıxan sənədlər</h2><p>{!canRegister?"Rəhbəri olduğunuz şöbələrə aid və məsul olduğunuz çıxan sənədlər":activeCompanyId?`${companyName(activeCompanyId)} — göndərilən sənədlərin qeydiyyatı`:"Təşkilatdan göndərilən sənədlərin qeydiyyatı"}</p></div>{canCreate&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sənəd</Button>}</div>
@@ -1948,6 +1954,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const [departments,setDepartments]=useState<IncomingDepartment[]>([]);
   const [directorOf,setDirectorOf]=useState<number[]>([]);
   const [canRegister,setCanRegister]=useState(false);
+  const [registerIn,setRegisterIn]=useState<RegisterTarget[]>([]);
   const [types,setTypes]=useState<Array<{company_id:number;name:string;departments?:string|null;incoming_folder_path:string|null;incoming_name_pattern:string|null}>>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -1966,8 +1973,8 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   // Sender lookup by VÖEN: "found" fills the name from the customer list, "missing" opens the new-customer card.
   const [voenState,setVoenState]=useState<Record<string,"found"|"missing"|"">>({});
   const [customerForm,setCustomerForm]=useState<Record<string,string>>({});
-  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;types?:Array<{company_id:number;name:string;departments?:string|null;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
-    const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);setCanRegister(Boolean(body.canRegister));
+  const apply=(body:{items?:IncomingDocument[];departments?:IncomingDepartment[];directorOf?:number[];canRegister?:boolean;registerIn?:RegisterTarget[];types?:Array<{company_id:number;name:string;departments?:string|null;incoming_folder_path:string|null;incoming_name_pattern:string|null}>})=>{
+    const list=body.items||[];setItems(list);setDepartments(body.departments||[]);setDirectorOf(body.directorOf||[]);setCanRegister(Boolean(body.canRegister));setRegisterIn(body.registerIn||[]);
     onPending(list.filter(i=>waitsForDirector(i)&&(body.directorOf||[]).includes(i.company_id)).length);
     if(body.types)setTypes(body.types);
   };
@@ -1982,7 +1989,9 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     return body;
   };
   // The firms passed in are the ones this user works for (all firms for the admin).
-  const registerFirms=companies;
+  // Versiya 2.99: only the firms where this user may register, and there only the allowed types.
+  const registerFirms=companies.filter(c=>registerIn.some(r=>r.companyId===c.id));
+  const allowedTypes=(companyId:number)=>registerIn.find(r=>r.companyId===companyId)?.types??null;
   const companyOf=(values:Record<string,string>)=>Number(values.companyId||activeCompanyId||(registerFirms.length===1?registerFirms[0].id:0))||0;
   const companyName=(id:number)=>companies.find(c=>c.id===id)?.name||items.find(i=>i.company_id===id)?.company_name||"—";
   const firmDepartments=(companyId:number)=>departments.filter(d=>d.company_id===companyId);
@@ -2112,7 +2121,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     {fromList&&<label className="field">Göndərənin telefonu<Input value={formatPhone(values.senderPhone)||""} readOnly placeholder="Müştəri kartında telefon yoxdur"/><small>Müştəri kartından</small></label>}
     <Field label="Sənədin nömrəsi (göndərənin)" value={values.senderDocNo||""} set={v=>set({...values,senderDocNo:v})}/>
     <Field label="Sənədin tarixi (göndərənin)" type="date" value={values.senderDocDate||""} set={v=>set({...values,senderDocDate:v})}/>
-    <label className="field">Sənədin tipi<Input list={`incomingTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`incomingTypeOptions-${chosen}`}>{[...new Set([...types.filter(t=>t.company_id===chosen).map(t=>t.name),...INCOMING_TYPES])].map(t=><option key={t} value={t}/>)}</datalist>{(()=>{const t=types.find(x=>x.company_id===chosen&&x.name.trim().toLocaleLowerCase("az-AZ")===(values.documentType||"").trim().toLocaleLowerCase("az-AZ"));return (values.documentType||"").trim()?<small className="incomingtypehint">{t?.incoming_folder_path?`Skan “${t.incoming_name_pattern||DEFAULT_INCOMING_NAME}” adı ilə ${t.incoming_folder_path} papkasına yazılacaq`:t?"Şablonda daxil olan sənəd papkası yoxdur — skan sistemdə saxlanılacaq":"Bu tip üçün şablon yoxdur — skan sistemdə saxlanılacaq"}</small>:null})()}</label>
+    <label className="field">Sənədin tipi<Input list={`incomingTypeOptions-${chosen}`} value={values.documentType||""} onChange={e=>set({...values,documentType:e.target.value})}/><datalist id={`incomingTypeOptions-${chosen}`}>{(allowedTypes(chosen)??[...new Set([...types.filter(t=>t.company_id===chosen).map(t=>t.name),...INCOMING_TYPES])]).map(t=><option key={t} value={t}/>)}</datalist>{(()=>{const t=types.find(x=>x.company_id===chosen&&x.name.trim().toLocaleLowerCase("az-AZ")===(values.documentType||"").trim().toLocaleLowerCase("az-AZ"));return (values.documentType||"").trim()?<small className="incomingtypehint">{t?.incoming_folder_path?`Skan “${t.incoming_name_pattern||DEFAULT_INCOMING_NAME}” adı ilə ${t.incoming_folder_path} papkasına yazılacaq`:t?"Şablonda daxil olan sənəd papkası yoxdur — skan sistemdə saxlanılacaq":"Bu tip üçün şablon yoxdur — skan sistemdə saxlanılacaq"}</small>:null})()}</label>
     <label className="field">Daxil olma yolu<select value={values.receiveMethod||""} onChange={e=>set({...values,receiveMethod:e.target.value})}><option value="">Seçin</option>{RECEIVE_METHODS.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
     <Field label="Qısa məzmun" value={values.summary||""} set={v=>set({...values,summary:v})}/>
     <Field label="Vərəq sayı" value={values.pages||""} set={v=>set({...values,pages:v})}/>
@@ -2332,21 +2341,38 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
 // "Giriş icazələri": which menu sections an employee sees and, in the sections with rights (Versiya 2.62: Baxış, Əlavə et,
 // Dəyişiklik et, Sil), what they may do there. Format and defaults: lib/permission-model.ts. Locked items cannot be closed;
 // the admin always may do everything.
+// Versiya 2.99: "Ümumi" holds the sections that do not belong to a firm; every firm of the user has its own tab with the firm
+// sections' rights, and in Çıxan / Daxil olan sənədlər the work there can be narrowed to some document types (the firm's templates).
+// A firm newly added to the user starts fully closed.
 type SectionNode={key:string;label:string;locked?:boolean;optIn?:boolean};
-const SECTION_TREE:{key:string;label:string;children:SectionNode[]}[]=[
-  {key:"tasks",label:"Tapşırıqlar",children:[{key:"tasks.manager",label:"Verilən tapşırıqlar",locked:true},{key:"tasks.requests",label:"Sorğular"},{key:"tasks.mine",label:"Şəxsi işlərim"},{key:"tasks.fixed",label:"Sabit işlər"}]},
-  {key:"documents",label:"Sənədlər",children:[{key:"documents.incoming",label:"Daxil olan sənədlər"},{key:"documents.outgoing",label:"Çıxan sənədlər"},{key:"dashboard.customers",label:"Müştərilər"}]},
-  {key:"hr",label:"Kadrlar",children:[{key:"hr.personnel",label:"Personallar (şəxsi məlumatlar, maaş)",optIn:true},{key:"hr.orders",label:"Əmrlər (məzuniyyət, işdən çıxma, digər)",optIn:true},{key:"hr.violations",label:"Nöqsanlar"}]},
+type SectionGroup={key:string;label:string;children:SectionNode[]};
+const GENERAL_TREE:SectionGroup[]=[
+  {key:"tasks",label:"Tapşırıqlar",children:[{key:"tasks.manager",label:"Verilən tapşırıqlar",locked:true},{key:"tasks.mine",label:"Şəxsi işlərim"},{key:"tasks.fixed",label:"Sabit işlər"}]},
+  {key:"documents",label:"Sənədlər",children:[{key:"dashboard.customers",label:"Müştərilər"}]},
   {key:"chat",label:"Çat",children:[]},
+];
+const FIRM_TREE:SectionGroup[]=[
+  {key:"tasks",label:"Tapşırıqlar",children:[{key:"tasks.requests",label:"Sorğular"}]},
+  {key:"documents",label:"Sənədlər",children:[{key:"documents.incoming",label:"Daxil olan sənədlər"},{key:"documents.outgoing",label:"Çıxan sənədlər"}]},
+  {key:"hr",label:"Kadrlar",children:[{key:"hr.personnel",label:"Personallar (şəxsi məlumatlar, maaş)"},{key:"hr.orders",label:"Əmrlər (məzuniyyət, işdən çıxma, digər)"},{key:"hr.violations",label:"Nöqsanlar"}]},
 ];
 const parseHiddenSections=(raw:string|null|undefined):string[]=>parseStoredPermissions(raw||"[]");
 const isLeveled=(key:string)=>(LEVELED_SECTIONS as readonly string[]).includes(key);
-function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:string[];onChange:(next:string[])=>void;employee:Employee|null;assignments:WorkAssignment[];copyFrom:Employee[]}){
-  // hiddenSet is what the employee may NOT see, whatever way each key is stored.
+// The client's view of what a user may do — the same rule the server uses (any firm gives a firm section).
+const deniedOf=(e:Employee)=>deniedWithFirms(parseHiddenSections(e.hidden_sections),parseCompanyPermissions(e.company_permissions||"{}"),(e.company_ids||"").split(",").filter(Boolean).map(Number));
+const ALL_FIRM_RIGHTS=():Partial<Record<FirmSection,FirmSectionRights>>=>Object.fromEntries(FIRM_SECTIONS.map(s=>[s,{actions:[...ACTIONS]}]));
+function PermissionTree({hidden,onChange,firms,onFirmsChange,companies,employee,assignments,copyFrom}:{hidden:string[];onChange:(next:string[])=>void;firms:CompanyPermissions;onFirmsChange:(next:CompanyPermissions)=>void;companies:Company[];employee:Employee|null;assignments:WorkAssignment[];copyFrom:Employee[]}){
+  // hiddenSet is what the employee may NOT see in Ümumi, whatever way each key is stored.
   const hiddenSet=deniedFromStored(hidden);
+  const [tab,setTab]=useState<string>("general");
+  const activeTab=tab==="general"||companies.some(c=>String(c.id)===tab)?tab:"general";
   // Groups start closed so the list stays short; a closed group still shows how many of its items are open.
   const [openGroups,setOpenGroups]=useState<Set<string>>(new Set());
   const toggleGroup=(key:string)=>setOpenGroups(current=>{const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next});
+  // The firms' document types to pick from: the Çıxan / Daxil olan sənəd templates (Sənədlər → Şablonlar).
+  const [templates,setTemplates]=useState<DocumentTemplate[]>([]);
+  useEffect(()=>{void fetch("/api/documents").then(r=>r.ok?r.json():{items:[]}).then(body=>setTemplates(body.items||[])).catch(()=>{})},[]);
+  // ----- Ümumi -----
   // A leveled section opens or closes with all four of its rights.
   const setKeys=(keys:string[],visible:boolean)=>{const next=new Set(hiddenSet);for(const key of keys.flatMap(k=>isLeveled(k)?[k,...ACTIONS.map(a=>actionKey(k,a))]:[k])){if(visible)next.delete(key);else next.add(key)}onChange(storedFromDenied(next))};
   // One right: any of Əlavə et / Dəyişiklik et / Sil turns Baxış on; taking Baxış away takes all of them.
@@ -2357,36 +2383,123 @@ function PermissionTree({hidden,onChange,employee,assignments,copyFrom}:{hidden:
     else next.add(actionKey(section,action));
     onChange(storedFromDenied(next));
   };
-  const allRights=(section:string)=>ACTIONS.every(a=>!hiddenSet.has(actionKey(section,a)));
+  // ----- One firm -----
+  const firmId=activeTab==="general"?0:Number(activeTab);
+  const rightsOf=(companyId:number,section:string)=>firmSectionRights(firms,companyId,section as FirmSection);
+  const setFirmEntry=(companyId:number,section:string,entry:FirmSectionRights|null)=>{
+    const firm={...(firms[String(companyId)]||{})};
+    if(entry&&entry.actions.length)firm[section as FirmSection]=entry;else delete firm[section as FirmSection];
+    onFirmsChange({...firms,[String(companyId)]:firm});
+  };
+  const setFirmAction=(companyId:number,section:string,action:SectionAction,on:boolean)=>{
+    const current=firms[String(companyId)]?.[section as FirmSection];
+    let actions=new Set<SectionAction>(current?.actions||[]);
+    if(on){actions.add(action);actions.add("view")}
+    else if(action==="view")actions=new Set();
+    else actions.delete(action);
+    setFirmEntry(companyId,section,{...(current?.types?{types:current.types}:{}),actions:ACTIONS.filter(a=>actions.has(a))});
+  };
+  const setFirmAll=(companyId:number,sections:string[],on:boolean)=>{
+    const firm={...(firms[String(companyId)]||{})};
+    for(const section of sections){if(on)firm[section as FirmSection]={...(firm[section as FirmSection]?.types?{types:firm[section as FirmSection]!.types}:{}),actions:[...ACTIONS]};else delete firm[section as FirmSection]}
+    onFirmsChange({...firms,[String(companyId)]:firm});
+  };
+  const setFirmTypes=(companyId:number,section:string,types:number[]|null)=>{
+    const current=firms[String(companyId)]?.[section as FirmSection];
+    if(!current)return;
+    setFirmEntry(companyId,section,types?{actions:current.actions,types}:{actions:current.actions});
+  };
+  const copyFirmToAll=(companyId:number)=>{
+    const source=firms[String(companyId)]||{};
+    // Document types are templates of one firm, so a narrowed list cannot be carried over: the other firms get every type.
+    const plain=Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions]}]));
+    onFirmsChange(Object.fromEntries(companies.map(c=>[String(c.id),c.id===companyId?source:structuredClone(plain)])));
+  };
+  const firmTemplates=(companyId:number,section:string)=>templates.filter(t=>Number(t.company_id)===companyId&&templateGroupOf(t)===(section==="documents.incoming"?"incoming":"outgoing"));
+  const openAll=()=>{onChange(storedFromDenied(new Set()));onFirmsChange(Object.fromEntries(companies.map(c=>[String(c.id),ALL_FIRM_RIGHTS()])))};
+  const copyEmployee=(source:Employee)=>{
+    onChange(parseHiddenSections(source.hidden_sections));
+    const theirs=parseCompanyPermissions(source.company_permissions||"{}");
+    onFirmsChange(Object.fromEntries(companies.filter(c=>theirs[String(c.id)]).map(c=>[String(c.id),theirs[String(c.id)]])));
+  };
+  const everythingOpen=!hiddenSet.size&&companies.every(c=>FIRM_SECTIONS.every(s=>ACTIONS.every(a=>rightsOf(c.id,s)[a])&&!rightsOf(c.id,s).types));
   const own=employee?assignments.filter(a=>a.employee_id===employee.id):[];
   const fixedCount=own.length;
   const warnings:string[]=[];
   if(hiddenSet.has("tasks.fixed")&&fixedCount)warnings.push(`Bu işçiyə ${fixedCount} sabit iş təyin olunub — “Sabit işlər” bağlı olsa, onları icra edildi kimi işarələyə bilməyəcək.`);
-  if(!hiddenSet.has("tasks.requests")&&hiddenSet.has(actionKey("tasks.requests","edit"))&&employee?.is_department_head)warnings.push("Bu işçi şöbə rəisidir — “Sorğular”da “Dəyişiklik et” bağlı olsa, şöbəsinə gələn sorğuları qəbul edib cavablandıra bilməyəcək.");
-  if(hiddenSet.has("tasks.requests")&&employee?.is_department_head)warnings.push("Bu işçi şöbə rəisidir — “Sorğular” bağlı olsa, şöbəsinə gələn sorğuları qəbul edə bilməyəcək, onları yalnız admin idarə edəcək.");
+  if(employee?.is_department_head){
+    const noRequests=companies.filter(c=>!rightsOf(c.id,"tasks.requests").edit).map(c=>c.name);
+    if(noRequests.length)warnings.push(`Bu işçi şöbə rəisidir — ${noRequests.join(", ")} firmasında “Sorğular”da “Dəyişiklik et” bağlı olsa, şöbəsinə gələn sorğuları qəbul edib cavablandıra bilməyəcək.`);
+  }
+  for(const c of companies)for(const s of TYPED_SECTIONS){const r=rightsOf(c.id,s);if(r.view&&r.types&&!r.types.length)warnings.push(`${c.name}: “${s==="documents.incoming"?"Daxil olan":"Çıxan"} sənədlər”də “Seçilmiş növlər” seçilib, amma heç bir növ işarələnməyib — bu firmada həmin sənədlər görünməyəcək.`)}
+  // One group (a box with a header checkbox, a count and its rows); the rows' state comes from the tab's own accessors.
+  const renderGroup=(group:SectionGroup,state:{shown:(key:string)=>boolean;all:(key:string)=>boolean;has:(key:string,a:SectionAction)=>boolean;setAll:(keys:string[],on:boolean)=>void;setOne:(key:string,a:SectionAction,on:boolean)=>void;leveled:(key:string)=>boolean;extra?:(key:string)=>React.ReactNode})=>{
+    const toggleable=group.children.length?group.children.filter(c=>!c.locked).map(c=>c.key):[group.key];
+    const visibleCount=toggleable.filter(state.shown).length;
+    const hasLocked=group.children.some(c=>c.locked);
+    const allVisible=visibleCount===toggleable.length;
+    const total=group.children.length||1;
+    const shown=group.children.length?group.children.filter(c=>c.locked||state.shown(c.key)).length:visibleCount;
+    const groupKey=`${activeTab}:${group.key}`;
+    const expanded=openGroups.has(groupKey);
+    return <div key={group.key} className={`permissiongroup${expanded?" open":""}`}>
+      <div className="permissionrow">
+        <input type="checkbox" aria-label={`${group.label}: hamısı`} checked={allVisible||hasLocked&&visibleCount>0} ref={el=>{if(el)el.indeterminate=visibleCount>0&&!allVisible}} onChange={()=>state.setAll(toggleable,!allVisible)}/>
+        {group.children.length>0?<button type="button" className="permissiontoggle" aria-expanded={expanded} onClick={()=>toggleGroup(groupKey)}><ChevronDown/><span>{group.label}</span></button>:<span className="permissiontoggle plain"><span>{group.label}</span></span>}
+        <small className={shown===total?"permissioncount all":shown===0?"permissioncount none":"permissioncount"}>{shown===total?"hamısı açıq":shown===0?"bağlı":`${shown}/${total} açıq`}</small>
+      </div>
+      {expanded&&group.children.length>0&&<div className="permissionchildren">{group.children.map(child=>state.leveled(child.key)?<div key={child.key} className="permissionleveled">
+        <label><input type="checkbox" checked={state.all(child.key)} ref={el=>{if(el)el.indeterminate=state.shown(child.key)&&!state.all(child.key)}} onChange={()=>state.setAll([child.key],!state.all(child.key))}/><span>{child.label}</span>{child.optIn&&<small>standart olaraq bağlıdır</small>}</label>
+        <div className="permissionactions">{ACTIONS.map(a=><label key={a}><input type="checkbox" checked={state.has(child.key,a)} onChange={e=>state.setOne(child.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
+        {state.extra?.(child.key)}
+      </div>:<label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||state.shown(child.key)} disabled={child.locked} onChange={e=>state.setAll([child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}{child.optIn&&<small>standart olaraq bağlıdır</small>}</label>)}</div>}
+    </div>;
+  };
+  const generalState={
+    shown:(key:string)=>!hiddenSet.has(key),
+    all:(key:string)=>ACTIONS.every(a=>!hiddenSet.has(actionKey(key,a))),
+    has:(key:string,a:SectionAction)=>!hiddenSet.has(actionKey(key,a)),
+    setAll:setKeys, setOne:setAction, leveled:isLeveled,
+  };
+  // "Sənəd növləri" under Çıxan / Daxil olan sənədlər of a firm.
+  const typePicker=(companyId:number,section:string)=>{
+    if(!(TYPED_SECTIONS as readonly string[]).includes(section))return null;
+    const r=rightsOf(companyId,section);
+    if(!r.view)return null;
+    const list=firmTemplates(companyId,section);
+    const chosen=new Set(r.types||[]);
+    return <div className="permissiontypes">
+      <span>Sənəd növləri:</span>
+      <label><input type="radio" checked={!r.types} onChange={()=>setFirmTypes(companyId,section,null)}/>Bütün növlər</label>
+      <label><input type="radio" checked={Boolean(r.types)} onChange={()=>setFirmTypes(companyId,section,r.types||[])}/>Seçilmiş növlər</label>
+      {r.types&&<div className="permissiontypelist">{list.length?list.map(t=><label key={t.id}><input type="checkbox" checked={chosen.has(t.id)} onChange={e=>setFirmTypes(companyId,section,e.target.checked?[...chosen,t.id]:[...chosen].filter(id=>id!==t.id))}/>{t.name}</label>):<small>Bu firmanın “{section==="documents.incoming"?"Daxil olan":"Çıxan"} sənəd” şablonu yoxdur (Sənədlər → Şablonlar).</small>}</div>}
+      {r.types&&<small className="permissiontypenote">Yalnız seçilmiş növlərin sənədlərini görür və qeydə alır; dəyişiklik və silmə yalnız özünün qeydə aldığı sənədlərdə.</small>}
+    </div>;
+  };
+  const firmState=(companyId:number)=>({
+    shown:(key:string)=>rightsOf(companyId,key).view,
+    all:(key:string)=>ACTIONS.every(a=>rightsOf(companyId,key)[a]),
+    has:(key:string,a:SectionAction)=>rightsOf(companyId,key)[a],
+    setAll:(keys:string[],on:boolean)=>setFirmAll(companyId,keys,on),
+    setOne:(key:string,a:SectionAction,on:boolean)=>setFirmAction(companyId,key,a,on),
+    leveled:()=>true,
+    extra:(key:string)=>typePicker(companyId,key),
+  });
+  const firmOpenCount=(companyId:number)=>FIRM_SECTIONS.filter(s=>rightsOf(companyId,s).view).length;
   return <div className="permissiontree">
-    <div className="permissionhead"><b>Giriş icazələri</b><span><select value="" onChange={e=>{const source=copyFrom.find(x=>String(x.id)===e.target.value);if(source)onChange(parseHiddenSections(source.hidden_sections))}}><option value="">Başqa işçidən köçür...</option>{copyFrom.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><button type="button" disabled={!hiddenSet.size} onClick={()=>onChange(storedFromDenied(new Set()))}>Hamısını aç</button></span></div>
-    <small className="permissionnote">İşarəsi götürülən bölmə bu işçinin menyusunda görünməyəcək və serverdə də bağlanacaq. Bəzi bölmələrdə ayrıca hüquqlar var: Baxış, Əlavə et, Dəyişiklik et, Sil. 🔒 olan bəndlər həmişə açıqdır. Alt başlıqları görmək üçün bölmənin adına klikləyin.</small>
-    <div className="permissiongroups">{SECTION_TREE.map(group=>{
-      const toggleable=group.children.length?group.children.filter(c=>!c.locked).map(c=>c.key):[group.key];
-      const visibleCount=toggleable.filter(key=>!hiddenSet.has(key)).length;
-      const hasLocked=group.children.some(c=>c.locked);
-      const allVisible=visibleCount===toggleable.length;
-      const total=group.children.length||1;
-      const shown=group.children.length?group.children.filter(c=>c.locked||!hiddenSet.has(c.key)).length:visibleCount;
-      const expanded=openGroups.has(group.key);
-      return <div key={group.key} className={`permissiongroup${expanded?" open":""}`}>
-        <div className="permissionrow">
-          <input type="checkbox" aria-label={`${group.label}: hamısı`} checked={allVisible||hasLocked&&visibleCount>0} ref={el=>{if(el)el.indeterminate=visibleCount>0&&!allVisible}} onChange={()=>setKeys(toggleable,!allVisible)}/>
-          {group.children.length>0?<button type="button" className="permissiontoggle" aria-expanded={expanded} onClick={()=>toggleGroup(group.key)}><ChevronDown/><span>{group.label}</span></button>:<span className="permissiontoggle plain"><span>{group.label}</span></span>}
-          <small className={shown===total?"permissioncount all":shown===0?"permissioncount none":"permissioncount"}>{shown===total?"hamısı açıq":shown===0?"bağlı":`${shown}/${total} açıq`}</small>
-        </div>
-        {expanded&&group.children.length>0&&<div className="permissionchildren">{group.children.map(child=>isLeveled(child.key)?<div key={child.key} className="permissionleveled">
-          <label><input type="checkbox" checked={allRights(child.key)} ref={el=>{if(el)el.indeterminate=!hiddenSet.has(child.key)&&!allRights(child.key)}} onChange={()=>setKeys([child.key],!allRights(child.key))}/><span>{child.label}</span>{child.optIn&&<small>standart olaraq bağlıdır</small>}</label>
-          <div className="permissionactions">{ACTIONS.map(a=><label key={a}><input type="checkbox" checked={!hiddenSet.has(actionKey(child.key,a))} onChange={e=>setAction(child.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
-        </div>:<label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||!hiddenSet.has(child.key)} disabled={child.locked} onChange={e=>setKeys([child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}{child.optIn&&<small>standart olaraq bağlıdır</small>}</label>)}</div>}
-      </div>;
-    })}</div>
+    <div className="permissionhead"><b>Giriş icazələri</b><span><select value="" onChange={e=>{const source=copyFrom.find(x=>String(x.id)===e.target.value);if(source)copyEmployee(source)}}><option value="">Başqa işçidən köçür...</option>{copyFrom.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><button type="button" disabled={everythingOpen} onClick={openAll}>Hamısını aç</button></span></div>
+    <small className="permissionnote">“Ümumi” — firmadan asılı olmayan bölmələr. Hər firmanın öz tabında həmin firmadakı hüquqlar verilir: Baxış, Əlavə et, Dəyişiklik et, Sil. İstifadəçiyə yeni firma əlavə edəndə o firmada hər şey bağlı olur. İşarəsi götürülən bölmə menyuda görünməyəcək və serverdə də bağlanacaq. 🔒 olan bəndlər həmişə açıqdır.</small>
+    <div className="permissionfirmtabs">
+      <button type="button" className={activeTab==="general"?"on":""} onClick={()=>setTab("general")}>Ümumi</button>
+      {companies.map(c=><button type="button" key={c.id} className={activeTab===String(c.id)?"on":""} onClick={()=>setTab(String(c.id))}>{c.name}<em className={firmOpenCount(c.id)?undefined:"none"}>{firmOpenCount(c.id)}/{FIRM_SECTIONS.length}</em></button>)}
+    </div>
+    {!companies.length&&<small className="permissionnote">Firma bölmələrinin (Sorğular, Sənədlər, Kadrlar) icazələri üçün əvvəlcə yuxarıda istifadəçinin firmalarını seçin.</small>}
+    {activeTab==="general"
+      ?<div className="permissiongroups">{GENERAL_TREE.map(group=>renderGroup(group,generalState))}</div>
+      :<>
+        <div className="permissionfirmhead"><b>{companies.find(c=>c.id===firmId)?.name}</b>{companies.length>1&&<button type="button" onClick={()=>{if(window.confirm("Bu firmanın icazələri istifadəçinin bütün firmalarına köçürülsün? Digər firmalarda seçilmiş sənəd növləri “Bütün növlər” olacaq."))copyFirmToAll(firmId)}}>Bu firmanın icazələrini bütün firmalara köçür</button>}</div>
+        <div className="permissiongroups">{FIRM_TREE.map(group=>renderGroup(group,firmState(firmId)))}</div>
+      </>}
     {warnings.map(w=><div key={w} className="permissionwarning">⚠ {w}</div>)}
   </div>;
 }

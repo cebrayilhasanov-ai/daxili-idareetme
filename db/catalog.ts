@@ -2,7 +2,8 @@ import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, hasFixedDue, isLongPeriod, periodCounts, periodWindow } from "@/lib/fixed-periods";
 import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
-import { parseHiddenSections, sectionRights } from "@/lib/permissions";
+import { firmAccess, parseHiddenSections, rightsForType, typeKey, type FirmAccess } from "@/lib/permissions";
+import { companyPermissionsFromStored, parseCompanyPermissions } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
 
 function db() {
@@ -146,7 +147,7 @@ async function ensureSchema() {
   // responsible_employee_id — the person who takes the document out and answers for its return (delivered_by keeps the name).
   // related_departments: JSON list of the departments the document concerns; the first is its main one (sending_department, {Şöbə}).
   // approval_flow 1: registered from Versiya 2.61 on, so it goes through the two-level approval (older documents do not).
-  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER", "return_due_date TEXT", "responsible_employee_id INTEGER", "informed_departments TEXT"]) {
+  for (const column of ["approval_flow INTEGER", "related_departments TEXT", "company_id INTEGER REFERENCES companies(id)", "file_base_name TEXT", "draft_path TEXT", "draft_key TEXT", "draft_name TEXT", "draft_size INTEGER", "draft_type TEXT", "final_path TEXT", "final_key TEXT", "final_name TEXT", "final_size INTEGER", "final_type TEXT", "signed_copy_returns INTEGER", "return_due_date TEXT", "responsible_employee_id INTEGER", "informed_departments TEXT", "created_by INTEGER"]) {
     if (!outgoingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE outgoing_documents ADD COLUMN ${column}`).run();
   }
   await db().prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT)").run();
@@ -284,6 +285,17 @@ async function ensureSchema() {
   // Sections hidden from this employee (JSON array of keys, see lib/permissions.ts); NULL = sees everything.
   if (!employeeColumns.results.some((column) => column.name === "hidden_sections")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN hidden_sections TEXT").run();
+  }
+  // Versiya 2.99: the firm sections' rights per firm (lib/permission-model.ts). On adding the column, each user's old one-for-all
+  // rights are written out for every firm they work in, so nobody's rights change; a firm added later starts fully closed.
+  if (!employeeColumns.results.some((column) => column.name === "company_permissions")) {
+    await db().prepare("ALTER TABLE employees ADD COLUMN company_permissions TEXT").run();
+    const linked = await db().prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'employee_companies'").first();
+    const rows = !linked ? [] : (await db().prepare("SELECT id, hidden_sections, (SELECT group_concat(company_id) FROM employee_companies WHERE employee_id = employees.id) AS company_ids FROM employees").all<{ id: number; hidden_sections: string | null; company_ids: string | null }>()).results;
+    for (const row of rows) {
+      const companyIds = String(row.company_ids || "").split(",").map(Number).filter(Boolean);
+      await db().prepare("UPDATE employees SET company_permissions = ? WHERE id = ?").bind(JSON.stringify(companyPermissionsFromStored(parseHiddenSections(row.hidden_sections), companyIds)), row.id).run();
+    }
   }
   if (!employeeColumns.results.some((column) => column.name === "authority_type")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN authority_type TEXT DEFAULT 'İşçi' NOT NULL").run();
@@ -777,17 +789,17 @@ async function setEmployeeCompanies(employeeId: number, companyIds: number[], co
   }
 }
 
-export async function createEmployee(input: { name: string; position?: string; email?: string; mainCompanyId?: number | null; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string; hiddenSections?: unknown }) {
+export async function createEmployee(input: { name: string; position?: string; email?: string; mainCompanyId?: number | null; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string; hiddenSections?: unknown; companyPermissions?: unknown }) {
   await ensureSchema();
   const hidden = parseHiddenSections(input.hiddenSections);
-  const result = await db().prepare("INSERT INTO employees (name, position, email, main_company_id, active, avatar_key, hidden_sections, created_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)")
-    .bind(input.name, input.position || "Personal", input.email || null, Number(input.mainCompanyId) || null, input.avatarKey || null, hidden.length ? JSON.stringify(hidden) : null, new Date().toISOString()).run();
+  const result = await db().prepare("INSERT INTO employees (name, position, email, main_company_id, active, avatar_key, hidden_sections, company_permissions, created_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)")
+    .bind(input.name, input.position || "Personal", input.email || null, Number(input.mainCompanyId) || null, input.avatarKey || null, hidden.length ? JSON.stringify(hidden) : null, JSON.stringify(firmPermissionsFor(input.companyPermissions, input.companyIds ?? [])), new Date().toISOString()).run();
   const employeeId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.companyIds?.length) await setEmployeeCompanies(employeeId, input.companyIds, input.companyPositions);
   return employeeId;
 }
 
-export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null; hiddenSections?: unknown }) {
+export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null; hiddenSections?: unknown; companyPermissions?: unknown }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("İstifadəçi tapılmadı.");
@@ -798,6 +810,16 @@ export async function updateEmployee(input: { id: number; name?: string; positio
     const hidden = parseHiddenSections(input.hiddenSections);
     await db().prepare("UPDATE employees SET hidden_sections = ? WHERE id = ?").bind(hidden.length ? JSON.stringify(hidden) : null, input.id).run();
   }
+  // Versiya 2.99: the rights per firm — only for the firms the user works in (a removed firm takes its rights with it).
+  if (input.companyPermissions !== undefined || input.companyIds !== undefined) {
+    const companyIds = input.companyIds ?? (await db().prepare("SELECT company_id FROM employee_companies WHERE employee_id = ?").bind(input.id).all<{ company_id: number }>()).results.map((r) => r.company_id);
+    await db().prepare("UPDATE employees SET company_permissions = ? WHERE id = ?").bind(JSON.stringify(firmPermissionsFor(input.companyPermissions ?? current.company_permissions, companyIds)), input.id).run();
+  }
+}
+
+function firmPermissionsFor(raw: unknown, companyIds: number[]) {
+  const all = parseCompanyPermissions(raw);
+  return Object.fromEntries(companyIds.map(String).filter((id) => all[id]).map((id) => [id, all[id]]));
 }
 
 export async function deleteEmployee(id: number) {
@@ -1736,13 +1758,14 @@ function outgoingDepartments(row: Record<string, unknown>) {
 }
 function outgoingRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>) {
   const companyId = Number(row.company_id);
-  const registrarHere = access.admin || (access.registrar && (!access.registrarFirms || access.registrarFirms.includes(companyId)));
+  const may = registrarRights(access, user, row);
+  const registrarHere = may.here;
   const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
   const heads = new Set(access.structure.headedBy(companyId, user.employeeId));
   const head = outgoingDepartments(row).some((d) => heads.has(d));
   const informed = parseDepartments(row.informed_departments).some((d) => heads.has(d));
   const responsible = Boolean(user.employeeId && Number(row.responsible_employee_id) === user.employeeId);
-  return { registrarHere, director, head, informed, responsible, visible: registrarHere || director || head || informed || responsible };
+  return { registrarHere, may, director, head, informed, responsible, visible: registrarHere || director || head || informed || responsible };
 }
 async function outgoingAccess(user: SessionUser): Promise<IncomingAccess> {
   return registrarAccess(user, "documents.outgoing");
@@ -1778,10 +1801,10 @@ export async function getOutgoingDocuments(user: SessionUser) {
       // Versiya 2.86: whose bell rings when the signed copy is late — the registrars and the related departments' heads.
       overdue_watch: rights.registrarHere || rights.head,
       can: {
-        edit: rights.registrarHere && access.may.edit && editable,
-        upload: rights.registrarHere && (access.admin || !approval.final) && (access.may.edit || (access.may.add && !hasOutgoingFile(row, "draft"))),
-        uploadFinal: rights.registrarHere && (access.admin || !approval.final) && access.may.edit,
-        remove: access.admin || (rights.registrarHere && access.may.delete && editable && !hasOutgoingFile(row, "final")),
+        edit: rights.may.edit && editable,
+        upload: rights.registrarHere && (access.admin || !approval.final) && (rights.may.edit || (rights.may.add && !hasOutgoingFile(row, "draft"))),
+        uploadFinal: rights.registrarHere && (access.admin || !approval.final) && rights.may.edit,
+        remove: access.admin || (rights.may.delete && editable && !hasOutgoingFile(row, "final")),
       },
     }];
   });
@@ -1800,8 +1823,9 @@ export async function overdueSignedCopies(user: SessionUser) {
 // The list rows read as plain records (getOutgoingDocuments spreads the table row into them).
 const outgoingRows = async (user: SessionUser) => (await getOutgoingDocuments(user)) as unknown as Array<Record<string, unknown>>;
 
-export async function canRegisterOutgoing(user: SessionUser) {
-  return (await outgoingAccess(user)).may.add;
+// Versiya 2.99: where (and which types) this user registers — the page offers only those firms and types.
+export async function outgoingRegisterTargets(user: SessionUser) {
+  return registerTargets(await outgoingAccess(user));
 }
 const hasOutgoingFile = (row: Record<string, unknown>, kind: "draft" | "final") => Boolean(row[`${kind}_name`] || row[`${kind}_path`] || row[`${kind}_key`]);
 
@@ -1814,6 +1838,7 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const scope = await outgoingCompanyScope(user);
   if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
   const docType = input.documentType?.trim() || "";
+  requireRegisterType(await outgoingAccess(user), companyId, docType);
   const related = JSON.parse(await documentDepartments(companyId, "outgoing", docType, input.relatedDepartments)) as string[];
   const department = related[0];
   const informed = await informedDepartments(companyId, input.informedDepartments, related);
@@ -1831,9 +1856,9 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
   // Daxil olma No / tarixi are filled when the signed document comes back (saveOutgoingFile), not typed at creation.
   const result = await db().prepare(`INSERT INTO outgoing_documents
-    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
-    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, phone, input.note || null, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related)).run();
+    (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`)
+    .bind(companyId, outgoingNo, input.outgoingDate || null, department, docType || null, input.sendingMethod || null, input.deliveredBy || null, input.copies || null, documentNumber, input.documentDate || null, input.voen || null, input.organizationName || null, phone, input.note || null, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), new Date().toISOString(), JSON.stringify(related), user.id).run();
   const id = Number(result.meta.last_row_id);
   // Versiya 2.75: who takes the document out (answers for the signed copy) and by when that copy must be back.
   const due = await returnDueFor(companyId, docType, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), input.outgoingDate);
@@ -1846,7 +1871,7 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
   const current = await db().prepare("SELECT * FROM outgoing_documents WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
   const access = await outgoingAccess(user);
-  if (!outgoingRights(access, user, current).registrarHere || !access.may.edit) throw new Error("FORBIDDEN");
+  if (!outgoingRights(access, user, current).may.edit) throw new Error("FORBIDDEN");
   if (!access.admin && (await approvalStateFor("outgoing", current, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin dəyişə bilər.");
   // Only the admin moves a document to another firm or types the Daxil olma No / tarixi by hand (they come with the signed copy).
   const companyId = access.admin && input.companyId ? Number(input.companyId) : Number(current.company_id) || null;
@@ -1857,6 +1882,8 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
   let department = current.sending_department as string | null;
   const docType = input.documentType ?? current.document_type;
   const typeChanged = input.documentType !== undefined && String(input.documentType || "").trim() !== String(current.document_type || "").trim();
+  // A registrar narrowed to some types (Versiya 2.99) may not move a document to a type outside them.
+  if (typeChanged && companyId) requireRegisterType(access, companyId, docType, "edit");
   if ((input.relatedDepartments !== undefined || typeChanged) && companyId) {
     related = await documentDepartments(companyId, "outgoing", docType, input.relatedDepartments);
     department = (JSON.parse(related) as string[])[0];
@@ -1916,7 +1943,7 @@ export async function deleteOutgoingDocument(user: SessionUser, id: number) {
   if (!row) throw new Error("Sənəd tapılmadı.");
   const access = await outgoingAccess(user);
   const rights = outgoingRights(access, user, row);
-  if (!access.may.delete) throw new Error("FORBIDDEN");
+  if (!rights.may.delete) throw new Error("FORBIDDEN");
   if (!access.admin && (await approvalStateFor("outgoing", row, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin silə bilər.");
   if (!access.admin && !(rights.registrarHere && !row.final_name && !row.final_path && !row.final_key)) throw new Error("Hazır (imzalı) sənədi yüklənmiş sənədi yalnız admin silə bilər.");
   const current = { draft_key: row.draft_key as string | null, final_key: row.final_key as string | null };
@@ -2043,9 +2070,10 @@ export async function saveOutgoingFile(user: SessionUser, input: { id: number; k
   const kind = input.kind;
   const access = await outgoingAccess(user);
   if (!access.admin) {
-    if (!outgoingRights(access, user, record).registrarHere) throw new Error("FORBIDDEN");
+    const { registrarHere, may } = outgoingRights(access, user, record);
+    if (!registrarHere) throw new Error("FORBIDDEN");
     // Əlavə et uploads into an empty slot; replacing a file and the ready (signed) document need Dəyişiklik et.
-    if (!access.may.edit && !(access.may.add && kind === "draft" && !hasOutgoingFile(record, "draft"))) throw new Error("FORBIDDEN");
+    if (!may.edit && !(may.add && kind === "draft" && !hasOutgoingFile(record, "draft"))) throw new Error("FORBIDDEN");
   }
   const values = documentValues(record);
   const template = record.document_type
@@ -2164,12 +2192,36 @@ function incomingValues(record: Record<string, unknown>) {
 // see it. Other staff of those departments no longer do.
 // Since Versiya 2.62 the registrar's work is split into rights (may): Baxış shows the firm's documents, Əlavə et registers new
 // ones (and uploads a file where none is yet), Dəyişiklik et corrects them and replaces files, Sil deletes them.
-type IncomingAccess = { admin: boolean; registrar: boolean; may: { add: boolean; edit: boolean; delete: boolean }; registrarFirms: number[] | null; structure: Awaited<ReturnType<typeof companyDepartments>> };
+// Since Versiya 2.99 these rights are given per firm, and in a firm they may be narrowed to some document types (templates):
+// such a registrar sees, registers and handles only documents of those types, and corrects or deletes only the ones they registered.
+type IncomingAccess = { admin: boolean; rights: FirmAccess; group: "incoming" | "outgoing"; registrarFirms: number[] | null; structure: Awaited<ReturnType<typeof companyDepartments>> };
 async function registrarAccess(user: SessionUser, section: "documents.incoming" | "documents.outgoing"): Promise<IncomingAccess> {
-  const admin = user.role === "admin";
-  const rights = admin ? { view: true, add: true, edit: true, delete: true } : await sectionRights(user, section);
-  const registrar = rights.view;
-  return { admin, registrar, may: { add: rights.add, edit: rights.edit, delete: rights.delete }, registrarFirms: admin ? null : registrar ? await outgoingCompanyScope(user) : [], structure: await companyDepartments() };
+  const rights = await firmAccess(user, section);
+  return { admin: rights.admin, rights, group: section === "documents.incoming" ? "incoming" : "outgoing", registrarFirms: rights.firms("view"), structure: await companyDepartments() };
+}
+function registrarRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>) {
+  if (access.admin) return { here: true, add: true, edit: true, delete: true };
+  const firm = access.rights.firm(Number(row.company_id));
+  const r = rightsForType(firm, row.document_type);
+  const own = !firm.types || Number(row.created_by) === user.id;
+  return { here: r.view, add: r.add && own, edit: r.edit && own, delete: r.delete && own };
+}
+// Where this user registers documents: per firm, every type (types null) or only the names of the listed templates.
+async function registerTargets(access: IncomingAccess) {
+  const firms = access.rights.firms("add");
+  const ids = firms ?? (await db().prepare("SELECT id FROM companies WHERE active = 1").all<{ id: number }>()).results.map((c) => c.id);
+  const templates = (await db().prepare("SELECT company_id, name FROM document_templates WHERE template_group = ?").bind(access.group).all<{ company_id: number; name: string }>()).results;
+  return ids.map((companyId) => {
+    const types = access.rights.firm(companyId).types;
+    return { companyId, types: types ? templates.filter((t) => Number(t.company_id) === companyId && types.has(typeKey(t.name))).map((t) => t.name) : null };
+  });
+}
+function requireRegisterType(access: IncomingAccess, companyId: number, documentType: unknown, action: "add" | "edit" = "add") {
+  if (access.admin) return;
+  const firm = access.rights.firm(companyId);
+  if (!firm[action]) throw new Error("FORBIDDEN");
+  const type = String(documentType || "").trim();
+  if (firm.types && !firm.types.has(typeKey(type))) throw new Error(type ? `“${type}” növlü sənədlər üzrə bu firmada icazəniz yoxdur.` : "Sənədin tipini seçin.");
 }
 async function incomingAccess(user: SessionUser): Promise<IncomingAccess> {
   return registrarAccess(user, "documents.incoming");
@@ -2177,7 +2229,8 @@ async function incomingAccess(user: SessionUser): Promise<IncomingAccess> {
 const parseDepartments = (raw: unknown): string[] => { try { const list = JSON.parse(String(raw || "[]")); return Array.isArray(list) ? list.map(String) : []; } catch { return []; } };
 function incomingRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>, assignments: IncomingAssignment[], requests: IncomingRequestLink[], delegates: number[]) {
   const companyId = Number(row.company_id);
-  const registrarHere = access.admin || (access.registrar && (!access.registrarFirms || access.registrarFirms.includes(companyId)));
+  const may = registrarRights(access, user, row);
+  const registrarHere = may.here;
   const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
   const me = user.employeeId;
   const heads = new Set(access.structure.headedBy(companyId, me));
@@ -2187,7 +2240,7 @@ function incomingRights(access: IncomingAccess, user: SessionUser, row: Record<s
   const informed = parseDepartments(row.informed_departments).some((d) => heads.has(d));
   // member: may raise a request from the document (the informed heads only look at it).
   const member = head || involved;
-  return { registrarHere, director, member, visible: registrarHere || director || member || informed };
+  return { registrarHere, may, director, member, visible: registrarHere || director || member || informed };
 }
 
 // Employees a department head handed the document's task on to (Həvalə et), per incoming document.
@@ -2319,9 +2372,9 @@ export async function getIncomingDocuments(user: SessionUser) {
       locked,
       file_missing: Boolean(row.file_path && folderStore && !folderStore.exists(String(row.file_path))),
       can: {
-        edit: rights.registrarHere && access.may.edit && editable,
-        remove: access.admin || (rights.registrarHere && access.may.delete && editable && !own.length && !linked.length),
-        upload: rights.registrarHere && (access.admin || !approval.final) && (access.may.edit || (access.may.add && !row.file_name && !row.file_path && !row.file_key)),
+        edit: rights.may.edit && editable,
+        remove: access.admin || (rights.may.delete && editable && !own.length && !linked.length),
+        upload: rights.registrarHere && (access.admin || !approval.final) && (rights.may.edit || (rights.may.add && !row.file_name && !row.file_path && !row.file_key)),
         direct: rights.director && !locked && !approval.final && incomingStatus(row, own) !== "İcra olundu",
         review: rights.director && !row.director_seen_at && !own.length,
         request: rights.member || rights.director,
@@ -2336,7 +2389,9 @@ export async function getIncomingDocuments(user: SessionUser) {
   // Document types from Şablonlar (each firm's “Daxil olan sənəd” templates), with where a scan of that type is filed.
   const allTypes = (await db().prepare("SELECT company_id, name, departments, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group = 'incoming' ORDER BY name").all<{ company_id: number; name: string; departments: string | null; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results;
   const types = allTypes.filter((t) => firms.has(Number(t.company_id)));
-  return { items, departments, directorOf, types, canRegister: access.may.add };
+  // Versiya 2.99: where (and which types) this user registers — the page offers only those firms and types.
+  const registerIn = await registerTargets(access);
+  return { items, departments, directorOf, types, canRegister: registerIn.length > 0, registerIn };
 }
 
 // The director's badge: documents waiting for their look (for the admin: in every firm).
@@ -2424,6 +2479,7 @@ export async function createIncomingDocument(user: SessionUser, input: IncomingI
   if (!companyId) throw new Error("Firma seçilməyib.");
   const scope = await incomingScope(user);
   if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
+  requireRegisterType(await incomingAccess(user), companyId, input.documentType);
   const sender = await senderFromVoen(input.senderVoen, input.senderName);
   const related = await documentDepartments(companyId, "incoming", input.documentType, input.relatedDepartments);
   const informed = await informedDepartments(companyId, input.informedDepartments, parseDepartments(related));
@@ -2440,8 +2496,9 @@ export async function createIncomingDocument(user: SessionUser, input: IncomingI
 export async function updateIncomingDocument(user: SessionUser, input: IncomingInput & { id: number }) {
   await ensureSchema();
   const { record: current, access, rights } = await incomingForAction(user, input.id);
-  if (!rights.registrarHere || !access.may.edit) throw new Error("FORBIDDEN");
+  if (!rights.may.edit) throw new Error("FORBIDDEN");
   if (!access.admin && (await approvalStateFor("incoming", current, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin dəyişə bilər.");
+  if (input.documentType !== undefined && String(input.documentType || "").trim() !== String(current.document_type || "").trim()) requireRegisterType(access, Number(current.company_id), input.documentType, "edit");
   const pick = (value: string | undefined, fallback: unknown) => (value === undefined ? fallback : value.trim() || null);
   const sender = input.senderVoen !== undefined || input.senderName !== undefined
     ? await senderFromVoen(input.senderVoen ?? String(current.sender_voen || ""), input.senderName ?? String(current.sender_name || ""))
@@ -2462,7 +2519,7 @@ export async function updateIncomingDocument(user: SessionUser, input: IncomingI
 export async function deleteIncomingDocument(user: SessionUser, id: number) {
   await ensureSchema();
   const { record: current, access, assignments, requests, rights } = await incomingForAction(user, id);
-  if (!access.may.delete) throw new Error("FORBIDDEN");
+  if (!rights.may.delete) throw new Error("FORBIDDEN");
   if (!access.admin && (await approvalStateFor("incoming", current, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin silə bilər.");
   if (!access.admin && !(rights.registrarHere && !assignments.length && !requests.length)) throw new Error("Sənəd üzrə tapşırıq və ya sorğu var — onu yalnız admin silə bilər.");
   // Tasks not started yet go with the document, approved ones stay in the heads' history; one in progress blocks the delete.
@@ -2548,9 +2605,10 @@ export async function saveIncomingFile(user: SessionUser, input: { id: number; f
   const record = await incomingRecord(user, input.id);
   const access = await incomingAccess(user);
   if (!access.admin) {
-    if (!incomingRights(access, user, record, [], [], []).registrarHere) throw new Error("FORBIDDEN");
+    const { registrarHere, may } = incomingRights(access, user, record, [], [], []);
+    if (!registrarHere) throw new Error("FORBIDDEN");
     // Əlavə et uploads the scan of a document that has none yet; replacing it needs Dəyişiklik et.
-    if (!access.may.edit && !(access.may.add && !record.file_name && !record.file_path && !record.file_key)) throw new Error("FORBIDDEN");
+    if (!may.edit && !(may.add && !record.file_name && !record.file_path && !record.file_key)) throw new Error("FORBIDDEN");
   }
   const values = incomingValues(record);
   // The folder and naming rule come from the template of the document's type (Şablonlar), like for outgoing documents.

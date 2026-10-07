@@ -26,7 +26,13 @@ export async function departmentScope(user: SessionUser): Promise<DepartmentScop
   return scope;
 }
 
-export const inScope = (scope: DepartmentScope, companyId: unknown, department: unknown) =>
+// Versiya 2.99: the rights are per firm, so the scope of one right keeps only the firms where it is given (null firms = all).
+export function narrowScope(scope: DepartmentScope, firms: number[] | null): DepartmentScope {
+  if (scope === null || firms === null) return scope;
+  return new Map([...scope].filter(([companyId]) => firms.includes(companyId)));
+}
+
+export const inScope =(scope: DepartmentScope, companyId: unknown, department: unknown) =>
   scope === null || Boolean(companyId && department && scope.get(Number(companyId))?.has(String(department).trim()));
 
 export const scopeCompanyIds = (scope: DepartmentScope) => (scope ? [...scope.keys()] : null);

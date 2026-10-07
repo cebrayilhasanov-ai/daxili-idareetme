@@ -1,6 +1,6 @@
 import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, personalWorkAccess, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
-import { requireAction, requireSection, sectionRights } from "@/lib/permissions";
+import { firmAccess, requireAction, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
 
 async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
@@ -8,6 +8,11 @@ async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, perso
   if (user.role === "admin") return;
   const work = await env.DB.prepare("SELECT user_id FROM personal_works WHERE id = ?").bind(personalWorkId).first<{ user_id: number }>();
   if (!work || work.user_id !== user.id) throw new Error("FORBIDDEN");
+}
+
+async function mayRequestFrom(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
+  const work = await env.DB.prepare("SELECT company_id FROM personal_works WHERE id = ?").bind(personalWorkId).first<{ company_id: number | null }>();
+  return Boolean(work?.company_id && (await firmAccess(user, "tasks.requests")).firm(work.company_id).add);
 }
 
 function authError(error: unknown) {
@@ -27,8 +32,8 @@ export async function GET(request: Request) {
     if (!access) throw new Error("FORBIDDEN");
     // Versiya 2.97: the admin gives no tasks or requests from a work's steps, so gets no candidates or targets either.
     if (access === "supervisor" || user.role === "admin") return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: [], canRequest: false, requestDepartments: [], ownDepartment: null });
-    // A step can be sent to another department only by someone who may add Sorğular.
-    const canRequest = (await sectionRights(user, "tasks.requests")).add;
+    // A step can be sent to another department only by someone who may add Sorğular in the work's firm (Versiya 2.99: per firm).
+    const canRequest = await mayRequestFrom(user, personalWorkId);
     const targets = canRequest ? await getPersonalWorkRequestTargets(personalWorkId, user.employeeId) : { departments: [], ownDepartment: null };
     return Response.json({ items: await getPersonalWorkChecklist(personalWorkId), candidates: await getPersonalWorkDelegateCandidates(personalWorkId), canRequest, requestDepartments: targets.departments, ownDepartment: targets.ownDepartment });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Siyahı açıla bilmədi." }, { status: 500 }); }
@@ -56,6 +61,7 @@ export async function PATCH(request: Request) {
     if (user.role === "admin" && (body.requestDepartment || body.delegateEmployeeId)) return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     if (body.requestDepartment) {
       await requireAction(user, "tasks.requests", "add");
+      if (!(await mayRequestFrom(user, existing.personal_work_id))) throw new Error("FORBIDDEN");
       const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, attachmentKey: body.attachmentKey, attachmentName: body.attachmentName, attachmentSize: body.attachmentSize, attachmentType: body.attachmentType });
       return Response.json({ items });
     }

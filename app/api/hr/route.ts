@@ -1,8 +1,8 @@
 import { createHrCustomer, deleteHrCalendarDay, deleteHrEducation, deleteHrEmployee, deleteHrFamilyMember, deleteHrLeave, getHrCustomerReport, saveHrEducation, saveHrFamilyMember, saveHrMaritalStatus, fillHrSalaries, getHrData, hrEmployeeLabel, saveHrCalendarDay, saveHrEmployee, saveHrLeave, saveHrParams, saveHrSalary, seedHrCalendar } from "@/db/hr";
 import { requireUser } from "@/lib/auth";
-import { requireAction, requireAnyAction, requireSection, sectionRights } from "@/lib/permissions";
+import { firmAccess, requireAction, requireAnyAction, requireSection, sectionRights, type SectionAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
-import { departmentScope, inScope, requireCardRowInScope, requireHrEmployeeInScope, scopeHrData } from "@/db/department-scope";
+import { departmentScope, inScope, narrowScope, requireCardRowInScope, requireHrEmployeeInScope, scopeHrData } from "@/db/department-scope";
 
 // HR register: the admin, and employees the admin has explicitly given "Personallar" (closed by default).
 // Rights (Versiya 2.62): Əlavə et — a new worker card; Dəyişiklik et — everything inside a card (leave, family, education,
@@ -16,13 +16,19 @@ function authError(error: unknown) {
   return null;
 }
 
+// Versiya 2.99: the rights are per firm — each right reaches the cards of the firms where it is given.
+async function hrScope(user: Awaited<ReturnType<typeof requireUser>>, action: SectionAction) {
+  const [scope, access] = await Promise.all([departmentScope(user), firmAccess(user, "hr.personnel")]);
+  return narrowScope(scope, access.firms(action));
+}
+
 async function hrUser(request: Request) {
   return requireSection(await requireUser(request), "hr.personnel");
 }
 
 // Every answer carries the viewer's rights, so the page offers only what is allowed.
 async function hrBody(user: Awaited<ReturnType<typeof requireUser>>, extra: Record<string, unknown> = {}) {
-  const [data, rights, scope] = await Promise.all([getHrData(), sectionRights(user, "hr.personnel"), departmentScope(user)]);
+  const [data, rights, scope] = await Promise.all([getHrData(), sectionRights(user, "hr.personnel"), hrScope(user, "view")]);
   return { ...scopeHrData(data, scope), rights: { add: rights.add, edit: rights.edit, delete: rights.delete }, ...extra };
 }
 
@@ -30,7 +36,7 @@ export async function GET(request: Request) {
   try {
     const user = await hrUser(request);
     if (new URL(request.url).searchParams.get("report") === "customers") {
-      const scope = await departmentScope(user);
+      const scope = await hrScope(user, "view");
       const rows = (await getHrCustomerReport()) as Array<Record<string, unknown>>;
       if (scope === null) return Response.json({ rows });
       const visible = new Set(((scopeHrData(await getHrData(), scope).employees) as Array<{ id: number }>).map((e) => e.id));
@@ -46,8 +52,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (body.action === "customer") await requireAnyAction(user, "hr.personnel", ["add", "edit"]);
     else await requireAction(user, "hr.personnel", body.action === "employee" && !body.id ? "add" : "edit");
-    // A card is saved only into, and only from, a department the user oversees.
-    const scope = await departmentScope(user);
+    // A card is saved only into, and only from, a department the user oversees — in a firm where the right is given.
+    const scope = await hrScope(user, body.action === "employee" && !body.id ? "add" : "edit");
     if (body.action === "employee") {
       if (body.id) await requireHrEmployeeInScope(scope, Number(body.id));
       if (!inScope(scope, body.companyId, body.department)) throw new Error(scope && (!body.companyId || !body.department) ? "Firma və şöbəni seçin." : "FORBIDDEN");
@@ -83,7 +89,7 @@ export async function DELETE(request: Request) {
     const params = new URL(request.url).searchParams;
     const type = params.get("type");
     await requireAction(user, "hr.personnel", type === "employee" ? "delete" : "edit");
-    const scope = await departmentScope(user);
+    const scope = await hrScope(user, type === "employee" ? "delete" : "edit");
     if (type === "employee") await requireHrEmployeeInScope(scope, Number(params.get("id")));
     else if (type === "leave" || type === "family" || type === "education") await requireCardRowInScope(scope, type, Number(params.get("id")));
     if (type === "employee") {
