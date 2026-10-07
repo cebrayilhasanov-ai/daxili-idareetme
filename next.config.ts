@@ -17,6 +17,13 @@ const nextConfig: NextConfig = {
   typescript: {
     tsconfigPath: "tsconfig.local.json",
   },
+  // vinext checks every multipart POST (file uploads to /api/... too) against the server-action body limit — 1 MB by
+  // default — before the route handler runs, so a larger file failed with "Payload Too Large". The routes themselves allow 25 MB.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "30mb",
+    },
+  },
   turbopack: {
     resolveAlias: {
       "@/lib/runtime": "./lib/runtime.local.ts",
