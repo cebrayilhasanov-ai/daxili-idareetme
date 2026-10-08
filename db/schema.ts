@@ -95,6 +95,7 @@ export const personalWorkChecklistItems = sqliteTable("personal_work_checklist_i
   id: integer("id").primaryKey({ autoIncrement: true }),
   personalWorkId: integer("personal_work_id").notNull().references(() => personalWorks.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  description: text("description"),
   done: integer("done", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull(),
 });

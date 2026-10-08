@@ -265,6 +265,8 @@ async function ensureSchema() {
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_name TEXT").run();
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_size INTEGER").run();
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_type TEXT").run();
+  // Versiya 3.05: a step has its own description (the first step gets the work's).
+  if (!checklistItemColumns.results.some((column) => column.name === "description")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN description TEXT").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
@@ -1329,6 +1331,14 @@ export async function createPersonalWork(input: { userId: number; actorName?: st
   // Versiya 3.04: up to 10 files (db/attachments.ts).
   if (input.files?.length) await setFiles("personal_work", workId, input.files);
   await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", `${title}${input.files?.length ? `\nFayl: ${fileNames(input.files)}` : ""}`);
+  // Versiya 3.05: the work starts with its first step — its name, description and copies of its files — so it can be done,
+  // handed to an employee or sent to a department straight away. Later edits of the work do not change the step.
+  const step = await db().prepare("INSERT INTO personal_work_checklist_items (personal_work_id, title, description, done, created_at) VALUES (?, ?, ?, 0, ?)")
+    .bind(workId, title, input.description?.trim() || null, new Date().toISOString()).run();
+  const stepId = Number((step as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
+  const stepFiles = input.files?.length ? await copyFiles(input.files) : [];
+  if (stepFiles.length) await setFiles("personal_work_item", stepId, stepFiles);
+  await recordPersonalWorkEvent(workId, input.actorName, "Addım əlavə edildi", `${title} (iş yaradılanda avtomatik)${stepFiles.length ? `\nFayl: ${fileNames(stepFiles)}` : ""}`);
 }
 
 // What changed in a list of files, for the history.
@@ -1439,6 +1449,22 @@ export async function getPersonalWorkRequestTargets(personalWorkId: number, empl
   return { departments: lookup.departmentsOf(work.company_id).map((d) => d.name).filter((name) => name !== ownDepartment), ownDepartment };
 }
 
+// Versiya 3.05: what goes with a step when it is handed on or sent as a request — the list chosen in the dialog (the step's files
+// kept there, plus newly uploaded ones), or all the step's files when no list is given. The step's own files go as copies, so
+// deleting either side never orphans the other; the step itself keeps its files whatever was sent.
+async function stepFilesToSend(itemId: number, chosen?: FileRef[]) {
+  const own = await filesOf("personal_work_item", itemId);
+  if (!chosen) return copyFiles(own);
+  const ownKeys = new Set(own.map((f) => f.key));
+  const sent: FileRef[] = [];
+  for (const f of chosen) {
+    if (!ownKeys.has(f.key)) { sent.push(f); continue; }
+    const [copy] = await copyFiles([f]);
+    if (copy) sent.push(copy);
+  }
+  return sent;
+}
+
 // Sends a step of "İşlərim" as a request to another department of the work's firm. It is an ordinary request (Sorğular);
 // the step only keeps the link, shows the progress and the answer, and the owner ticks it off once satisfied.
 export async function requestPersonalWorkChecklistItem(user: SessionUser, input: { id: number; toDepartment: string; title?: string; description?: string; desiredDueAt?: string; files?: FileRef[] }) {
@@ -1454,8 +1480,7 @@ export async function requestPersonalWorkChecklistItem(user: SessionUser, input:
   if (item.delegated_task_id) throw new Error("Bu addım artıq işçiyə həvalə edilib.");
   const open = await openRequestOfItem(input.id);
   if (open) throw new Error(`Bu addım üzrə ${open.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır (${open.status}).`);
-  // Without new files the step's own files go along, as copies, so deleting either side never orphans the other.
-  const files = input.files?.length ? input.files : await copyFiles(await filesOf("personal_work_item", input.id));
+  const files = await stepFilesToSend(input.id, input.files);
   await createRequest(user, {
     companyId: Number(work.company_id),
     toDepartment: input.toDepartment,
@@ -1504,7 +1529,7 @@ export async function togglePersonalWorkChecklistItem(input: { id: number; actor
   return getPersonalWorkChecklist(item.personal_work_id);
 }
 
-export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; actorName?: string; employeeId: number; comment?: string }) {
+export async function delegatePersonalWorkChecklistItem(input: { id: number; userId: number; actorName?: string; employeeId: number; comment?: string; files?: FileRef[] }) {
   await ensureSchema();
   const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!item) throw new Error("İş addımı tapılmadı.");
@@ -1518,8 +1543,8 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   if (!work.company_id) throw new Error("Həvalə etmək üçün əvvəlcə işin firmasını seçin.");
   if (!work.due_at) throw new Error("Həvalə etmək üçün əvvəlcə işin son tarixini təyin edin.");
   if (!(await getPersonalWorkDelegateCandidates(Number(work.id))).some((c) => c.id === input.employeeId)) throw new Error("Bu işçi firmanın strukturuna görə sizə tabe deyil.");
-  // The task gets its own copies of the step's files (only the step's — not the work's own) so deleting either side never orphans the other.
-  const files = await copyFiles(await filesOf("personal_work_item", input.id));
+  // The task gets the files chosen in the dialog (Versiya 3.05; the step's ones as copies) — never the work's own.
+  const files = await stepFilesToSend(input.id, input.files);
   const result = await db().prepare(`INSERT INTO tasks
     (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
     .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString()).run();
@@ -1530,6 +1555,28 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   const note = input.comment?.trim();
   await recordPersonalWorkEvent(Number(item.personal_work_id), input.actorName, "Addım işçiyə verildi", `${item.title} → ${employee?.name || "işçi"}${note ? `\nŞərh: ${note}` : ""}${files.length ? `\nFayl: ${fileNames(files)}` : ""}`);
   return getPersonalWorkChecklist(Number(item.personal_work_id));
+}
+
+// Versiya 3.05: a step's name and description are edited while the step is still the owner's own — not handed on, no open request.
+export async function updatePersonalWorkChecklistItem(input: { id: number; actorName?: string; title: string; description?: string }) {
+  await ensureSchema();
+  const title = input.title?.trim();
+  if (!title) throw new Error("İş addımının adını yazın.");
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, title, description FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; title: string; description: string | null }>();
+  if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.delegated_task_id) throw new Error("Həvalə edilmiş addım redaktə edilə bilməz.");
+  const openRequest = await openRequestOfItem(input.id);
+  if (openRequest) throw new Error(`Bu addım üzrə ${openRequest.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır — addım redaktə edilə bilməz.`);
+  const work = await db().prepare("SELECT status FROM personal_works WHERE id = ?").bind(item.personal_work_id).first<{ status: string }>();
+  if (work?.status === "Tamamlanıb") throw new Error("Tamamlanmış işin addımı redaktə edilə bilməz.");
+  const description = input.description?.trim() || null;
+  const before = item.description || null;
+  if (title !== item.title || description !== before) {
+    await db().prepare("UPDATE personal_work_checklist_items SET title = ?, description = ? WHERE id = ?").bind(title, description, input.id).run();
+    const changes = [title !== item.title ? `Ad: ${item.title} → ${title}` : "", description !== before ? `Açıqlama: ${description || "silindi"}` : ""].filter(Boolean).join("\n");
+    await recordPersonalWorkEvent(item.personal_work_id, input.actorName, "Addım redaktə edildi", changes);
+  }
+  return getPersonalWorkChecklist(item.personal_work_id);
 }
 
 // Versiya 3.04: a step keeps up to 10 files — new ones are added to the list, one is removed by its key.

@@ -1,4 +1,4 @@
-import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, personalWorkAccess, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem } from "@/db/catalog";
+import { createPersonalWorkChecklistItem, delegatePersonalWorkChecklistItem, deletePersonalWorkChecklistItem, getPersonalWorkChecklist, getPersonalWorkDelegateCandidates, getPersonalWorkRequestTargets, personalWorkAccess, requestPersonalWorkChecklistItem, setPersonalWorkChecklistItemAttachment, togglePersonalWorkChecklistItem, updatePersonalWorkChecklistItem } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireAction, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
@@ -14,6 +14,13 @@ async function assertAccess(user: Awaited<ReturnType<typeof requireUser>>, perso
 async function mayRequestFrom(user: Awaited<ReturnType<typeof requireUser>>, personalWorkId: number) {
   const work = await env.DB.prepare("SELECT company_id FROM personal_works WHERE id = ?").bind(personalWorkId).first<{ company_id: number | null }>();
   return Boolean(work?.company_id && (await firmAccess(user, "tasks.requests")).firm(work.company_id).add);
+}
+
+// Versiya 3.05: the files to send with a step, as chosen in the dialog — a list (even an empty one) is taken as it is;
+// without one (an older page) the step's own files go, or the single file it sent.
+function sentFiles(body: Record<string, unknown>) {
+  if (Array.isArray(body.files)) return parseFiles(body.files);
+  return body.attachmentKey ? parseFiles(undefined, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }) : undefined;
 }
 
 function authError(error: unknown) {
@@ -63,11 +70,14 @@ export async function PATCH(request: Request) {
     if (body.requestDepartment) {
       await requireAction(user, "tasks.requests", "add");
       if (!(await mayRequestFrom(user, existing.personal_work_id))) throw new Error("FORBIDDEN");
-      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, files: parseFiles(body.files, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }) });
+      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, files: sentFiles(body) });
       return Response.json({ items });
     }
     const items = body.delegateEmployeeId
-      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, actorName: user.name, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || "") })
+      ? await delegatePersonalWorkChecklistItem({ id, userId: user.id, actorName: user.name, employeeId: Number(body.delegateEmployeeId), comment: String(body.comment || ""), files: sentFiles(body) })
+      // Versiya 3.05: a step's name and description are edited.
+      : body.edit
+        ? await updatePersonalWorkChecklistItem({ id, actorName: user.name, title: String(body.title || ""), description: body.description ? String(body.description) : undefined })
       // Versiya 3.04: files are added to a step (addFiles) or one is removed (removeFileKey).
       : body.addFiles || body.removeFileKey
         ? await setPersonalWorkChecklistItemAttachment({ id, actorName: user.name, add: parseFiles(body.addFiles), removeKey: body.removeFileKey ? String(body.removeFileKey) : undefined })
