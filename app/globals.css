@@ -267,6 +267,9 @@ body{background:radial-gradient(circle at 12% 0%,#eef2ff 0%,transparent 42%),rad
 .businessdialog:has(.taskdetailform){width:min(940px,calc(100vw - 32px))!important;max-width:940px!important}
 .taskdetailform{grid-template-columns:260px 1fr!important;align-items:start!important}
 .taskdetailleft,.taskdetailright{display:grid;gap:15px;align-content:start;min-width:0}
+/* Versiya 3.08: a personal work opens wide (up to 1320px, as far as the screen allows), so a step's name, description, files
+   and buttons fit on one line; the window can still be resized. */
+.businessdialog:has(.personalworkform){width:min(1320px,calc(100vw - 32px))!important;max-width:1320px!important}
 @media(max-width:760px){.taskdetailform{grid-template-columns:1fr!important}.businessdialog:has(.taskdetailform){width:calc(100vw - 20px)!important}}
 
 /* Tapşırığın içərisində personalın öz iş axını (checklist) */
