@@ -267,6 +267,17 @@ async function ensureSchema() {
   if (!checklistItemColumns.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN attachment_type TEXT").run();
   // Versiya 3.05: a step has its own description (the first step gets the work's).
   if (!checklistItemColumns.results.some((column) => column.name === "description")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN description TEXT").run();
+  // Versiya 3.09: the step made together with the work cannot be deleted on its own. When the column is added, the steps already
+  // made that way (since 3.05) are marked: a work's first step, created within seconds of the work, in a work whose history says so.
+  if (!checklistItemColumns.results.some((column) => column.name === "auto_created")) {
+    await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN auto_created INTEGER DEFAULT 0").run();
+    const events = await db().prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'personal_work_events'").first();
+    if (events) await db().prepare(`UPDATE personal_work_checklist_items SET auto_created = 1 WHERE id IN (
+      SELECT MIN(i.id) FROM personal_work_checklist_items i JOIN personal_works w ON w.id = i.personal_work_id
+      WHERE EXISTS (SELECT 1 FROM personal_work_events e WHERE e.personal_work_id = w.id AND e.action = 'Addım əlavə edildi' AND e.detail LIKE '%(iş yaradılanda avtomatik)%')
+      GROUP BY i.personal_work_id
+      HAVING ABS(julianday(MIN(i.created_at)) - julianday(MIN(w.created_at))) * 86400 < 10)`).run();
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
@@ -1333,7 +1344,8 @@ export async function createPersonalWork(input: { userId: number; actorName?: st
   await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", `${title}${input.files?.length ? `\nFayl: ${fileNames(input.files)}` : ""}`);
   // Versiya 3.05: the work starts with its first step — its name, description and copies of its files — so it can be done,
   // handed to an employee or sent to a department straight away. Later edits of the work do not change the step.
-  const step = await db().prepare("INSERT INTO personal_work_checklist_items (personal_work_id, title, description, done, created_at) VALUES (?, ?, ?, 0, ?)")
+  // Versiya 3.09: it is the work's main step (auto_created) — it is only edited, and goes only with the work itself.
+  const step = await db().prepare("INSERT INTO personal_work_checklist_items (personal_work_id, title, description, done, created_at, auto_created) VALUES (?, ?, ?, 0, ?, 1)")
     .bind(workId, title, input.description?.trim() || null, new Date().toISOString()).run();
   const stepId = Number((step as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   const stepFiles = input.files?.length ? await copyFiles(input.files) : [];
@@ -1601,8 +1613,9 @@ export async function setPersonalWorkChecklistItemAttachment(input: { id: number
 
 export async function deletePersonalWorkChecklistItem(input: { id: number; actorName?: string }) {
   await ensureSchema();
-  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key, title FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null; title: string }>();
+  const item = await db().prepare("SELECT personal_work_id, delegated_task_id, attachment_key, title, auto_created FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<{ personal_work_id: number; delegated_task_id: number | null; attachment_key: string | null; title: string; auto_created: number | null }>();
   if (!item) throw new Error("İş addımı tapılmadı.");
+  if (item.auto_created) throw new Error("İşin yaradılanda avtomatik yaranan 1-ci addımı silinmir — o, yalnız iş silinəndə silinir. Onu ✎ ilə redaktə edə bilərsiniz.");
   if (item.delegated_task_id) throw new Error("Həvalə edilmiş addım silinə bilməz.");
   const openRequest = await openRequestOfItem(input.id);
   if (openRequest) throw new Error(`Bu addım üzrə ${openRequest.to_department} şöbəsinə göndərilmiş sorğu hələ açıqdır (${openRequest.status}). Addım sorğu bağlanandan və ya rədd ediləndən sonra silinə bilər; “Yeni” statusda sorğunu geri çağırmaq olar.`);
