@@ -1,6 +1,7 @@
 import { env } from "@/lib/runtime";
 import { requireUser } from "@/lib/auth";
 import { requireSection } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
 
 type User = Awaited<ReturnType<typeof requireUser>>;
 
@@ -11,7 +12,17 @@ function authError(error: unknown) {
   return null;
 }
 
+// Versiya 3.11: a deleted message keeps its place as "Mesaj silindi" — its text and file are removed.
+let chatSchemaReady = false;
+async function ensureChatSchema() {
+  if (chatSchemaReady) return;
+  const columns = await env.DB.prepare("PRAGMA table_info(chat_messages)").all<{ name: string }>();
+  if (!columns.results.some((column: { name: string }) => column.name === "deleted_at")) await env.DB.prepare("ALTER TABLE chat_messages ADD COLUMN deleted_at TEXT").run();
+  chatSchemaReady = true;
+}
+
 async function ensureGeneral(user: User) {
+  await ensureChatSchema();
   let thread = await env.DB.prepare("SELECT id FROM chat_threads WHERE type = 'group' ORDER BY id LIMIT 1").first<{ id: number }>();
   if (!thread) {
     await env.DB.prepare("INSERT INTO chat_threads (type,name,created_by,created_at) VALUES ('group','Ümumi işçi qrupu',?,?)")
@@ -34,9 +45,9 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
   const threads = await env.DB.prepare(`SELECT t.id,t.type,
       CASE WHEN t.type='group' THEN t.name ELSE COALESCE(other.name,'Şəxsi söhbət') END AS name,
       COALESCE(oe.avatar_key,other.avatar_key) AS avatar_key, other.id AS other_user_id,
-      (SELECT body FROM chat_messages lm WHERE lm.thread_id=t.id ORDER BY lm.id DESC LIMIT 1) AS last_message,
+      (SELECT CASE WHEN lm.deleted_at IS NOT NULL THEN 'Mesaj silindi' ELSE lm.body END FROM chat_messages lm WHERE lm.thread_id=t.id ORDER BY lm.id DESC LIMIT 1) AS last_message,
       (SELECT created_at FROM chat_messages lm WHERE lm.thread_id=t.id ORDER BY lm.id DESC LIMIT 1) AS last_message_at,
-      (SELECT COUNT(*) FROM chat_messages um WHERE um.thread_id=t.id AND um.id>m.last_read_message_id AND um.sender_user_id!=?) AS unread
+      (SELECT COUNT(*) FROM chat_messages um WHERE um.thread_id=t.id AND um.id>m.last_read_message_id AND um.sender_user_id!=? AND um.deleted_at IS NULL) AS unread
     FROM chat_members m JOIN chat_threads t ON t.id=m.thread_id
     LEFT JOIN chat_members om ON om.thread_id=t.id AND om.user_id!=? AND t.type='direct'
     LEFT JOIN app_users other ON other.id=om.user_id
@@ -49,7 +60,7 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
     const latest = totalUnread ? await env.DB.prepare(`SELECT msg.id, msg.thread_id, msg.body, msg.attachment_key, u.name AS sender_name, COALESCE(e.avatar_key,u.avatar_key) AS sender_avatar_key
       FROM chat_messages msg JOIN chat_members m ON m.thread_id = msg.thread_id AND m.user_id = ?
       JOIN app_users u ON u.id = msg.sender_user_id LEFT JOIN employees e ON e.id = u.employee_id
-      WHERE msg.id > m.last_read_message_id AND msg.sender_user_id != ? ORDER BY msg.id DESC LIMIT 1`).bind(user.id, user.id).first<Record<string, unknown>>() : null;
+      WHERE msg.id > m.last_read_message_id AND msg.sender_user_id != ? AND msg.deleted_at IS NULL ORDER BY msg.id DESC LIMIT 1`).bind(user.id, user.id).first<Record<string, unknown>>() : null;
     const thread = latest ? (threads.results as Array<{ id: number; name: string; type: string; unread: number }>).find((t) => Number(t.id) === Number(latest.thread_id)) : null;
     return { totalUnread, latest: latest && thread ? {
       id: Number(latest.id), threadId: Number(latest.thread_id), threadName: String(thread.name || ""), threadType: String(thread.type || ""),
@@ -65,13 +76,13 @@ async function chatData(user: User, requestedThreadId = 0, summaryOnly = false) 
   const messages = await env.DB.prepare(`SELECT m.*,u.name AS sender_name,COALESCE(e.avatar_key,u.avatar_key) AS sender_avatar_key FROM chat_messages m
     JOIN app_users u ON u.id=m.sender_user_id LEFT JOIN employees e ON e.id=u.employee_id WHERE m.thread_id=? ORDER BY m.id ASC LIMIT 300`).bind(threadId).all();
   const selectedThread = threads.results.find((t: any) => Number(t.id) === threadId) as { type: string } | undefined;
-  let readUpTo = 0;
-  if (selectedThread?.type === "direct") {
-    const other = await env.DB.prepare("SELECT COALESCE(MAX(last_read_message_id),0) AS id FROM chat_members WHERE thread_id=? AND user_id!=?")
-      .bind(threadId, user.id).first<{ id: number }>();
-    readUpTo = other?.id || 0;
-  }
-  return { threads: threads.results, users: users.results, messages: messages.results, selectedThreadId: threadId, totalUnread, readUpTo };
+  // Up to which message someone else has read this conversation: ✓✓ in a direct one, and (Versiya 3.11) a message up to here can
+  // no longer be deleted — in the group as soon as at least one member has read it.
+  const other = await env.DB.prepare("SELECT COALESCE(MAX(last_read_message_id),0) AS id FROM chat_members WHERE thread_id=? AND user_id!=?")
+    .bind(threadId, user.id).first<{ id: number }>();
+  const othersReadUpTo = other?.id || 0;
+  const readUpTo = selectedThread?.type === "direct" ? othersReadUpTo : 0;
+  return { threads: threads.results, users: users.results, messages: messages.results, selectedThreadId: threadId, totalUnread, readUpTo, othersReadUpTo };
 }
 
 export async function GET(request: Request) {
@@ -115,6 +126,24 @@ export async function POST(request: Request) {
       const last = await env.DB.prepare("SELECT MAX(id) AS id FROM chat_messages WHERE thread_id=?").bind(threadId).first<{id:number}>();
       await env.DB.prepare("UPDATE chat_members SET last_read_message_id=? WHERE thread_id=? AND user_id=?").bind(last?.id||0,threadId,user.id).run();
       return Response.json(await chatData(user, threadId));
+    }
+    // Versiya 3.11: only the sender deletes, and only while no one else has read the message (the admin too — only their own).
+    if (body.action === "delete") {
+      const messageId = Number(body.messageId);
+      const target = await env.DB.prepare("SELECT thread_id, sender_user_id, attachment_key, deleted_at FROM chat_messages WHERE id=?")
+        .bind(messageId).first<{ thread_id: number; sender_user_id: number; attachment_key: string | null; deleted_at: string | null }>();
+      if (!target || !await isMember(Number(target.thread_id), user.id)) return Response.json({ error: "Mesaj tapılmadı." }, { status: 404 });
+      if (Number(target.sender_user_id) !== user.id) return Response.json({ error: "Yalnız öz mesajınızı silə bilərsiniz." }, { status: 403 });
+      if (target.deleted_at) return Response.json({ error: "Mesaj artıq silinib." }, { status: 400 });
+      const result = await env.DB.prepare(`UPDATE chat_messages SET body=NULL, attachment_key=NULL, attachment_name=NULL, attachment_size=NULL, attachment_type=NULL, deleted_at=?
+        WHERE id=? AND sender_user_id=? AND deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM chat_members cm WHERE cm.thread_id=chat_messages.thread_id AND cm.user_id!=? AND cm.last_read_message_id>=chat_messages.id)`)
+        .bind(new Date().toISOString(), messageId, user.id, user.id).run();
+      if (!result.meta?.changes) return Response.json({ error: "Mesaj artıq oxunub — silmək olmaz." }, { status: 400 });
+      if (target.attachment_key && env.FILES) await env.FILES.delete(target.attachment_key);
+      const thread = await env.DB.prepare("SELECT type FROM chat_threads WHERE id=?").bind(target.thread_id).first<{ type: string }>();
+      await logAudit(user, "Çat mesajı silindi", "chat", thread?.type === "group" ? "Ümumi işçi qrupu" : "Şəxsi söhbət");
+      return Response.json(await chatData(user, Number(target.thread_id)));
     }
     return Response.json({ error: "Əməliyyat seçilməyib." }, { status: 400 });
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Mesaj göndərilmədi." }, { status: 500 }); }
