@@ -902,68 +902,124 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .personchip{display:inline-block;font-style:normal;padding:2px 7px;border:1px solid;border-radius:999px;font-weight:800}
 /* Versiya 2.93: the frequency tabs of "Sabit işlər" sit above the admin's catalog / assignments tabs */
 .fixedfreqtabs{margin-bottom:6px}.fixedfreqtabs button{font-weight:800}
-/* Versiya 3.12: Ana səhifə → Mənim performansım */
+/* Versiya 3.12–3.13: Ana səhifə → Mənim performansım (dizayn faylı ilə eyni düzülüş) */
 .dashtabs{margin:0 0 16px}
-.perfpage{display:grid;gap:16px;margin-bottom:18px}
-.perfempty{padding:28px;color:#64748b;font-size:13px}
-.perftoolbar{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;font-size:12px;color:#52647b}
-.perftoolbar select{height:34px;border:1px solid #dbe3ee;border-radius:9px;background:#fff;padding:0 10px;font-weight:700;color:#172237}
-.perftoolbar button{display:inline-flex;align-items:center;gap:6px;height:34px;min-width:34px;justify-content:center;border:1px solid #dbe3ee;border-radius:9px;background:#fff;color:#334155;font-weight:700;cursor:pointer}
+.perfpage{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:18px;--pblue:#2563eb;--pink:#1f2a44;--pmuted:#64748b;--pline:#e6ebf2}
+.perfpage .panel{border-color:var(--pline);border-radius:12px;box-shadow:0 1px 3px #0f172a0d}
+.perfpage h3{margin:0;font-size:15px;font-weight:700;color:var(--pink)}
+.perfempty{padding:28px;color:var(--pmuted);font-size:13px}
+.perftoolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.perftoolbar .lead .dashtabs{margin:0}
+.perftoolbar .right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto;font-size:13px;color:#475569}
+.perftoolbar .right>span{margin-right:6px}
+.perftoolbar select{height:38px;min-width:150px;border:1px solid var(--pline);border-radius:8px;background:#fff;padding:0 12px;font-size:13px;font-weight:500;color:var(--pink)}
+.perftoolbar button{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;min-width:38px;border:1px solid var(--pline);border-radius:8px;background:#fff;color:#475569;font-size:13px;font-weight:500;cursor:pointer}
 .perftoolbar button:disabled{opacity:.4;cursor:default}
 .perftoolbar button svg{width:16px;height:16px}
-.perftoolbar .perfprint{padding:0 12px;color:#0A7B8C}
-.perfhead{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
-.perfcard{display:flex;align-items:center;gap:20px;padding:20px}
-.perfcard img,.perfinitials{width:104px;height:104px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 4px #e6f4f6}
-.perfinitials{display:grid;place-items:center;background:#0A7B8C;color:#fff;font-size:30px;font-weight:800}
-.perfcard h2{margin:0 0 6px;font-size:24px}
-.perfcard p{margin:4px 0;color:#52647b;font-size:13px}
-.perfcard p.perfrole{font-size:15px;color:#334155}
-.perfscore{padding:20px 22px;background:linear-gradient(135deg,#f0fbf6,#e8f6f8);border-color:#cdeee0}
-.perfscore h3{margin:0 0 8px;font-size:15px}
-.perfscore>div{display:flex;align-items:baseline;gap:6px}
-.perfscore b{font-size:52px;line-height:1;color:#12262B}
-.perfscore span{font-size:22px;color:#52647b}
-.perfscore em{margin-left:12px;font-style:normal;font-weight:800;font-size:16px}
-.perfscore em.up{color:#16a34a}.perfscore em.down{color:#dc2626}
-.perfscore small{display:block;margin-top:6px;color:#64748b;font-size:11px}
-.perfscore small.perfweights{margin-top:10px;color:#0A7B8C;font-weight:700}
+.perftoolbar .perfprint{padding:0 16px;margin-left:8px;color:var(--pink)}
+.perftop{display:grid;grid-template-columns:1fr 1.15fr;gap:24px;align-items:center;padding:18px 18px 18px 26px}
+.perfprofile{display:flex;align-items:center;gap:28px}
+.perfprofile img,.perfinitials{width:136px;height:136px;border-radius:50%;object-fit:cover;flex:none}
+.perfinitials{display:grid;place-items:center;background:#dbeafe;color:var(--pblue);font-size:40px;font-weight:700}
+.perfprofile h2{margin:0 0 8px;font-size:27px;font-weight:700;color:var(--pink)}
+.perfprofile p{display:flex;align-items:center;gap:9px;margin:7px 0;color:#475569;font-size:14px}
+.perfprofile p.role{font-size:16px;color:#475569;margin-bottom:12px}
+.perfprofile p svg{width:17px;height:17px;color:var(--pblue);flex:none}
+.perfscore{align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding:22px 28px;border-radius:12px;background:#ecf8f1}
+.perfscore h3{font-size:16px;margin-bottom:12px}
+.perfscore .row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.perfscore .row>b{font-size:58px;line-height:.9;font-weight:700;color:#12223b}
+.perfscore .row>span{font-size:24px;color:#334155;margin-right:22px}
+.perfscore .delta{display:grid;gap:2px}
+.perfscore .delta strong{display:flex;align-items:center;gap:4px;font-size:20px;font-weight:700}
+.perfscore .delta strong svg{width:20px;height:20px}
+.perfscore .delta.up strong{color:#16a34a}
+.perfscore .delta.down strong{color:#dc2626}
+.perfscore .delta small{font-size:11px;color:var(--pmuted)}
+.perfscore .target{margin-left:auto;align-self:center;padding:7px 14px;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-style:normal;font-size:13px;font-weight:600}
+.perfscore>small{margin-top:8px;font-size:12px;color:var(--pmuted)}
 .perfcards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
-.perfcards section{padding:14px 16px}
-.perfcards small{color:#52647b;font-size:11px;font-weight:700}
-.perfcards div{margin:6px 0 10px}
-.perfcards b{font-size:24px;color:#172237}
-.perfcards span{font-size:13px;color:#64748b}
+.perfcards section{display:flex;align-items:center;gap:16px;padding:18px}
+.perfcards .icon{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;flex:none}
+.perfcards .icon svg{width:24px;height:24px}
+.perfcards section>div{flex:1;min-width:0}
+.perfcards small{display:block;color:var(--pink);font-size:12px;font-weight:500}
+.perfcards p{margin:4px 0 9px}
+.perfcards p b{font-size:24px;font-weight:600;color:var(--pink)}
+.perfcards p span{font-size:15px;color:#475569}
 .perfmeter{display:block;height:6px;border-radius:6px;background:#eef2f7;overflow:hidden}
 .perfmeter i{display:block;height:100%;border-radius:6px}
-.perfmid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
-.perfmid .head{padding:16px 20px 0}
-.perfmid h3{margin:0;font-size:15px}.perfmid p{margin:2px 0 0;color:#64748b;font-size:11px}
-.perftrend{display:block;width:100%;height:auto;padding:4px 12px 10px}
-.perftrend text{font-size:10px;fill:#64748b}
-.perftrend text.val{font-weight:700;fill:#172237}
+.perftabs{display:flex;gap:6px;border-bottom:1px solid var(--pline);overflow-x:auto}
+.perftabs button{padding:10px 18px 12px;border:0;border-bottom:3px solid transparent;background:none;color:#475569;font-size:14px;font-weight:500;white-space:nowrap;cursor:pointer}
+.perftabs button.on{color:var(--pblue);border-bottom-color:var(--pblue);font-weight:600}
+.perfgrid{display:grid;grid-template-columns:1.45fr 1.05fr 1fr;grid-template-areas:"trend donut bars" "table table note" "table table plan";gap:16px}
+.perfgrid>section{padding:16px 18px;min-width:0}
+.perfgrid .trend{grid-area:trend}
+.perfgrid .donut{grid-area:donut}
+.perfgrid .bars{grid-area:bars}
+.perfgrid .table{grid-area:table;padding:16px 0 4px}
+.perfgrid .note{grid-area:note}
+.perfgrid .plan{grid-area:plan}
+.perfgrid .head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.perfgrid .table .head{padding:0 18px 12px}
+.perfgrid .head button{display:inline-flex;align-items:center;gap:5px;border:0;background:none;color:var(--pblue);font-size:12px;font-weight:500;cursor:pointer}
+.perfgrid .head button svg{width:14px;height:14px}
+.perftrend{display:block;width:100%;height:auto;margin-top:8px}
+.perftrend text{font-size:10px;fill:#475569}
+.perftrend text.val{font-weight:600;fill:var(--pink)}
 .perftrend .grid{stroke:#eef2f7}
-.perftrend .line{fill:none;stroke:#2563eb;stroke-width:2.5}
-.perftrend .area{fill:#2563eb18}
-.perftrend .dot{fill:#2563eb;stroke:#fff;stroke-width:2}
-.perflegend{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0}
-.perflegend i{width:10px;height:10px;border-radius:50%}
-.perflegend b{min-width:18px}
-.perfnone{display:block;padding:20px;color:#64748b;font-size:12px}
-.perflist{padding:14px 0 6px;overflow-x:auto}
-.perflist .fixedsubtabs{padding:0 18px 10px}
-.perflist table{width:100%;border-collapse:collapse;font-size:12px}
-.perflist th{text-align:left;padding:9px 18px;background:#f8fafc;color:#52647b;font-size:11px;border-bottom:1px solid #e2e8f0}
-.perflist td{padding:9px 18px;border-bottom:1px solid #eef2f7;vertical-align:top}
-.perflist td small{display:block;color:#94a3b8;font-size:10px}
-.perfbadge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap}
-.perfbadge.ok{background:#dcfce7;color:#15803d}.perfbadge.warn{background:#ffedd5;color:#c2410c}.perfbadge.bad{background:#fee2e2;color:#b91c1c}
-.perfbadge.info{background:#dbeafe;color:#1d4ed8}.perfbadge.muted{background:#f1f5f9;color:#64748b}
-.perfnotes{list-style:none;margin:0;padding:0 18px}
-.perfnotes li{padding:10px 0;border-bottom:1px solid #eef2f7}
-.perfnotes li b{font-size:13px;margin-right:8px}
-.perfnotes p{margin:6px 0 2px;color:#334155;font-size:12px;font-style:italic}
-.perfnotes small{color:#94a3b8;font-size:10px}
-@media(max-width:1100px){.perfcards{grid-template-columns:repeat(3,1fr)}.perfmid,.perfhead{grid-template-columns:1fr}}
-@media(max-width:600px){.perfcards{grid-template-columns:repeat(2,1fr)}.perfcard{flex-direction:column;text-align:center}.perfscore b{font-size:42px}}
-@media print{.side,.shell header,.perftoolbar,.dashtabs,.perflist .fixedsubtabs{display:none!important}.perfpage{gap:10px}.panel{box-shadow:none;break-inside:avoid}}
+.perftrend .axis{stroke:#cbd5e1}
+.perftrend .line{fill:none;stroke:var(--pblue);stroke-width:2}
+.perftrend .dot{fill:var(--pblue)}
+.perfdonut{display:flex;align-items:center;gap:26px;padding:18px 4px 6px}
+.perfdonut .ring{position:relative;width:155px;height:155px;flex:none}
+.perfdonut .ring svg{width:100%;height:100%}
+.perfdonut .center{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.perfdonut .center b{font-size:32px;font-weight:600;color:var(--pink);line-height:1}
+.perfdonut .center small{font-size:11px;color:#475569;margin-top:4px}
+.perfdonut ul{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.perfdonut li{display:flex;align-items:center;gap:10px;font-size:13px;color:#334155}
+.perfdonut li i{width:10px;height:10px;border-radius:50%}
+.perfdonut li b{min-width:18px;font-weight:600}
+.perfbars{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:13px}
+.perfbars li{display:grid;grid-template-columns:118px 1fr 32px;align-items:center;gap:10px;font-size:12px;color:#334155}
+.perfbars .perfmeter,.perfbars .perfmeter i{height:9px;border-radius:2px}
+.perfbars b{text-align:right;font-weight:600}
+.perfweights{display:block;margin-top:14px;color:var(--pmuted);font-size:10px}
+.perfgrid table,.perflist table{width:100%;border-collapse:collapse;font-size:12px}
+.perfgrid th,.perflist th{text-align:left;padding:9px 18px;background:#f8fafc;color:var(--pink);font-weight:600;font-size:12px;border-bottom:1px solid var(--pline)}
+.perfgrid td,.perflist td{padding:11px 18px;border-bottom:1px solid #eef2f7;vertical-align:middle;color:#334155}
+.perfgrid tr:last-child td{border-bottom:0}
+.perfgrid td b,.perflist td b{font-weight:500;color:var(--pink)}
+.perfgrid td small,.perflist td small{display:block;color:#94a3b8;font-size:10px;margin-top:2px}
+.perfgrid td small.late,.perflist td small.late{color:#c2410c}
+.perfprogress{display:grid;grid-template-columns:38px 1fr;align-items:center;gap:10px;min-width:150px}
+.perfprogress .perfmeter,.perfprogress .perfmeter i{height:10px;border-radius:3px}
+.perfbadge{display:inline-block;padding:4px 12px;border-radius:7px;font-size:11px;font-weight:500;white-space:nowrap}
+.perfbadge.ok{background:#dcf5e6;color:#15803d}
+.perfbadge.warn{background:#ffedd5;color:#c2410c}
+.perfbadge.bad{background:#fde2d6;color:#c2410c}
+.perfbadge.info{background:#dbeafe;color:#1d4ed8}
+.perfbadge.muted{background:#f1f5f9;color:#64748b}
+.perfnote{margin-top:14px;padding:14px;border-radius:10px;background:#f6f8fb}
+.perfnote .who{display:flex;align-items:center;gap:12px}
+.perfnote .who i{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-style:normal;font-weight:700;font-size:13px;flex:none}
+.perfnote .who div{flex:1;min-width:0}
+.perfnote .who b{display:block;font-size:13px;font-weight:600;color:var(--pink)}
+.perfnote .who small{font-size:11px;color:var(--pmuted)}
+.perfnote time{font-size:11px;color:var(--pmuted)}
+.perfnote p{margin:10px 0 0;font-size:12px;line-height:1.55;color:#334155}
+.perfplan{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
+.perfplan li{display:flex;align-items:center;gap:12px}
+.perfplan li>i{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:#eff4ff;color:var(--pblue);flex:none}
+.perfplan li>i svg{width:17px;height:17px}
+.perfplan li div{flex:1;min-width:0}
+.perfplan b{display:block;font-size:13px;font-weight:600;color:var(--pink)}
+.perfplan small{font-size:11px;color:var(--pmuted)}
+.perfnone{display:block;padding:18px;color:var(--pmuted);font-size:12px}
+.perflist{padding:6px 0;overflow-x:auto}
+.perflist.perfnotes{padding:4px 18px 18px}
+@media(max-width:1200px){.perfcards{grid-template-columns:repeat(3,minmax(0,1fr))}.perfgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"trend trend" "donut bars" "table table" "note plan"}.perftop{grid-template-columns:1fr}}
+.perfpage>*,.perfgrid>*,.perfcards>*,.perftop>*{min-width:0}
+@media(max-width:700px){.perfcards{grid-template-columns:minmax(0,1fr)}.perftop{grid-template-columns:minmax(0,1fr);padding:18px}.perfscore{padding:18px}.perfscore .target{margin-left:0}.perftoolbar .right{margin-left:0}.perfgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"trend" "donut" "bars" "table" "note" "plan"}.perfgrid .table{overflow-x:auto}.perfprofile{flex-direction:column;text-align:center}.perfprofile p{justify-content:center}.perfprofile img,.perfinitials{width:104px;height:104px}.perfscore .row>b{font-size:44px}.perfdonut{flex-direction:column}}
+@media print{.side,.shell header,.perftoolbar,.dashtabs,.perftabs{display:none!important}.perfpage{gap:10px}.panel{box-shadow:none;break-inside:avoid}}

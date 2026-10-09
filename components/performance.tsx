@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowRight, ArrowUp, Building2, CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Download, Mail, ShieldCheck, Star } from "lucide-react";
 import { DEFAULT_FIXED_START, FREQUENCY_TITLES, formatBakuDate, periodState, periodWindow, periodsOfYear, type FixedFrequency } from "@/lib/fixed-periods";
 
 // Versiya 3.12: Ana səhifə → "Mənim performansım" — the user's own quarter, counted from what the program already holds: tasks
@@ -16,7 +16,6 @@ type Quarter = { year:number; q:number };
 export const SCORE_WEIGHTS = { grade:40, onTime:30, fixed:20, discipline:10 } as const;
 const ROMAN = ["I","II","III","IV"];
 const quarterLabel = (p:Quarter) => `${p.year} – ${ROMAN[p.q-1]} rüb`;
-const shortLabel = (p:Quarter) => `${ROMAN[p.q-1]} ${p.year}`;
 const shift = (p:Quarter, by:number):Quarter => { const n = p.year*4 + (p.q-1) + by; return { year:Math.floor(n/4), q:n%4+1 }; };
 const range = (p:Quarter) => ({ start:new Date(p.year,(p.q-1)*3,1).getTime(), end:new Date(p.year,p.q*3,1).getTime() });
 const currentQuarter = ():Quarter => { const d = new Date(); return { year:d.getFullYear(), q:Math.floor(d.getMonth()/3)+1 }; };
@@ -68,102 +67,123 @@ function quarterStats(data:PerfData, p:Quarter, now:number) {
 
 const fmt = (n:number|null, digits=0) => n == null ? "—" : n.toLocaleString("az-AZ", { maximumFractionDigits:digits, minimumFractionDigits:digits });
 const dateOnly = (iso:string|number) => formatBakuDate(new Date(iso).getTime());
+// The level the score is measured against (the "Hədəf" badge next to it).
+export const SCORE_TARGET = 80;
 
 function Meter({ value, color }:{ value:number|null; color:string }) {
   return <span className="perfmeter"><i style={{ width:`${Math.max(0, Math.min(100, value ?? 0))}%`, background:color }}/></span>;
 }
 
 function TrendChart({ points }:{ points:{ label:string; value:number|null }[] }) {
-  const w = 560, h = 210, left = 34, right = 14, top = 18, bottom = 30;
+  const w = 520, h = 220, left = 30, right = 28, top = 22, bottom = 28;
   const x = (i:number) => left + (points.length > 1 ? i*(w-left-right)/(points.length-1) : (w-left-right)/2);
   const y = (v:number) => top + (100-v)*(h-top-bottom)/100;
   const shown = points.map((p,i) => ({ ...p, i })).filter(p => p.value != null) as { label:string; value:number; i:number }[];
   const line = shown.map((p,k) => `${k ? "L" : "M"}${x(p.i)},${y(p.value)}`).join(" ");
   const area = shown.length > 1 ? `${line} L${x(shown[shown.length-1].i)},${y(0)} L${x(shown[0].i)},${y(0)} Z` : "";
   return <svg className="perftrend" viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Rüblər üzrə ümumi bal">
+    <defs><linearGradient id="perfarea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity=".28"/><stop offset="100%" stopColor="#3b82f6" stopOpacity=".02"/></linearGradient></defs>
     {[0,20,40,60,80,100].map(v => <g key={v}><line x1={left} x2={w-right} y1={y(v)} y2={y(v)} className="grid"/><text x={left-8} y={y(v)+3} textAnchor="end">{v}</text></g>)}
-    {area && <path d={area} className="area"/>}
+    <line x1={left} x2={left} y1={top} y2={y(0)} className="axis"/>
+    {area && <path d={area} fill="url(#perfarea)"/>}
     {line && <path d={line} className="line"/>}
-    {shown.map(p => <g key={p.i}><circle cx={x(p.i)} cy={y(p.value)} r="4" className="dot"/><text x={x(p.i)} y={y(p.value)-10} textAnchor="middle" className="val">{p.value}</text></g>)}
+    {shown.map(p => <g key={p.i}><circle cx={x(p.i)} cy={y(p.value)} r="3.5" className="dot"/><text x={x(p.i)} y={y(p.value)-10} textAnchor="middle" className="val">{p.value}</text></g>)}
     {points.map((p,i) => <text key={p.label} x={x(i)} y={h-8} textAnchor="middle">{p.label}</text>)}
   </svg>;
 }
 
-const BUCKETS:[string,string][] = [["Tamamlanan","#16a34a"],["Davam edən","#2563eb"],["Gecikən","#f59e0b"],["Başlanmayan","#cbd5e1"]];
+const BUCKETS:[string,string][] = [["Tamamlanan","#22a35a"],["Davam edən","#3b82f6"],["Gecikən","#f59e0b"],["Başlanmayan","#cbd5e1"]];
 function TaskDonut({ tasks, now }:{ tasks:PerfTask[]; now:number }) {
   const counts = Object.fromEntries(BUCKETS.map(([b]) => [b, 0])) as Record<string, number>;
   tasks.forEach(t => counts[taskBucket(t, now)]++);
   const total = tasks.length;
   let at = 0;
-  return <div className="donutwrap"><div className="donut"><svg viewBox="0 0 42 42" role="img" aria-label="Tapşırıqların vəziyyəti">
-    <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#eef2f7" strokeWidth="6"/>
-    {total > 0 && BUCKETS.filter(([b]) => counts[b]).map(([b,color]) => { const share = counts[b]/total*100; const seg = <circle key={b} cx="21" cy="21" r="15.9155" fill="none" stroke={color} strokeWidth="6" strokeDasharray={`${share} ${100-share}`} strokeDashoffset={25-at}/>; at += share; return seg; })}
-  </svg><div className="donutcenter"><b>{total}</b><small>tapşırıq</small></div></div>
-    <div className="donutlegend">{BUCKETS.map(([b,color]) => <div key={b} className="perflegend"><i style={{ background:color }}/><b>{counts[b]}</b><span>{b}</span></div>)}</div>
+  return <div className="perfdonut"><div className="ring"><svg viewBox="0 0 42 42" role="img" aria-label="Tapşırıqların bölgüsü">
+    <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#eef2f7" strokeWidth="5.5"/>
+    {total > 0 && BUCKETS.filter(([b]) => counts[b]).map(([b,color]) => { const share = counts[b]/total*100; const seg = <circle key={b} cx="21" cy="21" r="15.9155" fill="none" stroke={color} strokeWidth="5.5" strokeDasharray={`${share} ${100-share}`} strokeDashoffset={25-at}/>; at += share; return seg; })}
+  </svg><div className="center"><b>{total}</b><small>Ümumi tapşırıq</small></div></div>
+    <ul>{BUCKETS.map(([b,color]) => <li key={b}><i style={{ background:color }}/><b>{counts[b]}</b><span>{b}</span></li>)}</ul>
   </div>;
 }
 
 const STATE_TEXT:Record<string,[string,string]> = { done:["Vaxtında","ok"], "late-done":["Gecikməklə","warn"], overdue:["Gecikib","bad"], active:["Açıqdır","info"], future:["Hələ açılmayıb","muted"] };
+const BUCKET_CLASS:Record<string,string> = { "Tamamlanan":"ok", "Davam edən":"info", "Gecikən":"bad", "Başlanmayan":"muted" };
+type Tab = "summary"|"tasks"|"fixed"|"notes"|"history";
 
-export function PerformancePanel({ employeeId }:{ employeeId:number|null }) {
+export function PerformancePanel({ employeeId, lead }:{ employeeId:number|null; lead?:ReactNode }) {
   const [data, setData] = useState<PerfData|null>(null);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState<Quarter>(currentQuarter);
-  const [tab, setTab] = useState<"tasks"|"fixed"|"notes">("tasks");
+  const [tab, setTab] = useState<Tab>("summary");
   useEffect(() => { let cancelled = false; setData(null); setError("");
     fetch(`/api/performance${employeeId ? `?employeeId=${employeeId}` : ""}`).then(async r => { const body = await r.json(); if (!r.ok) throw new Error(body.error); if (!cancelled) setData(body); })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Performans məlumatı açıla bilmədi."); });
     return () => { cancelled = true; }; }, [employeeId]);
   const now = Date.now();
   const latest = currentQuarter();
-  const stats = useMemo(() => data && !data.none ? quarterStats(data, period, now) : null, [data, period.year, period.q]); // eslint-disable-line react-hooks/exhaustive-deps
-  const previous = useMemo(() => data && !data.none ? quarterStats(data, shift(period, -1), now) : null, [data, period.year, period.q]); // eslint-disable-line react-hooks/exhaustive-deps
-  const trend = useMemo(() => data && !data.none ? Array.from({ length:6 }, (_, i) => { const p = shift(period, i-5); return { label:shortLabel(p), value:quarterStats(data, p, now).score }; }) : [], [data, period.year, period.q]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (error) return <div className="panel perfempty">{error}</div>;
-  if (!data) return <div className="panel perfempty">Yüklənir...</div>;
-  if (data.none || !stats) return <div className="panel perfempty">Hesabınız işçi kartına bağlı deyil — performans göstəriciləri yoxdur.</div>;
-  const e = data.employee;
-  const pos = data.positions.find(p => p.title) || data.positions[0];
+  const ready = data && !data.none ? data : null;
+  const stats = useMemo(() => ready ? quarterStats(ready, period, now) : null, [ready, period.year, period.q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const previous = useMemo(() => ready ? quarterStats(ready, shift(period, -1), now) : null, [ready, period.year, period.q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const history = useMemo(() => ready ? Array.from({ length:8 }, (_, i) => { const p = shift(period, i-7); return { p, s:quarterStats(ready, p, now) }; }) : [], [ready, period.year, period.q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toolbar = <div className="perftoolbar"><div className="lead">{lead}</div><div className="right"><span>Qiymətləndirmə dövrü</span>
+    <select value={`${period.year}-${period.q}`} onChange={ev => { const [y,q] = ev.target.value.split("-").map(Number); setPeriod({ year:y, q }); }}>{Array.from({ length:8 }, (_, i) => shift(latest, -i)).map(p => <option key={`${p.year}-${p.q}`} value={`${p.year}-${p.q}`}>{p.year} - Q{p.q}</option>)}</select>
+    <button title="Əvvəlki rüb" onClick={() => setPeriod(p => shift(p, -1))}><ChevronLeft/></button>
+    <button title="Növbəti rüb" disabled={period.year*4+period.q >= latest.year*4+latest.q} onClick={() => setPeriod(p => shift(p, 1))}><ChevronRight/></button>
+    <button className="perfprint" onClick={() => window.print()}><Download/>PDF yüklə</button></div></div>;
+  if (error) return <div className="perfpage">{toolbar}<div className="panel perfempty">{error}</div></div>;
+  if (!data) return <div className="perfpage">{toolbar}<div className="panel perfempty">Yüklənir...</div></div>;
+  if (!ready || !stats) return <div className="perfpage">{toolbar}<div className="panel perfempty">Hesabınız işçi kartına bağlı deyil — performans göstəriciləri yoxdur.</div></div>;
+  const e = ready.employee;
+  const pos = ready.positions.find(p => p.title) || ready.positions[0];
   const delta = stats.score != null && previous?.score != null ? stats.score - previous.score : null;
   const approved = stats.tasks.filter(done).length;
-  const notes = data.tasks.filter(t => done(t) && t.evaluation_note?.trim()).sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at))).slice(0, 5);
-  const options = Array.from({ length:8 }, (_, i) => shift(latest, -i));
-  const cards:[string,string,string,number|null,string][] = [
-    ["Tapşırıqlar", `${approved}`, ` / ${stats.tasks.length}`, stats.tasks.length ? approved/stats.tasks.length*100 : null, "#2563eb"],
-    ["Orta qiymət", fmt(stats.avg, 1), " / 10", stats.avg == null ? null : stats.avg*10, "#7c3aed"],
-    ["Vaxtında icra", stats.onTime == null ? "—" : `${fmt(stats.onTime)}%`, stats.timedCount ? ` · ${stats.timedCount} tapşırıq` : "", stats.onTime, "#0A7B8C"],
-    ["Sabit işlər", `${stats.fixedOnTime}`, ` / ${stats.settledCount}`, stats.fixed, "#f59e0b"],
-    ["Nöqsanlar", String(stats.violations.length), stats.violations.length ? "" : " · yoxdur", stats.discipline, stats.violations.length ? "#dc2626" : "#16a34a"],
+  const notes = ready.tasks.filter(t => done(t) && t.evaluation_note?.trim()).sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+  const fixedRows = [...stats.fixedRows].sort((a,b) => a.due - b.due);
+  const cards:{ label:string; value:string; suffix:string; meter:number|null; color:string; tint:string; icon:ReactNode }[] = [
+    { label:"Tapşırıq icrası", value:String(approved), suffix:` / ${stats.tasks.length}`, meter:stats.tasks.length ? approved/stats.tasks.length*100 : null, color:"#22a35a", tint:"#e8f7ee", icon:<ClipboardCheck/> },
+    { label:"Orta qiymət", value:fmt(stats.avg, 1), suffix:" / 10", meter:stats.avg == null ? null : stats.avg*10, color:"#3b82f6", tint:"#e8f0fe", icon:<Star/> },
+    { label:"Vaxtında icra", value:stats.onTime == null ? "—" : `${fmt(stats.onTime)}%`, suffix:"", meter:stats.onTime, color:"#f59e0b", tint:"#fef3e2", icon:<Clock/> },
+    { label:"Sabit işlər", value:String(stats.fixedOnTime), suffix:` / ${stats.settledCount}`, meter:stats.fixed, color:"#7c5cf0", tint:"#efebfd", icon:<CalendarCheck/> },
+    { label:"Nöqsanlar", value:String(stats.violations.length), suffix:stats.violations.length ? "" : " · yoxdur", meter:stats.discipline, color:"#0ea5a4", tint:"#e3f6f5", icon:<ShieldCheck/> },
   ];
+  const parts:[string,number|null][] = [["Orta qiymət", stats.avg == null ? null : stats.avg*10], ["Vaxtında icra", stats.onTime], ["Sabit işlər", stats.fixed], ["Tapşırıq icrası", stats.tasks.length ? approved/stats.tasks.length*100 : null], ["Nöqsansızlıq", stats.discipline]];
+  const tabs:[Tab,string][] = [["summary","Ümumi görünüş"],["tasks","Tapşırıqlar"],["fixed","Sabit işlər"],["notes","Rəhbərin qeydləri"],["history","Keçmiş dövrlər"]];
+  const taskTable = (rows:PerfTask[]) => rows.length ? <table><thead><tr><th>Tapşırıq</th><th>Son tarix</th><th>Vəziyyət</th><th>Qiymət</th></tr></thead><tbody>{rows.map(t => { const b = taskBucket(t, now); const tm = timing(t, now); return <tr key={t.id}>
+    <td><b>{t.title}</b>{t.company_name && <small>{t.company_name}</small>}</td>
+    <td>{dateOnly(t.due_at)}{handedIn(t) && <small className={tm === "late" ? "late" : ""}>Təqdim: {dateOnly(handedIn(t)!)}{tm === "late" ? " · gec" : ""}</small>}</td>
+    <td><span className={`perfbadge ${BUCKET_CLASS[b]}`}>{b}</span></td>
+    <td><div className="perfprogress"><span>{t.evaluation != null ? `${t.evaluation * 10}%` : "—"}</span><Meter value={t.evaluation != null ? t.evaluation*10 : 0} color={t.evaluation == null ? "#cbd5e1" : t.evaluation >= 8 ? "#22a35a" : t.evaluation >= 5 ? "#3b82f6" : "#ef5b2b"}/></div></td>
+  </tr>; })}</tbody></table> : <small className="perfnone">Bu rübdə son tarixi olan tapşırıq yoxdur.</small>;
+  const fixedTable = fixedRows.length ? <table><thead><tr><th>Sabit iş</th><th>Növ</th><th>Son tarix</th><th>Vəziyyət</th></tr></thead><tbody>{fixedRows.map(r => { const [text, cls] = STATE_TEXT[r.state] || [r.state, "muted"]; return <tr key={`${r.assignment.id}|${r.key}`}><td><b>{r.assignment.title}</b><small>{r.assignment.company_name}</small></td><td>{FREQUENCY_TITLES[r.assignment.frequency as FixedFrequency] || r.assignment.frequency}</td><td>{formatBakuDate(r.due)}</td><td><span className={`perfbadge ${cls}`}>{text}</span></td></tr>; })}</tbody></table> : <small className="perfnone">Bu rübdə son tarixi olan sabit iş yoxdur.</small>;
+  const note = (t:PerfTask) => <div className="perfnote" key={t.id}><div className="who"><i>{t.evaluation}</i><div><b>{t.title}</b><small>Qiymət: {t.evaluation}/10{t.company_name ? ` · ${t.company_name}` : ""}</small></div>{t.completed_at && <time>{dateOnly(t.completed_at)}</time>}</div><p>“{t.evaluation_note}”</p></div>;
   return <div className="perfpage">
-    <div className="perftoolbar"><span>Qiymətləndirmə dövrü</span>
-      <select value={`${period.year}-${period.q}`} onChange={ev => { const [y,q] = ev.target.value.split("-").map(Number); setPeriod({ year:y, q }); }}>{options.map(p => <option key={`${p.year}-${p.q}`} value={`${p.year}-${p.q}`}>{quarterLabel(p)}</option>)}</select>
-      <button title="Əvvəlki rüb" onClick={() => setPeriod(p => shift(p, -1))}><ChevronLeft/></button>
-      <button title="Növbəti rüb" disabled={period.year*4+period.q >= latest.year*4+latest.q} onClick={() => setPeriod(p => shift(p, 1))}><ChevronRight/></button>
-      <button className="perfprint" onClick={() => window.print()}><Printer/>Çap / PDF</button>
-    </div>
-    <div className="perfhead">
-      <section className="panel perfcard">
+    {toolbar}
+    <section className="panel perftop">
+      <div className="perfprofile">
         {e.avatar_key ? <img src={`/api/file?key=${encodeURIComponent(e.avatar_key)}`} alt={e.name}/> : <span className="perfinitials">{e.name.split(" ").slice(0,2).map(x => x[0]).join("").toUpperCase()}</span>}
-        <div><h2>{e.name}</h2>{pos?.title && <p className="perfrole">{pos.title}</p>}{pos?.department && <p>🏢 {pos.department}{pos.company_name ? ` · ${pos.company_name}` : ""}</p>}{e.email && <p>✉ {e.email}</p>}</div>
-      </section>
-      <section className="panel perfscore">
+        <div><h2>{e.name}</h2>{pos?.title && <p className="role">{pos.title}</p>}{pos?.department && <p><Building2/>{pos.department}{pos.company_name ? ` · ${pos.company_name}` : ""}</p>}{e.email && <p><Mail/>{e.email}</p>}</div>
+      </div>
+      <div className="perfscore">
         <h3>Ümumi performans balı</h3>
-        <div><b>{stats.score ?? "—"}</b><span> / 100</span>{delta != null && <em className={delta >= 0 ? "up" : "down"}>{delta >= 0 ? "↑ +" : "↓ "}{delta}</em>}</div>
-        <small>{stats.score == null ? "Bu rübdə hesablanacaq iş yoxdur." : delta != null ? "Əvvəlki rüblə müqayisədə" : quarterLabel(period)}</small>
-        <small className="perfweights">Qiymət {SCORE_WEIGHTS.grade}% · Vaxtında icra {SCORE_WEIGHTS.onTime}% · Sabit işlər {SCORE_WEIGHTS.fixed}% · Nöqsanlar {SCORE_WEIGHTS.discipline}%</small>
-      </section>
-    </div>
-    <div className="perfcards">{cards.map(([label, value, suffix, meter, color]) => <section className="panel" key={label}><small>{label}</small><div><b>{value}</b><span>{suffix}</span></div><Meter value={meter} color={color}/></section>)}</div>
-    <div className="perfmid">
-      <section className="panel"><div className="head"><div><h3>Performans trendi</h3><p>Son 6 rübün ümumi balı</p></div></div><TrendChart points={trend}/></section>
-      <section className="panel"><div className="head"><div><h3>Tapşırıqların vəziyyəti</h3><p>{quarterLabel(period)}</p></div></div>{stats.tasks.length ? <TaskDonut tasks={stats.tasks} now={now}/> : <small className="perfnone">Bu rübdə son tarixi olan tapşırıq yoxdur.</small>}</section>
-    </div>
-    <section className="panel perflist">
-      <div className="fixedsubtabs"><button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>Tapşırıqlar ({stats.tasks.length})</button><button className={tab === "fixed" ? "on" : ""} onClick={() => setTab("fixed")}>Sabit işlər ({stats.fixedRows.length})</button><button className={tab === "notes" ? "on" : ""} onClick={() => setTab("notes")}>Rəhbərin qeydləri ({notes.length})</button></div>
-      {tab === "tasks" && (stats.tasks.length ? <table><thead><tr><th>Tapşırıq</th><th>Son tarix</th><th>Təqdim</th><th>Vəziyyət</th><th>Qiymət</th></tr></thead><tbody>{stats.tasks.map(t => { const tm = timing(t, now); const b = taskBucket(t, now); return <tr key={t.id}><td>{t.title}{t.company_name && <small>{t.company_name}</small>}</td><td>{dateOnly(t.due_at)}</td><td>{handedIn(t) ? <span className={`perfbadge ${tm === "ontime" ? "ok" : "warn"}`}>{dateOnly(handedIn(t)!)}{tm === "late" ? " · gec" : ""}</span> : tm === "late" ? <span className="perfbadge bad">Təqdim edilməyib</span> : "—"}</td><td>{b}</td><td>{t.evaluation != null ? `${t.evaluation}/10` : "—"}</td></tr>; })}</tbody></table> : <small className="perfnone">Bu rübdə tapşırıq yoxdur.</small>)}
-      {tab === "fixed" && (stats.fixedRows.length ? <table><thead><tr><th>Sabit iş</th><th>Növ</th><th>Son tarix</th><th>Vəziyyət</th></tr></thead><tbody>{stats.fixedRows.sort((a,b) => a.due - b.due).map(r => { const [text, cls] = STATE_TEXT[r.state] || [r.state, "muted"]; return <tr key={`${r.assignment.id}|${r.key}`}><td>{r.assignment.title}<small>{r.assignment.company_name}</small></td><td>{FREQUENCY_TITLES[r.assignment.frequency as FixedFrequency] || r.assignment.frequency}</td><td>{formatBakuDate(r.due)}</td><td><span className={`perfbadge ${cls}`}>{text}</span></td></tr>; })}</tbody></table> : <small className="perfnone">Bu rübdə son tarixi olan sabit iş yoxdur.</small>)}
-      {tab === "notes" && (notes.length ? <ul className="perfnotes">{notes.map(t => <li key={t.id}><b>{t.title}</b><span className="perfbadge info">{t.evaluation}/10</span><p>“{t.evaluation_note}”</p>{t.completed_at && <small>{dateOnly(t.completed_at)}</small>}</li>)}</ul> : <small className="perfnone">Təsdiqlənən tapşırıqlarda hələ qeyd yazılmayıb.</small>)}
+        <div className="row"><b>{stats.score ?? "—"}</b><span>/ 100</span>
+          {delta != null && <div className={`delta ${delta >= 0 ? "up" : "down"}`}><strong>{delta >= 0 ? <ArrowUp/> : <ArrowDown/>}{delta >= 0 ? `+${delta}` : delta}</strong><small>Əvvəlki dövrə görə</small></div>}
+          <em className="target">Hədəf: {SCORE_TARGET}</em></div>
+        {stats.score == null && <small>Bu rübdə hesablanacaq iş yoxdur.</small>}
+      </div>
     </section>
+    <div className="perfcards">{cards.map(c => <section className="panel" key={c.label}><i className="icon" style={{ background:c.tint, color:c.color }}>{c.icon}</i><div><small>{c.label}</small><p><b>{c.value}</b>{c.suffix && <span>{c.suffix}</span>}</p><Meter value={c.meter} color={c.color}/></div></section>)}</div>
+    <nav className="perftabs">{tabs.map(([key, label]) => <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>)}</nav>
+    {tab === "summary" && <div className="perfgrid">
+      <section className="panel trend"><h3>Performans trendi</h3><TrendChart points={history.slice(-7).map(h => ({ label:`Q${h.p.q} ${h.p.year}`, value:h.s.score }))}/></section>
+      <section className="panel donut"><h3>Tapşırıq bölgüsü</h3>{stats.tasks.length ? <TaskDonut tasks={stats.tasks} now={now}/> : <small className="perfnone">Bu rübdə son tarixi olan tapşırıq yoxdur.</small>}</section>
+      <section className="panel bars"><h3>Bal tərkibi</h3><ul className="perfbars">{parts.map(([label, v]) => <li key={label}><span>{label}</span><Meter value={v} color="#3b82f6"/><b>{v == null ? "—" : fmt(v)}</b></li>)}</ul><small className="perfweights">Ümumi bal: qiymət {SCORE_WEIGHTS.grade}% · vaxtında icra {SCORE_WEIGHTS.onTime}% · sabit işlər {SCORE_WEIGHTS.fixed}% · nöqsanlar {SCORE_WEIGHTS.discipline}%</small></section>
+      <section className="panel table"><div className="head"><h3>Tapşırıqlar</h3><button onClick={() => setTab("tasks")}>Bütün tapşırıqları gör <ArrowRight/></button></div>{taskTable(stats.tasks.slice(0, 6))}</section>
+      <section className="panel note"><h3>Rəhbərin qeydi</h3>{notes.length ? note(notes[0]) : <small className="perfnone">Təsdiqlənən tapşırıqlarda hələ qeyd yazılmayıb.</small>}</section>
+      <section className="panel plan"><div className="head"><h3>Sabit işlər</h3><button onClick={() => setTab("fixed")}>Hamısını gör <ArrowRight/></button></div>{fixedRows.length ? <ul className="perfplan">{fixedRows.slice(0, 4).map(r => { const [text, cls] = STATE_TEXT[r.state] || [r.state, "muted"]; return <li key={`${r.assignment.id}|${r.key}`}><i><CalendarCheck/></i><div><b>{r.assignment.title}</b><small>{FREQUENCY_TITLES[r.assignment.frequency as FixedFrequency] || r.assignment.frequency} · {formatBakuDate(r.due)}</small></div><span className={`perfbadge ${cls}`}>{text}</span></li>; })}</ul> : <small className="perfnone">Bu rübdə son tarixi olan sabit iş yoxdur.</small>}</section>
+    </div>}
+    {tab === "tasks" && <section className="panel perflist">{taskTable(stats.tasks)}</section>}
+    {tab === "fixed" && <section className="panel perflist">{fixedTable}</section>}
+    {tab === "notes" && <section className="panel perflist perfnotes">{notes.length ? notes.slice(0, 20).map(note) : <small className="perfnone">Təsdiqlənən tapşırıqlarda hələ qeyd yazılmayıb.</small>}</section>}
+    {tab === "history" && <section className="panel perflist"><table><thead><tr><th>Dövr</th><th>Ümumi bal</th><th>Tapşırıq icrası</th><th>Orta qiymət</th><th>Vaxtında icra</th><th>Sabit işlər</th><th>Nöqsanlar</th></tr></thead><tbody>{[...history].reverse().map(({ p, s }) => <tr key={`${p.year}-${p.q}`}><td><b>{quarterLabel(p)}</b></td><td><b>{s.score ?? "—"}</b></td><td>{s.tasks.filter(done).length} / {s.tasks.length}</td><td>{fmt(s.avg, 1)}</td><td>{s.onTime == null ? "—" : `${fmt(s.onTime)}%`}</td><td>{s.fixedOnTime} / {s.settledCount}</td><td>{s.violations.length}</td></tr>)}</tbody></table></section>}
   </div>;
 }
