@@ -120,7 +120,8 @@ function periodBegin(rule: FixedWorkRule, key: string, window: { start: number }
 }
 
 // A period counts when it begins (see periodBegin) on or after the counting start, and the work was assigned before the period
-// opened for work.
+// opened for work — a quarterly one (since Versiya 3.10) before its deadline, so a work assigned on 9 Oct 2026 counts the III
+// quarter (opens 1 Oct, due 20 Oct).
 export function periodCounts(rule: FixedWorkRule, key: string, scope: PeriodScope = {}) {
   const window = periodWindow(rule, key);
   if (!window) return false;
@@ -128,7 +129,7 @@ export function periodCounts(rule: FixedWorkRule, key: string, scope: PeriodScop
   const [y, m, d] = start.split("-").map(Number);
   if (periodBegin(rule, key, window) < bakuMidnight(y, m - 1, d)) return false;
   const assigned = scope.assignedAt ? new Date(scope.assignedAt).getTime() : NaN;
-  return Number.isNaN(assigned) || assigned < window.start;
+  return Number.isNaN(assigned) || assigned < (rule.frequency === "quarterly" ? window.due : window.start);
 }
 
 export function periodState(rule: FixedWorkRule, key: string, completedAt: string | null | undefined, now = Date.now(), scope?: PeriodScope): PeriodState {
