@@ -37,6 +37,8 @@ async function ensureSchema() {
   if (!columns.results.some((column) => column.name === "submission_attachment_size")) await db().prepare("ALTER TABLE tasks ADD COLUMN submission_attachment_size INTEGER").run();
   if (!columns.results.some((column) => column.name === "submission_attachment_type")) await db().prepare("ALTER TABLE tasks ADD COLUMN submission_attachment_type TEXT").run();
   if (!columns.results.some((column) => column.name === "overdue_notified_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN overdue_notified_at TEXT").run();
+  // Versiya 3.12: when the worker last submitted the task — "Vaxtında icra" on Ana səhifə goes by it, not by the approval.
+  if (!columns.results.some((column) => column.name === "submitted_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN submitted_at TEXT").run();
   if (!columns.results.some((column) => column.name === "original_due_at")) {
     await db().prepare("ALTER TABLE tasks ADD COLUMN original_due_at TEXT").run();
     await db().prepare("UPDATE tasks SET original_due_at = due_at WHERE original_due_at IS NULL").run();
@@ -939,13 +941,15 @@ export async function updateTask(input: { id: number; actorName?: string; status
   const employeeStatusChanged = input.userMode
     ? Number(current.employee_status_changed || 0) + 1
     : status === "Geri qaytarılıb" ? 1 : Number(current.employee_status_changed || 0);
-  await db().prepare(`UPDATE tasks SET status = ?, evaluation = ?, evaluation_note = ?, completed_at = ?, employee_status_changed = ? WHERE id = ?`)
+  const submittedAt = status === "Təqdim edilib" && current.status !== "Təqdim edilib" ? new Date().toISOString() : current.submitted_at ?? null;
+  await db().prepare(`UPDATE tasks SET status = ?, evaluation = ?, evaluation_note = ?, completed_at = ?, employee_status_changed = ?, submitted_at = ? WHERE id = ?`)
     .bind(
       status,
       input.evaluation ?? current.evaluation,
       input.evaluationNote ?? current.evaluation_note,
       completedAt,
       employeeStatusChanged,
+      submittedAt,
       input.id,
     ).run();
   // Versiya 3.04: the work is submitted with up to 10 files; submitting again replaces them.
@@ -2909,4 +2913,28 @@ export async function updateViolation(input: { id: number; companyId?: number | 
 
 export async function updateRecurring(input: { id: number; active?: boolean }) {
   await db().prepare("UPDATE recurring_tasks SET active = ? WHERE id = ?").bind(Number(input.active), input.id).run();
+}
+
+// Versiya 3.12: Ana səhifə → "Mənim performansım" — one employee's own card, tasks, fixed works and violations; the page counts
+// the periods, the indicators and the score from these.
+export async function getPerformanceData(employeeId: number) {
+  await ensureSchema();
+  const [employee, positions, tasks, assignments, completions, violations] = await Promise.all([
+    db().prepare("SELECT id, name, email, avatar_key FROM employees WHERE id = ?").bind(employeeId).first<Record<string, unknown>>(),
+    db().prepare(`SELECT c.name AS company_name, p.title, p.department FROM employee_companies ec JOIN companies c ON c.id = ec.company_id
+      LEFT JOIN company_structure_positions p ON p.id = ec.position_id AND p.company_id = ec.company_id
+      WHERE ec.employee_id = ? ORDER BY c.name`).bind(employeeId).all(),
+    db().prepare(`SELECT t.id, t.title, t.status, t.due_at, t.created_at, t.completed_at, t.submitted_at, t.evaluation, t.evaluation_note, c.name AS company_name,
+      (SELECT id FROM work_requests WHERE work_requests.task_id = t.id) AS request_id
+      FROM tasks t LEFT JOIN companies c ON c.id = t.company_id WHERE t.employee_id = ? ORDER BY t.due_at DESC`).bind(employeeId).all(),
+    db().prepare(`SELECT a.id, a.employee_id, a.company_id, a.created_at, d.title, d.frequency, d.due_day, d.due_month, c.name AS company_name
+      FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id JOIN companies c ON c.id = a.company_id
+      WHERE a.employee_id = ?`).bind(employeeId).all(),
+    db().prepare(`SELECT x.work_assignment_id, x.period_key, x.completed_at FROM work_assignment_completions x
+      JOIN work_assignments a ON a.id = x.work_assignment_id WHERE a.employee_id = ?`).bind(employeeId).all(),
+    db().prepare("SELECT id, title, created_at FROM employee_violations WHERE employee_id = ? ORDER BY created_at DESC").bind(employeeId).all(),
+  ]);
+  if (!employee) throw new Error("İşçi kartı tapılmadı.");
+  return { employee, positions: positions.results, tasks: tasks.results, assignments: assignments.results, completions: completions.results,
+    violations: violations.results, fixedWorksStart: await getFixedWorksStart() };
 }

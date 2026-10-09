@@ -902,3 +902,68 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .personchip{display:inline-block;font-style:normal;padding:2px 7px;border:1px solid;border-radius:999px;font-weight:800}
 /* Versiya 2.93: the frequency tabs of "Sabit işlər" sit above the admin's catalog / assignments tabs */
 .fixedfreqtabs{margin-bottom:6px}.fixedfreqtabs button{font-weight:800}
+/* Versiya 3.12: Ana səhifə → Mənim performansım */
+.dashtabs{margin:0 0 16px}
+.perfpage{display:grid;gap:16px;margin-bottom:18px}
+.perfempty{padding:28px;color:#64748b;font-size:13px}
+.perftoolbar{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;font-size:12px;color:#52647b}
+.perftoolbar select{height:34px;border:1px solid #dbe3ee;border-radius:9px;background:#fff;padding:0 10px;font-weight:700;color:#172237}
+.perftoolbar button{display:inline-flex;align-items:center;gap:6px;height:34px;min-width:34px;justify-content:center;border:1px solid #dbe3ee;border-radius:9px;background:#fff;color:#334155;font-weight:700;cursor:pointer}
+.perftoolbar button:disabled{opacity:.4;cursor:default}
+.perftoolbar button svg{width:16px;height:16px}
+.perftoolbar .perfprint{padding:0 12px;color:#0A7B8C}
+.perfhead{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+.perfcard{display:flex;align-items:center;gap:20px;padding:20px}
+.perfcard img,.perfinitials{width:104px;height:104px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 4px #e6f4f6}
+.perfinitials{display:grid;place-items:center;background:#0A7B8C;color:#fff;font-size:30px;font-weight:800}
+.perfcard h2{margin:0 0 6px;font-size:24px}
+.perfcard p{margin:4px 0;color:#52647b;font-size:13px}
+.perfcard p.perfrole{font-size:15px;color:#334155}
+.perfscore{padding:20px 22px;background:linear-gradient(135deg,#f0fbf6,#e8f6f8);border-color:#cdeee0}
+.perfscore h3{margin:0 0 8px;font-size:15px}
+.perfscore>div{display:flex;align-items:baseline;gap:6px}
+.perfscore b{font-size:52px;line-height:1;color:#12262B}
+.perfscore span{font-size:22px;color:#52647b}
+.perfscore em{margin-left:12px;font-style:normal;font-weight:800;font-size:16px}
+.perfscore em.up{color:#16a34a}.perfscore em.down{color:#dc2626}
+.perfscore small{display:block;margin-top:6px;color:#64748b;font-size:11px}
+.perfscore small.perfweights{margin-top:10px;color:#0A7B8C;font-weight:700}
+.perfcards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.perfcards section{padding:14px 16px}
+.perfcards small{color:#52647b;font-size:11px;font-weight:700}
+.perfcards div{margin:6px 0 10px}
+.perfcards b{font-size:24px;color:#172237}
+.perfcards span{font-size:13px;color:#64748b}
+.perfmeter{display:block;height:6px;border-radius:6px;background:#eef2f7;overflow:hidden}
+.perfmeter i{display:block;height:100%;border-radius:6px}
+.perfmid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.perfmid .head{padding:16px 20px 0}
+.perfmid h3{margin:0;font-size:15px}.perfmid p{margin:2px 0 0;color:#64748b;font-size:11px}
+.perftrend{display:block;width:100%;height:auto;padding:4px 12px 10px}
+.perftrend text{font-size:10px;fill:#64748b}
+.perftrend text.val{font-weight:700;fill:#172237}
+.perftrend .grid{stroke:#eef2f7}
+.perftrend .line{fill:none;stroke:#2563eb;stroke-width:2.5}
+.perftrend .area{fill:#2563eb18}
+.perftrend .dot{fill:#2563eb;stroke:#fff;stroke-width:2}
+.perflegend{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0}
+.perflegend i{width:10px;height:10px;border-radius:50%}
+.perflegend b{min-width:18px}
+.perfnone{display:block;padding:20px;color:#64748b;font-size:12px}
+.perflist{padding:14px 0 6px;overflow-x:auto}
+.perflist .fixedsubtabs{padding:0 18px 10px}
+.perflist table{width:100%;border-collapse:collapse;font-size:12px}
+.perflist th{text-align:left;padding:9px 18px;background:#f8fafc;color:#52647b;font-size:11px;border-bottom:1px solid #e2e8f0}
+.perflist td{padding:9px 18px;border-bottom:1px solid #eef2f7;vertical-align:top}
+.perflist td small{display:block;color:#94a3b8;font-size:10px}
+.perfbadge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap}
+.perfbadge.ok{background:#dcfce7;color:#15803d}.perfbadge.warn{background:#ffedd5;color:#c2410c}.perfbadge.bad{background:#fee2e2;color:#b91c1c}
+.perfbadge.info{background:#dbeafe;color:#1d4ed8}.perfbadge.muted{background:#f1f5f9;color:#64748b}
+.perfnotes{list-style:none;margin:0;padding:0 18px}
+.perfnotes li{padding:10px 0;border-bottom:1px solid #eef2f7}
+.perfnotes li b{font-size:13px;margin-right:8px}
+.perfnotes p{margin:6px 0 2px;color:#334155;font-size:12px;font-style:italic}
+.perfnotes small{color:#94a3b8;font-size:10px}
+@media(max-width:1100px){.perfcards{grid-template-columns:repeat(3,1fr)}.perfmid,.perfhead{grid-template-columns:1fr}}
+@media(max-width:600px){.perfcards{grid-template-columns:repeat(2,1fr)}.perfcard{flex-direction:column;text-align:center}.perfscore b{font-size:42px}}
+@media print{.side,.shell header,.perftoolbar,.dashtabs,.perflist .fixedsubtabs{display:none!important}.perfpage{gap:10px}.panel{box-shadow:none;break-inside:avoid}}

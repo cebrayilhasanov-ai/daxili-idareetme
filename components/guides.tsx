@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -26,6 +26,37 @@ export type GuideContext = {
 const AUDIENCE_LABELS: Record<Audience, string> = { all: "Hamı üçün", registrar: "Qeydiyyatçı üçün", head: "Şöbə rəhbəri üçün", director: "Firmanın rəhbəri (direktor) üçün", admin: "Admin üçün" };
 
 const GUIDES: Guide[] = [
+  {
+    id: "dashboard", group: "Ana səhifə", title: "Mənim performansım", path: "Ana səhifə → Mənim performansım", section: "dashboard",
+    intro: "Ana səhifə “Mənim performansım” tabı ilə açılır: seçilmiş rübdə öz işlərinizin nəticəsi — tapşırıqlar, sabit işlər, nöqsanlar və onlardan hesablanan ümumi bal. Burada heç nə doldurulmur: hər şey proqramdakı işlərinizdən özü hesablanır. Hər kəs yalnız öz məlumatlarını görür.",
+    parts: [
+      { audience: "all", title: "Səhifədə nə var", blocks: [
+        { list: [
+          "Yuxarıda dövr seçimi (məsələn, “2026 – III rüb”), ‹ › ilə əvvəlki / növbəti rüb və “Çap / PDF” düyməsi (çap pəncərəsində “PDF kimi saxla” seçin).",
+          "Kartınız: şəkil, ad, vəzifə, şöbə və firma, e-poçt. Yanında ümumi bal (100 üzərindən) və əvvəlki rüblə fərq (↑ / ↓).",
+          "Göstəricilər: Tapşırıqlar (təsdiqlənən / rübdə son tarixi olan), Orta qiymət (təsdiqdə qoyulan 1–10 qiymətlərin ortası), Vaxtında icra (%), Sabit işlər (vaxtında icra edilən / son tarixi çatanlar), Nöqsanlar (rübdə qeydə alınan).",
+          "Performans trendi — son 6 rübün ümumi balı; tapşırıqların vəziyyəti — Tamamlanan, Davam edən, Gecikən, Başlanmayan.",
+          "Aşağıda tablar: rübün tapşırıqları (son tarix, təqdim tarixi, vəziyyət, qiymət), sabit işləri (son tarix və vəziyyət) və rəhbərin təsdiqdə yazdığı qeydlər.",
+          "“Ümumi baxış” tabı — Ana səhifənin əvvəlki görünüşü (qiymətləndirmə, tapşırıq və nöqsan qrafikləri).",
+        ] },
+      ] },
+      { audience: "all", title: "Necə hesablanır", blocks: [
+        { list: [
+          "Tapşırıq rübə son tarixinə görə düşür (məsələn, son tarixi 15 avqust olan tapşırıq III rübdədir).",
+          "Vaxtında icra — tapşırığı son tarixədək təqdim etmisinizsə, vaxtındadır; rəhbərin nə vaxt təsdiqləməsi buna təsir etmir. Son tarix keçib, iş təqdim edilməyibsə — gecikmiş sayılır. Son tarixi hələ gəlməyən və təqdim edilməyən tapşırıq hesaba düşmür.",
+          "Sabit işlər — son tarixi rübə düşən və sizin üçün hesablanan dövrlər: vaxtında icra — tam, gecikməklə icra — yarım, icra edilməyib — sıfır. Hələ açıq olan dövr hesaba düşmür.",
+          "Nöqsanlar — rübdə nöqsan yoxdursa 100, hər nöqsan 25 bal azaldır.",
+          "Ümumi bal = Orta qiymət 40% + Vaxtında icra 30% + Sabit işlər 20% + Nöqsanlar 10%. Rübdə hansısa hissə üçün iş yoxdursa (məsələn, sabit işiniz yoxdur), onun payı qalanlara bölünür. Rübdə heç bir tapşırıq və sabit iş yoxdursa, bal “—” göstərilir.",
+        ] },
+      ] },
+      { audience: "admin", title: "Admin üçün", blocks: [
+        { list: [
+          "Admin hesabının öz işçi kartı yoxdur — Ana səhifədə yalnız “Ümumi baxış” görünür.",
+          "İstifadəçinin performansına baxmaq üçün “İstifadəçi görünüşü” ilə həmin istifadəçini seçin — Ana səhifədə onun “Mənim performansım” tabı açılır.",
+        ] },
+      ] },
+    ],
+  },
   {
     id: "tasks", group: "Tapşırıqlar", title: "Verilən tapşırıqlar", path: "Tapşırıqlar → Verilən tapşırıqlar", section: "tasks.manager",
     intro: "Sizə verilmiş tapşırıqlar: rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
