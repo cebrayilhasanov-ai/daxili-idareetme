@@ -476,6 +476,14 @@ async function ensureSchema() {
   if (!violationColumns.results.some((column) => column.name === "company_id")) {
     await db().prepare("ALTER TABLE employee_violations ADD COLUMN company_id INTEGER REFERENCES companies(id)").run();
   }
+  // Versiya 3.18: a Nöqsan is a draft (approved_at NULL) until its author approves it; on approval created_at becomes the
+  // approval time (the record's date everywhere), drafted_at keeps when writing began. Records from before were approved.
+  if (!violationColumns.results.some((column) => column.name === "approved_at")) {
+    await db().prepare("ALTER TABLE employee_violations ADD COLUMN approved_at TEXT").run();
+    await db().prepare("ALTER TABLE employee_violations ADD COLUMN drafted_at TEXT").run();
+    await db().prepare("ALTER TABLE employee_violations ADD COLUMN created_by_user_id INTEGER").run();
+    await db().prepare("UPDATE employee_violations SET approved_at = created_at, drafted_at = created_at WHERE approved_at IS NULL").run();
+  }
   const migrated = await db().prepare("SELECT COUNT(*) AS count FROM work_definitions").first<{count:number}>();
   if (!migrated?.count) {
     await db().prepare(`INSERT INTO work_definitions (title, frequency, created_at)
@@ -2873,17 +2881,18 @@ export async function listViolationsForEmployee(employeeId: number) {
     FROM employee_violations
     JOIN employees ON employees.id = employee_violations.employee_id
     LEFT JOIN companies ON companies.id = employee_violations.company_id
-    WHERE employee_violations.employee_id = ?
+    WHERE employee_violations.employee_id = ? AND employee_violations.approved_at IS NOT NULL
     ORDER BY employee_violations.created_at DESC`).bind(employeeId).all()).results;
 }
 
-export async function createViolation(input: { employeeId: number; companyId?: number; title: string; note?: string; createdByName?: string; files?: FileRef[] }) {
+export async function createViolation(input: { employeeId: number; companyId?: number; title: string; note?: string; createdByName?: string; createdByUserId: number; files?: FileRef[] }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("Nöqsanın başlığını yazın.");
   if (!input.employeeId) throw new Error("Personal seçin.");
-  const result = await db().prepare(`INSERT INTO employee_violations (employee_id, company_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
-    .bind(input.employeeId, input.companyId || null, title, input.note?.trim() || null, input.createdByName || null, new Date().toISOString()).run();
+  const now = new Date().toISOString();
+  const result = await db().prepare(`INSERT INTO employee_violations (employee_id, company_id, title, note, created_by_name, created_by_user_id, created_at, drafted_at, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`)
+    .bind(input.employeeId, input.companyId || null, title, input.note?.trim() || null, input.createdByName || null, input.createdByUserId, now, now).run();
   // Versiya 3.17: "Əlaqəli məlumat" — files (e.g. a screenshot of the mistake) kept with the record.
   if (input.files?.length) await setFiles("violation", Number(result.meta.last_row_id), input.files);
 }
@@ -2906,6 +2915,14 @@ export async function violationTargets(companyIds: number[]) {
   ]);
   return { employees: employees.results, companies: companies.results };
 }
+// Versiya 3.18: the author approves the draft; from then on it is the record's date and the worker sees it.
+export async function approveViolation(id: number) {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  const result = await db().prepare("UPDATE employee_violations SET approved_at = ?, created_at = ? WHERE id = ? AND approved_at IS NULL").bind(now, now, id).run();
+  if (!result.meta.changes) throw new Error("Qeyd artıq təsdiqlənib.");
+}
+
 export async function updateViolation(input: { id: number; companyId?: number | null; title: string; note?: string; files?: FileRef[] }) {
   await ensureSchema();
   const title = input.title?.trim();
@@ -2936,7 +2953,7 @@ export async function getPerformanceData(employeeId: number) {
       WHERE a.employee_id = ?`).bind(employeeId).all(),
     db().prepare(`SELECT x.work_assignment_id, x.period_key, x.completed_at FROM work_assignment_completions x
       JOIN work_assignments a ON a.id = x.work_assignment_id WHERE a.employee_id = ?`).bind(employeeId).all(),
-    db().prepare("SELECT id, title, created_at FROM employee_violations WHERE employee_id = ? ORDER BY created_at DESC").bind(employeeId).all(),
+    db().prepare("SELECT id, title, created_at FROM employee_violations WHERE employee_id = ? AND approved_at IS NOT NULL ORDER BY created_at DESC").bind(employeeId).all(),
   ]);
   if (!employee) throw new Error("İşçi kartı tapılmadı.");
   return { employee, positions: positions.results, tasks: tasks.results, assignments: assignments.results, completions: completions.results,

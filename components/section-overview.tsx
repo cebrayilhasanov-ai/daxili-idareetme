@@ -108,7 +108,7 @@ export function HrOverview({ showViolations, showPersonnel, showOrders, activeCo
       const inScope = (companyId: number | null) => !activeCompanyId || companyId === activeCompanyId;
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const violations = ((vio.items || []) as Array<{ company_id: number | null; created_at: string }>).filter((v) => inScope(v.company_id));
+      const violations = ((vio.items || []) as Array<{ company_id: number | null; created_at: string; approved_at?: string | null }>).filter((v) => v.approved_at && inScope(v.company_id));
       const workers = ((hr.employees || []) as Array<{ company_id: number | null; termination_date: string | null }>).filter((e) => inScope(e.company_id));
       const orders = ((ord.orders || []) as Array<{ company_id: number | null; status: string }>).filter((o) => inScope(o.company_id));
       setCounts({

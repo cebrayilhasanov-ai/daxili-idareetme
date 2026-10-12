@@ -60,7 +60,7 @@ type AppUser = { id:number; name:string; email:string; role:"admin"|"employee"; 
 type ManagedUser = { id:number; name:string; email:string; role:string; employee_id:number|null; active:number; must_change_password:number };
 type Page = "dashboard"|"settings"|"tasks"|"requests"|"chat"|"employees"|"companies"|"customers"|"audit"|"documents"|"hr"|"guides";
 type AuditItem = { id:number; actor_name:string; action:string; target_type:string; target_label:string|null; created_at:string };
-type Violation = { files?:FileRef[]; id:number; employee_id:number; employee_name:string; company_id:number|null; company_name:string|null; title:string; note:string|null; created_by_name:string|null; created_at:string };
+type Violation = { files?:FileRef[]; approved_at?:string|null; can_edit?:boolean; can_delete?:boolean; can_approve?:boolean; id:number; employee_id:number; employee_name:string; company_id:number|null; company_name:string|null; title:string; note:string|null; created_by_name:string|null; created_at:string };
 type EmployeeCompanyPosition = { company_id:number; position_id:number|null; position_title:string|null };
 const parseCompanyPositions=(raw:string|null|undefined):EmployeeCompanyPosition[]=>{try{const list=JSON.parse(raw||"[]");return Array.isArray(list)?list:[]}catch{return []}};
 const companyPositionsForm=(raw:string|null|undefined)=>JSON.stringify(Object.fromEntries(parseCompanyPositions(raw).filter(p=>p.position_id).map(p=>[String(p.company_id),p.position_id])));
@@ -325,7 +325,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.17</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.18</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -603,7 +603,7 @@ function ViolationsChart({onOpenEmployee}:{onOpenEmployee?:(employee:{id:number;
   const [period,setPeriod]=useState<ViolationPeriod>("3m");
   const [now]=useState(()=>new Date());
   useEffect(()=>{let cancelled=false;fetch("/api/violations").then(r=>r.ok?r.json():{items:[]}).then(body=>{if(!cancelled)setItems(body.items||[])}).catch(()=>{if(!cancelled)setItems([])});return()=>{cancelled=true}},[]);
-  const all=(items||[]).map(v=>({v,at:new Date(v.created_at)}));
+  const all=(items||[]).filter(v=>v.approved_at).map(v=>({v,at:new Date(v.created_at)}));
   const range=violationPeriodRange(period,now);
   const current=range?all.filter(x=>x.at>=range.start):all;
   const previous=range?all.filter(x=>x.at>=range.prevStart&&x.at<range.prevEnd).length:0;
@@ -625,7 +625,7 @@ function ViolationsChart({onOpenEmployee}:{onOpenEmployee?:(employee:{id:number;
 }
 function MyViolationsPanel({employeeId,activeCompanyId}:{employeeId:number;activeCompanyId?:number|null}){
   const [items,setItems]=useState<Violation[]|null>(null);
-  useEffect(()=>{let cancelled=false;void fetch("/api/violations").then(r=>r.ok?r.json():{items:[]}).then(body=>{if(cancelled)return;const own=(body.items||[]).filter((i:Violation)=>i.employee_id===employeeId&&(!activeCompanyId||i.company_id===activeCompanyId));setItems(own)}).catch(()=>{if(!cancelled)setItems([])});return()=>{cancelled=true}},[employeeId,activeCompanyId]);
+  useEffect(()=>{let cancelled=false;void fetch("/api/violations").then(r=>r.ok?r.json():{items:[]}).then(body=>{if(cancelled)return;const own=(body.items||[]).filter((i:Violation)=>Boolean(i.approved_at)&&i.employee_id===employeeId&&(!activeCompanyId||i.company_id===activeCompanyId));setItems(own)}).catch(()=>{if(!cancelled)setItems([])});return()=>{cancelled=true}},[employeeId,activeCompanyId]);
   if(items===null)return null;
   return <section className="panel">
     <div className="head"><div><h3>Nöqsanlarım</h3><p>{items.length?`Ümumi ${items.length} qeyd`:"Qeydə alınmış noqsan yoxdur"}</p></div></div>
@@ -1413,6 +1413,8 @@ function AuditPage(){
 type ViolationsMeta={can:{add:boolean;edit:boolean;delete:boolean};manager:boolean;employees?:Array<{id:number;name:string}>;companies?:Array<{id:number;name:string}>};
 const violationColumns:Array<{key:string;label:string;width:number;search:(item:Violation)=>string;render:(item:Violation)=>React.ReactNode}>=[
   {key:"date",label:"Tarix",width:130,search:i=>formatDate(i.created_at),render:i=><time>{formatDate(i.created_at)}</time>},
+  // Versiya 3.18: a draft until its author approves it (the date is then the approval day); the worker sees only approved ones.
+  {key:"status",label:"Status",width:130,search:i=>i.approved_at?"Təsdiqlənib":"Qaralama",render:i=>i.approved_at?<span className="tablestatus done">Təsdiqlənib</span>:<span className="tablestatus review">Qaralama</span>},
   {key:"employee",label:"İşçi",width:170,search:i=>i.employee_name||"",render:i=><b>{i.employee_name}</b>},
   {key:"company",label:"Firma",width:190,search:i=>i.company_name||"",render:i=><>{i.company_name||"—"}</>},
   {key:"title",label:"Nöqsanın başlığı",width:220,search:i=>i.title||"",render:i=><>{i.title}</>},
@@ -1470,6 +1472,17 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
     }catch(e){setError(e instanceof Error?e.message:"Qeyd saxlanmadı.")}
     finally{setBusy(false)}
   };
+  const approve=async(item:Violation)=>{
+    const files=(item.files||[]).length;
+    if(!window.confirm(`Qeydi oxuyub yoxlayın — təsdiqdən sonra dəyişdirilmir və ${item.employee_name} onu görür.\n\nİşçi: ${item.employee_name}${item.company_name?`\nFirma: ${item.company_name}`:""}\nNöqsan: ${item.title}${item.note?`\nQeyd: ${item.note}`:""}\nƏlaqəli məlumat: ${files?`${files} fayl`:"yoxdur"}\n\nOxudum, təsdiqləyirəm?`))return;
+    setError("");
+    try{
+      const response=await fetch("/api/violations",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"approve",id:item.id})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error);
+      apply(result);
+    }catch(e){setError(e instanceof Error?e.message:"Qeyd təsdiqlənmədi.")}
+  };
   const remove=async(item:Violation)=>{
     if(!window.confirm(`"${item.title}" qeydini silmək istəyirsiniz?`))return;
     setError("");
@@ -1481,7 +1494,7 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
     }catch(e){setError(e instanceof Error?e.message:"Qeyd silinmədi.")}
   };
   const shownItems=employeeFilter?items.filter(item=>item.employee_id===employeeFilter.id):items;
-  const counts=Object.values(shownItems.reduce((acc,item)=>{
+  const counts=Object.values(shownItems.filter(item=>item.approved_at).reduce((acc,item)=>{
     const existing=acc[item.employee_id];
     if(existing){existing.count+=1;if(item.created_at>existing.last)existing.last=item.created_at}
     else acc[item.employee_id]={employeeId:item.employee_id,name:item.employee_name,count:1,last:item.created_at};
@@ -1489,6 +1502,8 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
   },{} as Record<number,{employeeId:number;name:string;count:number;last:string}>)).sort((a,b)=>b.count-a.count);
   const excel=useExcelFilters("violations",violationColumns,shownItems.filter(item=>isAdmin||!activeCompanyId||item.company_id===activeCompanyId));
   const filtered=excel.rows;
+  // Versiya 3.18: the server says per row what this user may do (approve / edit / delete a draft of their own; the admin all).
+  const rowActions=items.some(i=>i.can_edit||i.can_delete||i.can_approve);
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Nöqsanlar</h2><p>{meta.manager?`${filtered.length} qeyd göstərilir`:"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{employeeFilter&&<button className="statusfilterchip" onClick={onClearEmployeeFilter} title="Süzgəci sil">İşçi: {employeeFilter.name} <X/></button>}{meta.can.add&&<Button onClick={()=>{resetForm();setCreating(v=>!v||Boolean(form.id))}}><Plus/>Yeni qeyd</Button>}</div>
     {creating&&<div className="inlinetaskrow documentrow customerrow violationrow" onPaste={pasteFiles}>
@@ -1496,14 +1511,14 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
       <label className="field">Firma (istəyə bağlı)<select value={form.companyId||""} onChange={e=>setForm({...form,companyId:e.target.value})}><option value="">Seçin</option>{pickCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label className="field">Nöqsanın başlığı<Input value={form.title||""} onChange={e=>setForm({...form,title:e.target.value})}/></label>
       <label className="field">Qeyd (istəyə bağlı)<Input value={form.note||""} onChange={e=>setForm({...form,note:e.target.value})}/></label>
-      <div className="violationfiles">{keptFiles.length>0&&<FileLinks files={keptFiles} busy={busy} onRemove={f=>setKeptFiles(keptFiles.filter(k=>k.key!==f.key))}/>}<FilePicker label="Əlaqəli məlumat (istəyə bağlı)" files={newFiles} onChange={setNewFiles} kept={keptFiles.length}/><small className="filepickernote">Ekran görüntüsünü (Win+Shift+S) bu formada Ctrl+V ilə də əlavə edə bilərsiniz.</small></div>
-      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);resetForm()}}>Ləğv et</button><Button disabled={busy||!form.employeeId||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Saxlanılır...":form.id?"Yadda saxla":"Əlavə et"}</Button></div>
+      <div className="violationfiles">{keptFiles.length>0&&<FileLinks files={keptFiles} busy={busy} onRemove={f=>setKeptFiles(keptFiles.filter(k=>k.key!==f.key))}/>}<FilePicker label="Əlaqəli məlumat (istəyə bağlı)" files={newFiles} onChange={setNewFiles} kept={keptFiles.length}/><small className="filepickernote">Ekran görüntüsünü (Win+Shift+S) bu formada Ctrl+V ilə də əlavə edə bilərsiniz.</small><small className="filepickernote">Qeyd qaralama kimi saxlanılır — təsdiqləyənədək dəyişə bilərsiniz; işçi onu yalnız siz “Təsdiqlə” basandan sonra görür.</small></div>
+      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);resetForm()}}>Ləğv et</button><Button disabled={busy||!form.employeeId||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Saxlanılır...":form.id?"Yadda saxla":"Qaralama kimi saxla"}</Button></div>
     </div>}
     {error&&<div className="errorbox">{error}</div>}
     {meta.manager&&!loading&&<div className="employeecards officialcards">{counts.length?counts.map(c=><article key={c.employeeId}><div className="identityblock"><i>{initials(c.name)}</i><div><div className="identitytitle"><h3>{c.name}</h3></div><p><b>Son qeyd:</b> {formatDate(c.last)}</p></div></div><div className="recordmetrics"><span><small>Nöqsan sayı</small><b>{c.count}</b></span></div></article>):<Empty text="Hələ heç bir noqsan qeydə alınmayıb."/>}</div>}
-    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={meta.can.edit||meta.can.delete?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{(meta.can.edit||meta.can.delete)&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
+    {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={rowActions?["actions"]:[]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}{rowActions&&<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th>}</tr></thead><tbody>{filtered.map(item=><tr key={item.id}>
       {order.map(key=>{const col=columnsByKey[key];return <td key={key} data-label={col.label}>{col.render(item)}</td>})}
-      {(meta.can.edit||meta.can.delete)&&<td data-label="Əməliyyat"><div className="tableactions">{meta.can.edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}{meta.can.delete&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}</div></td>}
+      {rowActions&&<td data-label="Əməliyyat"><div className="tableactions">{item.can_approve&&<button className="evaluatebtn" onClick={()=>void approve(item)}>Təsdiqlə</button>}{item.can_edit&&<button className="editcompanybtn" onClick={()=>startEdit(item)}>Redaktə et</button>}{item.can_delete&&<button className="deletetaskbtn" onClick={()=>void remove(item)}>Sil</button>}</div></td>}
     </tr>)}</tbody></table>{!filtered.length&&<Empty text={items.length?"Axtarışa uyğun qeyd tapılmadı.":"Hələ qeyd yoxdur."}/>}</div>}
   </section>;
 }
