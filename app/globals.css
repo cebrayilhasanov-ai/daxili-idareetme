@@ -1026,3 +1026,5 @@ body.chatresizing{user-select:none;cursor:grabbing}
 
 /* Versiya 3.16: cədvəllərdə şrift 2px böyük — xananın içindəki öz ölçülü elementlər də */
 :is(.tasktable,.hrtable) td :is(.nodocument,.folderpath,.latedays,.requestsub,.tasktype,.hrtag){font-size:12px}:is(.tasktable,.hrtable) td .delegatedtag{font-size:11px}:is(.tasktable,.hrtable) td .sharedname{font-size:13px}:is(.tasktable,.hrtable) td :is(.sharedname small,.sharedname em){font-size:12px}:is(.tasktable,.hrtable) td .filelink small{font-size:11px}
+/* Versiya 3.17: Nöqsanlar — "Əlaqəli məlumat" faylları formada tam en */
+.violationrow .violationfiles{flex:1 1 100%;display:grid;gap:6px}.violationrow .violationfiles .filefield{max-width:520px}

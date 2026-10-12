@@ -11,11 +11,12 @@ function db() {
 }
 
 export type FileRef = { key: string; name: string; size: number; type: string };
-export type AttachmentKind = "personal_work" | "personal_work_item" | "task" | "task_submission" | "task_item" | "request";
+// Versiya 3.17: "violation" — the files of a Nöqsan ("Əlaqəli məlumat"); it has no single-file columns to mirror.
+export type AttachmentKind = "personal_work" | "personal_work_item" | "task" | "task_submission" | "task_item" | "request" | "violation";
 export const MAX_FILES = 10;
 
 // Where each kind's first file is mirrored: table and column prefix.
-const MIRROR: Record<AttachmentKind, [string, string]> = {
+const MIRROR: Partial<Record<AttachmentKind, [string, string]>> = {
   personal_work: ["personal_works", "attachment"],
   personal_work_item: ["personal_work_checklist_items", "attachment"],
   task: ["tasks", "attachment"],
@@ -43,7 +44,7 @@ export async function ensureAttachmentSchema() {
   // Once: the files kept so far in the single-file columns become each owner's first file.
   if (!(await db().prepare("SELECT 1 AS ok FROM app_settings WHERE key = 'attachments_migrated'").first())) {
     const now = new Date().toISOString();
-    for (const [kind, [table, prefix]] of Object.entries(MIRROR)) {
+    for (const [kind, [table, prefix]] of Object.entries(MIRROR) as Array<[string, [string, string]]>) {
       const exists = await db().prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?").bind(table).first();
       if (!exists) continue;
       const columns = (await db().prepare(`PRAGMA table_info(${table})`).all<{ name: string }>()).results.map((c) => c.name);
@@ -100,9 +101,9 @@ export async function setFiles(kind: AttachmentKind, id: number, files: FileRef[
     await db().prepare("INSERT INTO attachments (owner_kind, owner_id, file_key, name, size, type, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(kind, id, f.key, f.name, f.size, f.type, position, now).run();
   }
-  const [table, prefix] = MIRROR[kind];
+  const mirror = MIRROR[kind];
   const first = files[0];
-  await db().prepare(`UPDATE ${table} SET ${prefix}_key = ?, ${prefix}_name = ?, ${prefix}_size = ?, ${prefix}_type = ? WHERE id = ?`)
+  if (mirror) await db().prepare(`UPDATE ${mirror[0]} SET ${mirror[1]}_key = ?, ${mirror[1]}_name = ?, ${mirror[1]}_size = ?, ${mirror[1]}_type = ? WHERE id = ?`)
     .bind(first?.key ?? null, first?.name ?? null, first?.size ?? null, first?.type ?? null, id).run();
   const kept = new Set(files.map((f) => f.key));
   if (env.FILES) for (const f of before) if (!kept.has(f.key)) await env.FILES.delete(f.key);

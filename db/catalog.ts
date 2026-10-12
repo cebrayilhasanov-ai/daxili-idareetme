@@ -2877,18 +2877,21 @@ export async function listViolationsForEmployee(employeeId: number) {
     ORDER BY employee_violations.created_at DESC`).bind(employeeId).all()).results;
 }
 
-export async function createViolation(input: { employeeId: number; companyId?: number; title: string; note?: string; createdByName?: string }) {
+export async function createViolation(input: { employeeId: number; companyId?: number; title: string; note?: string; createdByName?: string; files?: FileRef[] }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("Nöqsanın başlığını yazın.");
   if (!input.employeeId) throw new Error("Personal seçin.");
-  await db().prepare(`INSERT INTO employee_violations (employee_id, company_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+  const result = await db().prepare(`INSERT INTO employee_violations (employee_id, company_id, title, note, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
     .bind(input.employeeId, input.companyId || null, title, input.note?.trim() || null, input.createdByName || null, new Date().toISOString()).run();
+  // Versiya 3.17: "Əlaqəli məlumat" — files (e.g. a screenshot of the mistake) kept with the record.
+  if (input.files?.length) await setFiles("violation", Number(result.meta.last_row_id), input.files);
 }
 
 export async function deleteViolation(id: number) {
   await ensureSchema();
   await db().prepare("DELETE FROM employee_violations WHERE id = ?").bind(id).run();
+  await removeFiles("violation", id);
 }
 
 // Nöqsanlar managed by an employee: the people and firms they may pick from (narrowed to their departments in the route).
@@ -2903,12 +2906,13 @@ export async function violationTargets(companyIds: number[]) {
   ]);
   return { employees: employees.results, companies: companies.results };
 }
-export async function updateViolation(input: { id: number; companyId?: number | null; title: string; note?: string }) {
+export async function updateViolation(input: { id: number; companyId?: number | null; title: string; note?: string; files?: FileRef[] }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("Nöqsanın başlığını yazın.");
   await db().prepare("UPDATE employee_violations SET company_id = ?, title = ?, note = ? WHERE id = ?")
     .bind(input.companyId || null, title, input.note?.trim() || null, input.id).run();
+  if (input.files) await setFiles("violation", input.id, input.files);
 }
 
 export async function updateRecurring(input: { id: number; active?: boolean }) {

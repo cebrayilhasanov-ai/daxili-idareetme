@@ -60,7 +60,7 @@ type AppUser = { id:number; name:string; email:string; role:"admin"|"employee"; 
 type ManagedUser = { id:number; name:string; email:string; role:string; employee_id:number|null; active:number; must_change_password:number };
 type Page = "dashboard"|"settings"|"tasks"|"requests"|"chat"|"employees"|"companies"|"customers"|"audit"|"documents"|"hr"|"guides";
 type AuditItem = { id:number; actor_name:string; action:string; target_type:string; target_label:string|null; created_at:string };
-type Violation = { id:number; employee_id:number; employee_name:string; company_id:number|null; company_name:string|null; title:string; note:string|null; created_by_name:string|null; created_at:string };
+type Violation = { files?:FileRef[]; id:number; employee_id:number; employee_name:string; company_id:number|null; company_name:string|null; title:string; note:string|null; created_by_name:string|null; created_at:string };
 type EmployeeCompanyPosition = { company_id:number; position_id:number|null; position_title:string|null };
 const parseCompanyPositions=(raw:string|null|undefined):EmployeeCompanyPosition[]=>{try{const list=JSON.parse(raw||"[]");return Array.isArray(list)?list:[]}catch{return []}};
 const companyPositionsForm=(raw:string|null|undefined)=>JSON.stringify(Object.fromEntries(parseCompanyPositions(raw).filter(p=>p.position_id).map(p=>[String(p.company_id),p.position_id])));
@@ -325,7 +325,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.16</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.17</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -1417,6 +1417,8 @@ const violationColumns:Array<{key:string;label:string;width:number;search:(item:
   {key:"company",label:"Firma",width:190,search:i=>i.company_name||"",render:i=><>{i.company_name||"—"}</>},
   {key:"title",label:"Nöqsanın başlığı",width:220,search:i=>i.title||"",render:i=><>{i.title}</>},
   {key:"note",label:"Qeyd",width:220,search:i=>i.note||"",render:i=><>{i.note||"—"}</>},
+  // Versiya 3.17: files kept with the record (e.g. a screenshot of the mistake) — the worker sees them too.
+  {key:"files",label:"Əlaqəli məlumat",width:200,search:i=>(i.files||[]).map(f=>f.name).join(" "),render:i=><FileLinks files={i.files||[]} empty={<>—</>}/>},
   {key:"author",label:"Qeyd edən",width:160,search:i=>i.created_by_name||"",render:i=><>{i.created_by_name||"—"}</>},
 ];
 function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,companies,activeCompanyId}:{isAdmin:boolean;employeeFilter?:{id:number;name:string}|null;onClearEmployeeFilter?:()=>void;employees:Employee[];companies:Company[];activeCompanyId?:number|null}){
@@ -1431,6 +1433,21 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
   const [creating,setCreating]=useState(false);
   const [form,setForm]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false);
+  // Versiya 3.17: "Əlaqəli məlumat" — the record's own files (kept while editing, ✕ removes one) and new ones, chosen or pasted.
+  const [keptFiles,setKeptFiles]=useState<FileRef[]>([]);
+  const [newFiles,setNewFiles]=useState<File[]>([]);
+  const resetForm=()=>{setForm({});setKeptFiles([]);setNewFiles([])};
+  // A screenshot copied with Win+Shift+S (or Print Screen) is added with Ctrl+V anywhere in the form.
+  const pasteFiles=(e:React.ClipboardEvent)=>{
+    const pasted=[...e.clipboardData.files];
+    if(!pasted.length)return;
+    e.preventDefault();
+    const left=MAX_FILES-keptFiles.length-newFiles.length;
+    if(pasted.length>left)window.alert(`Ən çox ${MAX_FILES} fayl əlavə etmək olar — ${Math.max(left,0)} fayl əlavə edilə bilər.`);
+    const stamp=new Date().toISOString().slice(0,19).replace(/[-:]/g,"").replace("T","-");
+    const named=pasted.slice(0,Math.max(left,0)).map((f,i)=>f.type.startsWith("image/")&&/^image\.\w+$/i.test(f.name)?new File([f],`ekran-goruntusu-${stamp}${pasted.length>1?`-${i+1}`:""}.${f.type.split("/")[1]||"png"}`,{type:f.type}):f);
+    setNewFiles([...newFiles,...named]);
+  };
   // Rights come from the server (Versiya 2.62): a manager (the admin, or an employee with Əlavə et / Dəyişiklik et / Sil) sees
   // the violations of their firms and gets the people and firms to pick from; otherwise only their own violations.
   const [meta,setMeta]=useState<ViolationsMeta>({can:{add:isAdmin,edit:isAdmin,delete:isAdmin},manager:isAdmin});
@@ -1440,15 +1457,16 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/violations");const body=await response.json();if(!response.ok)throw new Error(body.error);apply(body)}catch(e){setError(e instanceof Error?e.message:"Qeydlər yüklənmədi.")}finally{setLoading(false)}};
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{void load()},[]);
-  const startEdit=(item:Violation)=>{setForm({id:String(item.id),employeeId:String(item.employee_id),companyId:item.company_id?String(item.company_id):"",title:item.title,note:item.note||""});setCreating(true)};
+  const startEdit=(item:Violation)=>{setForm({id:String(item.id),employeeId:String(item.employee_id),companyId:item.company_id?String(item.company_id):"",title:item.title,note:item.note||""});setKeptFiles(item.files||[]);setNewFiles([]);setCreating(true)};
   const create=async()=>{
     if(!form.employeeId||!(form.title||"").trim())return;
     setBusy(true);setError("");
     try{
-      const response=await fetch("/api/violations",{method:form.id?"PATCH":"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:form.id?Number(form.id):undefined,employeeId:Number(form.employeeId),companyId:form.companyId?Number(form.companyId):undefined,title:form.title,note:form.note})});
+      const uploaded=await uploadFiles(newFiles);
+      const response=await fetch("/api/violations",{method:form.id?"PATCH":"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:form.id?Number(form.id):undefined,employeeId:Number(form.employeeId),companyId:form.companyId?Number(form.companyId):undefined,title:form.title,note:form.note,files:[...keptFiles,...uploaded]})});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error);
-      apply(result);setForm({});setCreating(false);
+      apply(result);resetForm();setCreating(false);
     }catch(e){setError(e instanceof Error?e.message:"Qeyd saxlanmadı.")}
     finally{setBusy(false)}
   };
@@ -1472,13 +1490,14 @@ function ViolationsPage({isAdmin,employeeFilter,onClearEmployeeFilter,employees,
   const excel=useExcelFilters("violations",violationColumns,shownItems.filter(item=>isAdmin||!activeCompanyId||item.company_id===activeCompanyId));
   const filtered=excel.rows;
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Nöqsanlar</h2><p>{meta.manager?`${filtered.length} qeyd göstərilir`:"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{employeeFilter&&<button className="statusfilterchip" onClick={onClearEmployeeFilter} title="Süzgəci sil">İşçi: {employeeFilter.name} <X/></button>}{meta.can.add&&<Button onClick={()=>{setForm({});setCreating(v=>!v||Boolean(form.id))}}><Plus/>Yeni qeyd</Button>}</div>
-    {creating&&<div className="inlinetaskrow documentrow customerrow">
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">PERSONAL NƏZARƏTİ</span><h2>Nöqsanlar</h2><p>{meta.manager?`${filtered.length} qeyd göstərilir`:"Sizin adınıza qeydə alınmış noqsanlar"}</p></div>{employeeFilter&&<button className="statusfilterchip" onClick={onClearEmployeeFilter} title="Süzgəci sil">İşçi: {employeeFilter.name} <X/></button>}{meta.can.add&&<Button onClick={()=>{resetForm();setCreating(v=>!v||Boolean(form.id))}}><Plus/>Yeni qeyd</Button>}</div>
+    {creating&&<div className="inlinetaskrow documentrow customerrow violationrow" onPaste={pasteFiles}>
       <label className="field">İşçi<select value={form.employeeId||""} disabled={Boolean(form.id)} onChange={e=>setForm({...form,employeeId:e.target.value})}><option value="">Seçin</option>{(form.id&&!pickEmployees.some(e=>String(e.id)===form.employeeId)?[...pickEmployees,{id:Number(form.employeeId),name:items.find(i=>String(i.id)===form.id)?.employee_name||""}]:pickEmployees).map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
       <label className="field">Firma (istəyə bağlı)<select value={form.companyId||""} onChange={e=>setForm({...form,companyId:e.target.value})}><option value="">Seçin</option>{pickCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label className="field">Nöqsanın başlığı<Input value={form.title||""} onChange={e=>setForm({...form,title:e.target.value})}/></label>
       <label className="field">Qeyd (istəyə bağlı)<Input value={form.note||""} onChange={e=>setForm({...form,note:e.target.value})}/></label>
-      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!form.employeeId||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Saxlanılır...":form.id?"Yadda saxla":"Əlavə et"}</Button></div>
+      <div className="violationfiles">{keptFiles.length>0&&<FileLinks files={keptFiles} busy={busy} onRemove={f=>setKeptFiles(keptFiles.filter(k=>k.key!==f.key))}/>}<FilePicker label="Əlaqəli məlumat (istəyə bağlı)" files={newFiles} onChange={setNewFiles} kept={keptFiles.length}/><small className="filepickernote">Ekran görüntüsünü (Win+Shift+S) bu formada Ctrl+V ilə də əlavə edə bilərsiniz.</small></div>
+      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);resetForm()}}>Ləğv et</button><Button disabled={busy||!form.employeeId||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Saxlanılır...":form.id?"Yadda saxla":"Əlavə et"}</Button></div>
     </div>}
     {error&&<div className="errorbox">{error}</div>}
     {meta.manager&&!loading&&<div className="employeecards officialcards">{counts.length?counts.map(c=><article key={c.employeeId}><div className="identityblock"><i>{initials(c.name)}</i><div><div className="identitytitle"><h3>{c.name}</h3></div><p><b>Son qeyd:</b> {formatDate(c.last)}</p></div></div><div className="recordmetrics"><span><small>Nöqsan sayı</small><b>{c.count}</b></span></div></article>):<Empty text="Hələ heç bir noqsan qeydə alınmayıb."/>}</div>}

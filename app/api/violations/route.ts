@@ -3,6 +3,7 @@ import { departmentScope, narrowScope, scopeCompanyIds, userScopeTest, type Depa
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireAction, requireSection, sectionRights, type SectionAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { parseFiles, withFiles } from "@/db/attachments";
 
 // Nöqsanlar (Versiya 2.62): with only Baxış an employee sees the violations recorded on them; with Əlavə et, Dəyişiklik et or
 // Sil they manage violations — since 2.65 only of the people in the departments they oversee (db/department-scope.ts).
@@ -25,7 +26,12 @@ async function violationScope(user: User, actions: SectionAction[]) {
 }
 type ViolationRow = { id: number; employee_id: number; company_id: number | null };
 
+// Versiya 3.17: every record comes with its "Əlaqəli məlumat" files; whoever sees the record (the worker too) sees them.
 async function listBody(user: User) {
+  const body = await listRecords(user);
+  return { ...body, items: await withFiles(body.items as Array<Record<string, unknown>>, "violation") };
+}
+async function listRecords(user: User) {
   const rights = await sectionRights(user, "hr.violations");
   const can = { add: rights.add, edit: rights.edit, delete: rights.delete };
   if (user.role === "admin") return { items: await listViolations(), can, manager: true };
@@ -65,7 +71,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const companyId = body.companyId ? Number(body.companyId) : null;
     await checkTarget(await violationScope(user, ["add"]), Number(body.employeeId), companyId);
-    await createViolation({ employeeId: Number(body.employeeId), companyId: companyId ?? undefined, title: String(body.title || ""), note: body.note, createdByName: user.name });
+    await createViolation({ employeeId: Number(body.employeeId), companyId: companyId ?? undefined, title: String(body.title || ""), note: body.note, createdByName: user.name, files: parseFiles(body.files) });
     await logAudit(user, "Nöqsan qeydə alındı", "employee", `#${body.employeeId}`);
     return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Qeyd saxlanmadı." }, { status: 400 }); }
@@ -80,7 +86,7 @@ export async function PATCH(request: Request) {
     const scope = await violationScope(user, ["edit"]);
     const row = await checkExisting(scope, id);
     await checkTarget(scope, row.employee_id, companyId);
-    await updateViolation({ id, companyId, title: String(body.title || ""), note: body.note });
+    await updateViolation({ id, companyId, title: String(body.title || ""), note: body.note, files: Array.isArray(body.files) ? parseFiles(body.files) : undefined });
     await logAudit(user, "Nöqsan qeydi dəyişdirildi", "employee", `#${id}`);
     return Response.json(await listBody(user));
   } catch (error) { return authError(error) || Response.json({ error: error instanceof Error ? error.message : "Qeyd dəyişdirilmədi." }, { status: 400 }); }

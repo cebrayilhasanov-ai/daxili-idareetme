@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -456,6 +456,33 @@ const GUIDES: Guide[] = [
           "“✕” seçilmiş papkanı götürür; papka seçilməyibsə, sənəd sistemdə saxlanılır.",
           "Seçilmiş papka sonradan serverdən silinsə və ya adı dəyişsə, cədvəldə ⚠ görünür və bu tipli sənədin faylı yüklənmir — papkanı yenidən seçin.",
           "Papka seçmək yalnız proqram öz serverdə işləyəndə mümkündür.",
+        ] },
+      ] },
+    ],
+  },
+  {
+    id: "violations", group: "Kadrlar", title: "Nöqsanlar", path: "Kadrlar → Nöqsanlar", section: "hr.violations",
+    intro: "İşçinin yol verdiyi səhvlərin və pozuntuların qeydi. Hər qeydə “Əlaqəli məlumat” kimi fayl — məsələn, səhvin ekran görüntüsü — əlavə etmək olar.",
+    parts: [
+      { audience: "all", title: "Kim nəyi görür", blocks: [
+        { list: [
+          "Yalnız Baxış hüququ olan işçi öz adına yazılmış nöqsanları görür — “Əlaqəli məlumat” faylları ilə birlikdə.",
+          "Əlavə et, Dəyişiklik et və ya Sil hüququ olan işçi öz şöbəsinin və strukturda ondan aşağıdakı şöbələrin işçilərinin nöqsanlarını görür və idarə edir (hüquq verilmiş firmalar üzrə). Admin hamısını görür.",
+          "Hər nöqsan həmin rübün “Mənim performansım” balında Nöqsanlar hissəsini 25 bal azaldır.",
+        ] },
+      ] },
+      { audience: "all", title: "Nöqsanın qeydə alınması", blocks: [
+        { steps: [
+          "“Yeni qeyd” düyməsinə basın.",
+          "İşçini seçin; istəsəniz firmanı seçin; nöqsanın başlığını və qeydi yazın.",
+          "“Əlaqəli məlumat (istəyə bağlı)” sahəsindən fayl seçin — ən çox 10 fayl, hər biri 25 MB-a qədər.",
+          "Ekran görüntüsü üçün: Win+Shift+S ilə ekranın lazım olan hissəsini seçin, sonra formanın içində Ctrl+V basın — şəkil “ekran-goruntusu-…png” adı ilə siyahıya əlavə olunur.",
+          "“Əlavə et” basın.",
+        ] },
+        { list: [
+          "Fayllar cədvəlin “Əlaqəli məlumat” sütununda görünür; adına basanda açılır (şəkil brauzerdə açılır, digər fayllar yüklənir). Fayl yoxdursa “—” yazılır.",
+          "“Redaktə et” ilə faylları sonradan əlavə etmək və ya ✕ ilə silmək olar (Dəyişiklik et hüququ ilə).",
+          "Nöqsan silinəndə onun faylları da silinir.",
         ] },
       ] },
     ],
