@@ -470,3 +470,27 @@ export async function seedHrCalendar(year: number) {
   if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new Error("İl düzgün deyil.");
   await db().batch(suggestedHolidays(year).map((d) => db().prepare("INSERT OR IGNORE INTO hr_calendar (date, kind, name) VALUES (?, ?, ?)").bind(d.date, d.kind, d.name)));
 }
+
+// ---------- Rights per part of the card (Versiya 3.19) ----------
+// A saved card as the card form sends it, so /api/hr can keep the stored values of the parts the user may not change.
+export async function storedHrInput(id: number): Promise<Record<string, unknown> | null> {
+  await ensureHrSchema();
+  const e = await db().prepare("SELECT * FROM hr_employees WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!e) return null;
+  const jobs = (await db().prepare("SELECT id, customer_id, position, start_date, end_date, termination_reason FROM hr_prior_jobs WHERE hr_employee_id = ? ORDER BY sort_order, id").bind(id).all<Record<string, unknown>>()).results;
+  return {
+    companyId: e.company_id, department: e.department, position: e.position, lastName: e.last_name, firstName: e.first_name, patronymic: e.patronymic,
+    fin: e.fin, idSeries: e.id_series, idNumber: e.id_number, idIssuedBy: e.id_issued_by, idIssuedAt: e.id_issued_at, idValidUntil: e.id_valid_until,
+    birthDate: e.birth_date, gender: e.gender, regAddress: e.reg_address, phone: e.phone, idFrontKey: e.id_front_key, idFrontName: e.id_front_name, idBackKey: e.id_back_key, idBackName: e.id_back_name,
+    hireDate: e.hire_date, priorExperienceMonths: e.prior_experience_months, priorExperienceDays: e.prior_experience_days, baseLeaveDays: e.base_leave_days, extraLeaveDays: e.extra_leave_days, extraLeaveNote: e.extra_leave_note,
+    workWeek: e.work_week, monthlySalary: e.monthly_salary, openingBalanceDate: e.opening_balance_date, openingBalanceDays: e.opening_balance_days, userEmployeeId: e.user_employee_id, note: e.note,
+    photoKey: e.photo_key, photoName: e.photo_name, contractNo: e.contract_no, contractDate: e.contract_date, contractType: e.contract_type, contractEndDate: e.contract_end_date, probationMonths: e.probation_months,
+    hireOrderNo: e.hire_order_no, hireOrderDate: e.hire_order_date, emergencyName: e.emergency_name, emergencyRelation: e.emergency_relation, emergencyPhone: e.emergency_phone,
+    priorJobs: jobs.map((j) => ({ id: j.id, customerId: j.customer_id, position: j.position, startDate: j.start_date, endDate: j.end_date, terminationReason: j.termination_reason || "" })),
+  };
+}
+
+export async function hrSalaryExists(employeeId: number, period: string) {
+  await ensureHrSchema();
+  return Boolean(await db().prepare("SELECT 1 AS ok FROM hr_salaries WHERE hr_employee_id = ? AND period = ?").bind(employeeId, String(period || "")).first());
+}

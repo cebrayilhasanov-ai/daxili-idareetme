@@ -12,6 +12,8 @@ import {
   leaveDaysBetween, leaveKindLabel, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
   weekday, workNorm, type CalendarDay, type CalendarKind, type HrParams,
 } from "@/lib/hr-calc";
+import { allPartsRights, partsRightsOf, type PartsRights } from "@/lib/permission-model";
+import { canSeeBalance, canSeeSettlement } from "@/lib/hr-parts";
 
 // HR section (kadr uçotu): the register of every worker of every firm — most of them never sign in to the app — with
 // ID card data, leave records and balances, monthly earnings, the final settlement on termination and the production calendar.
@@ -40,8 +42,14 @@ type HrData = {
   priorJobs: HrPriorJob[]; customers: HrCustomer[]; family: HrFamily[]; education: HrEducation[];
   // The viewer's rights in Personallar (Versiya 2.62), sent with every answer of /api/hr.
   rights?: { add: boolean; edit: boolean; delete: boolean };
+  // Versiya 3.19: per firm, the rights in each part of the card (null for the admin — everything). The server does not send
+  // the data of a part that may not be seen.
+  partRights?: Record<string, PartsRights> | null;
 };
 const rightsOf = (data: HrData) => data.rights ?? { add: true, edit: true, delete: true };
+const ALL_PARTS = allPartsRights("hr.personnel");
+const NO_PARTS = partsRightsOf("hr.personnel", null);
+const partsOf = (data: HrData, companyId: number | string | null | undefined) => data.partRights ? data.partRights[String(companyId ?? "")] ?? NO_PARTS : ALL_PARTS;
 type Call = (method: "POST" | "DELETE", payload: Record<string, unknown> | string) => Promise<HrData & { savedId?: number; customerId?: number }>;
 export type HrSection = "personnel" | "calendar" | "settings" | "customers";
 
@@ -115,28 +123,31 @@ function highestEducation(e: HrEmployee, data: HrData) {
   return [...EDUCATION_LEVELS].reverse().find((level) => level !== "Kurs / sertifikat" && levels.includes(level)) || levels[0] || "";
 }
 
+// Only the parts the viewer may see (Versiya 3.19); the name, firm and position are always in the heading.
 function employeeCard(e: HrEmployee, data: HrData, today: string): CardSection[] {
+  const parts = partsOf(data, e.company_id);
   const params = normalizeParams(data.params);
   const asOf = e.termination_date || today;
   const balance = leaveBalance(e, data.leaves.filter((l) => l.hr_employee_id === e.id), params, asOf);
   const prior = priorOf(e, data);
   const family = data.family.filter((f) => f.hr_employee_id === e.id);
   const education = data.education.filter((x) => x.hr_employee_id === e.id);
-  const sections: CardSection[] = [
-    { title: "Şəxsi məlumatlar", fields: [["Soyad", dash(e.last_name)], ["Ad", dash(e.first_name)], ["Ata adı", dash(e.patronymic)], ["Doğum tarixi", dayOrDash(e.birth_date)], ["Cins", dash(e.gender)], ["Telefon", dash(formatPhone(e.phone))]] },
-    { title: "Təcili əlaqə şəxsi", fields: [["Adı, soyadı", dash(e.emergency_name)], ["Qohumluq", dash(e.emergency_relation)], ["Telefon", dash(formatPhone(e.emergency_phone))]] },
-    { title: "Şəxsiyyət vəsiqəsi", fields: [["FİN", dash(e.fin)], ["Seriya və nömrə", dash([e.id_series, e.id_number].filter(Boolean).join(" "))], ["Verən orqan", dash(e.id_issued_by)], ["Verilmə tarixi", dayOrDash(e.id_issued_at)], ["Etibarlıdır (tarixədək)", dayOrDash(e.id_valid_until)], ["Qeydiyyat ünvanı", dash(e.reg_address)]] },
-    { title: "İş yeri", fields: [["Firma", dash(e.company_name)], ["Şöbə", dash(e.department)], ["Vəzifə", dash(e.position)], ["İşə qəbul tarixi", dayOrDash(e.hire_date)], ["Bu firmada staj", serviceText(serviceParts(e.hire_date, asOf))], ["İş həftəsi", `${e.work_week || 5} günlük`], ["Vəzifə maaşı", e.monthly_salary ? money(e.monthly_salary) : "—"], ["Sistem istifadəçisi", dash(e.user_employee_name)]] },
-    { title: "Əvvəlki iş yerləri", table: prior.jobs.length ? { head: ["İş yeri", "VÖEN", "Vəzifə", "Dövr", "Staj", "İşdən çıxma əsası"], rows: prior.jobs.map((j) => [dash(j.customer_name), dash(j.customer_voen), j.position, `${formatDay(j.start_date)} – ${formatDay(j.end_date)}`, serviceText(serviceParts(j.start_date, j.end_date)), j.termination_reason ? reasonLabel(j.termination_reason) : "—"]) } : undefined,
+  const sections: (CardSection & { part: string | boolean })[] = [
+    { part: "personal", title: "Şəxsi məlumatlar", fields: [["Soyad", dash(e.last_name)], ["Ad", dash(e.first_name)], ["Ata adı", dash(e.patronymic)], ["Doğum tarixi", dayOrDash(e.birth_date)], ["Cins", dash(e.gender)], ["Telefon", dash(formatPhone(e.phone))]] },
+    { part: "emergency", title: "Təcili əlaqə şəxsi", fields: [["Adı, soyadı", dash(e.emergency_name)], ["Qohumluq", dash(e.emergency_relation)], ["Telefon", dash(formatPhone(e.emergency_phone))]] },
+    { part: "idcard", title: "Şəxsiyyət vəsiqəsi", fields: [["FİN", dash(e.fin)], ["Seriya və nömrə", dash([e.id_series, e.id_number].filter(Boolean).join(" "))], ["Verən orqan", dash(e.id_issued_by)], ["Verilmə tarixi", dayOrDash(e.id_issued_at)], ["Etibarlıdır (tarixədək)", dayOrDash(e.id_valid_until)], ["Qeydiyyat ünvanı", dash(e.reg_address)]] },
+    { part: true, title: "İş yeri", fields: [["Firma", dash(e.company_name)], ["Şöbə", dash(e.department)], ["Vəzifə", dash(e.position)], ["İşə qəbul tarixi", dayOrDash(e.hire_date)], ["Bu firmada staj", serviceText(serviceParts(e.hire_date, asOf))], ["İş həftəsi", `${e.work_week || 5} günlük`],
+      ...(parts.salary.view ? [["Vəzifə maaşı", e.monthly_salary ? money(e.monthly_salary) : "—"] as [string, string]] : []), ...(parts.workplace.view ? [["Sistem istifadəçisi", dash(e.user_employee_name)] as [string, string]] : [])] },
+    { part: "priorJobs", title: "Əvvəlki iş yerləri", table: prior.jobs.length ? { head: ["İş yeri", "VÖEN", "Vəzifə", "Dövr", "Staj", "İşdən çıxma əsası"], rows: prior.jobs.map((j) => [dash(j.customer_name), dash(j.customer_voen), j.position, `${formatDay(j.start_date)} – ${formatDay(j.end_date)}`, serviceText(serviceParts(j.start_date, j.end_date)), j.termination_reason ? reasonLabel(j.termination_reason) : "—"]) } : undefined,
       note: `Əvvəlki iş yerlərindəki ümumi staj: ${serviceText(prior.total)}${prior.jobs.length ? "" : " (əl ilə daxil edilib)"}` },
-    { title: "Əmək müqaviləsi", fields: [["Müqavilənin nömrəsi", dash(e.contract_no)], ["Müqavilənin tarixi", dayOrDash(e.contract_date)], ["Növü", contractTypeLabel(e.contract_type)], ...(e.contract_type === "fixed" ? [["Bitmə tarixi", dayOrDash(e.contract_end_date)] as [string, string]] : []), ["Sınaq müddəti", e.probation_months === null || e.probation_months === undefined ? "—" : e.probation_months ? `${e.probation_months} ay` : "Yoxdur"], ["İşə qəbul əmri", dash([e.hire_order_no ? `№ ${e.hire_order_no}` : "", e.hire_order_date ? formatDay(e.hire_order_date) : ""].filter(Boolean).join(", "))]] },
-    { title: "Məzuniyyət hüququ", fields: [["Əsas məzuniyyət", `${e.base_leave_days ?? params.baseLeaveDays} gün`], ["Digər əlavə günlər", e.extra_leave_days ? `${e.extra_leave_days} gün${e.extra_leave_note ? ` (${e.extra_leave_note})` : ""}` : "—"], [`Məzuniyyət qalığı (${formatDay(asOf)})`, `${days(balance.balance)} gün`]] },
-    { title: "Ailə məlumatları", fields: [["Ailə vəziyyəti", dash(e.marital_status)]], table: family.length ? { head: ["Qohumluq", "Soyadı, adı, ata adı", "Doğum tarixi", "Yaşı", "İş / təhsil yeri", "Telefon"], rows: family.map((f) => [f.relation, [f.last_name, f.first_name, f.patronymic].filter(Boolean).join(" "), dayOrDash(f.birth_date), dash(ageOn(f.birth_date, today)), dash(f.workplace), dash(f.phone)]) } : undefined },
-    { title: "Təhsil", table: education.length ? { head: ["Səviyyə", "Təhsil müəssisəsi", "İxtisas", "İllər", "Diplom №"], rows: education.map((x) => [x.level, x.institution, dash(x.specialty), x.start_year || x.end_year ? `${x.start_year || "…"} – ${x.end_year || "…"}` : "—", dash(x.diploma_no)]) } : undefined, note: education.length ? undefined : "Təhsil qeydi yoxdur." },
+    { part: "contract", title: "Əmək müqaviləsi", fields: [["Müqavilənin nömrəsi", dash(e.contract_no)], ["Müqavilənin tarixi", dayOrDash(e.contract_date)], ["Növü", contractTypeLabel(e.contract_type)], ...(e.contract_type === "fixed" ? [["Bitmə tarixi", dayOrDash(e.contract_end_date)] as [string, string]] : []), ["Sınaq müddəti", e.probation_months === null || e.probation_months === undefined ? "—" : e.probation_months ? `${e.probation_months} ay` : "Yoxdur"], ["İşə qəbul əmri", dash([e.hire_order_no ? `№ ${e.hire_order_no}` : "", e.hire_order_date ? formatDay(e.hire_order_date) : ""].filter(Boolean).join(", "))]] },
+    { part: "entitlement", title: "Məzuniyyət hüququ", fields: [["Əsas məzuniyyət", `${e.base_leave_days ?? params.baseLeaveDays} gün`], ["Digər əlavə günlər", e.extra_leave_days ? `${e.extra_leave_days} gün${e.extra_leave_note ? ` (${e.extra_leave_note})` : ""}` : "—"], ...(canSeeBalance(parts) ? [[`Məzuniyyət qalığı (${formatDay(asOf)})`, `${days(balance.balance)} gün`] as [string, string]] : [])] },
+    { part: "family", title: "Ailə məlumatları", fields: [["Ailə vəziyyəti", dash(e.marital_status)]], table: family.length ? { head: ["Qohumluq", "Soyadı, adı, ata adı", "Doğum tarixi", "Yaşı", "İş / təhsil yeri", "Telefon"], rows: family.map((f) => [f.relation, [f.last_name, f.first_name, f.patronymic].filter(Boolean).join(" "), dayOrDash(f.birth_date), dash(ageOn(f.birth_date, today)), dash(f.workplace), dash(f.phone)]) } : undefined },
+    { part: "education", title: "Təhsil", table: education.length ? { head: ["Səviyyə", "Təhsil müəssisəsi", "İxtisas", "İllər", "Diplom №"], rows: education.map((x) => [x.level, x.institution, dash(x.specialty), x.start_year || x.end_year ? `${x.start_year || "…"} – ${x.end_year || "…"}` : "—", dash(x.diploma_no)]) } : undefined, note: education.length ? undefined : "Təhsil qeydi yoxdur." },
   ];
-  if (e.termination_date) sections.push({ title: "İşdən çıxma", fields: [["İşdən çıxma tarixi", formatDay(e.termination_date)], ["Əsas", reasonLabel(e.termination_reason)]] });
-  if (e.note) sections.push({ title: "Qeyd", fields: [["Qeyd", e.note]] });
-  return sections;
+  if (e.termination_date) sections.push({ part: true, title: "İşdən çıxma", fields: [["İşdən çıxma tarixi", formatDay(e.termination_date)], ...(parts.termination.view ? [["Əsas", reasonLabel(e.termination_reason)] as [string, string]] : [])] });
+  if (e.note) sections.push({ part: "personal", title: "Qeyd", fields: [["Qeyd", e.note]] });
+  return sections.filter((s) => s.part === true || parts[s.part as string]?.view).map((s): CardSection => ({ title: s.title, fields: s.fields, table: s.table, note: s.note }));
 }
 
 function printEmployeeCard(e: HrEmployee, data: HrData) {
@@ -185,18 +196,32 @@ async function downloadEmployeeCard(e: HrEmployee, data: HrData) {
   await saveXlsx(rows, [30, 34, 24, 24, 18, 32], "Şəxsi kart", `${safeFileName(fullName(e))} — şəxsi kart.xlsx`);
 }
 
+// Each column belongs to a part of the card (Versiya 3.19): a column no listed card shows is left out, and a card whose part
+// may not be seen gets an empty cell there.
 async function downloadPersonnelList(list: PersonnelRow[], data: HrData, today: string) {
-  const head = ["Soyad", "Ad", "Ata adı", "FİN", "Doğum tarixi", "Cins", "Telefon", "Firma", "Şöbə", "Vəzifə", "İşə qəbul tarixi", "Bu firmada staj", "Əvvəlki staj",
-    "Müqavilənin növü", "Müqavilənin bitmə tarixi", "Vəzifə maaşı (₼)", "Məzuniyyət qalığı (gün)", "Vəsiqə etibarlıdır", "Ailə vəziyyəti", "Təhsil", "Status", "İşdən çıxma tarixi", "İşdən çıxma əsası"];
-  const rows: (XlsxCell | null)[][] = [head.map((c) => ({ value: c, fontWeight: "bold", backgroundColor: "#DDEFF2", wrap: true }))];
-  for (const { e, balance } of list) {
-    rows.push([e.last_name, e.first_name, e.patronymic, e.fin, dayOrDash(e.birth_date), e.gender, formatPhone(e.phone), e.company_name, e.department, e.position, dayOrDash(e.hire_date),
-      serviceText(serviceParts(e.hire_date, e.termination_date || today)), serviceText(priorOf(e, data).total), e.contract_type ? contractTypeLabel(e.contract_type) : "",
-      e.contract_type === "fixed" ? dayOrDash(e.contract_end_date) : "", e.monthly_salary ?? undefined, Math.round(balance.balance * 100) / 100, dayOrDash(e.id_valid_until), e.marital_status,
-      highestEducation(e, data), e.termination_date ? "İşdən çıxıb" : "İşləyir", e.termination_date ? formatDay(e.termination_date) : "", e.termination_date ? reasonLabel(e.termination_reason) : ""]
-      .map((value) => ({ value: value === null || value === undefined || value === "—" ? undefined : value })));
-  }
-  await saveXlsx(rows, [16, 14, 16, 10, 12, 8, 18, 22, 18, 22, 12, 16, 16, 12, 14, 12, 12, 14, 12, 14, 11, 13, 30], "Personallar", `Personallar ${formatDay(today)}.xlsx`, 1);
+  const columns: [string, number, string | null, (r: PersonnelRow) => string | number | null | undefined][] = [
+    ["Soyad", 16, null, ({ e }) => e.last_name], ["Ad", 14, null, ({ e }) => e.first_name], ["Ata adı", 16, null, ({ e }) => e.patronymic],
+    ["FİN", 10, "idcard", ({ e }) => e.fin], ["Doğum tarixi", 12, "personal", ({ e }) => dayOrDash(e.birth_date)], ["Cins", 8, "personal", ({ e }) => e.gender],
+    ["Telefon", 18, "personal", ({ e }) => formatPhone(e.phone)], ["Firma", 22, null, ({ e }) => e.company_name], ["Şöbə", 18, null, ({ e }) => e.department], ["Vəzifə", 22, null, ({ e }) => e.position],
+    ["İşə qəbul tarixi", 12, null, ({ e }) => dayOrDash(e.hire_date)], ["Bu firmada staj", 16, null, ({ e }) => serviceText(serviceParts(e.hire_date, e.termination_date || today))],
+    ["Əvvəlki staj", 16, "entitlement", ({ e }) => serviceText(priorOf(e, data).total)], ["Müqavilənin növü", 12, "contract", ({ e }) => e.contract_type ? contractTypeLabel(e.contract_type) : ""],
+    ["Müqavilənin bitmə tarixi", 14, "contract", ({ e }) => e.contract_type === "fixed" ? dayOrDash(e.contract_end_date) : ""], ["Vəzifə maaşı (₼)", 12, "salary", ({ e }) => e.monthly_salary ?? undefined],
+    ["Məzuniyyət qalığı (gün)", 12, "balance", ({ balance }) => Math.round(balance.balance * 100) / 100], ["Vəsiqə etibarlıdır", 14, "idcard", ({ e }) => dayOrDash(e.id_valid_until)],
+    ["Ailə vəziyyəti", 12, "family", ({ e }) => e.marital_status], ["Təhsil", 14, "education", ({ e }) => highestEducation(e, data)], ["Status", 11, null, ({ e }) => e.termination_date ? "İşdən çıxıb" : "İşləyir"],
+    ["İşdən çıxma tarixi", 13, null, ({ e }) => e.termination_date ? formatDay(e.termination_date) : ""], ["İşdən çıxma əsası", 30, "termination", ({ e }) => e.termination_date ? reasonLabel(e.termination_reason) : ""],
+  ];
+  const sees = (r: PersonnelRow, part: string | null) => {
+    if (!part) return true;
+    const parts = partsOf(data, r.e.company_id);
+    return part === "balance" ? canSeeBalance(parts) : parts[part].view;
+  };
+  const shown = columns.filter(([, , part]) => list.some((r) => sees(r, part)));
+  const rows: (XlsxCell | null)[][] = [shown.map(([c]) => ({ value: c, fontWeight: "bold", backgroundColor: "#DDEFF2", wrap: true }))];
+  for (const r of list) rows.push(shown.map(([, , part, value]) => {
+    const v = sees(r, part) ? value(r) : undefined;
+    return { value: v === null || v === undefined || v === "—" ? undefined : v };
+  }));
+  await saveXlsx(rows, shown.map(([, width]) => width), "Personallar", `Personallar ${formatDay(today)}.xlsx`, 1);
 }
 
 // ---------------------------------------------------------------- İşçilər
@@ -206,9 +231,18 @@ const PERSONNEL_COLUMNS: { key: string; width: number }[] = [
   { key: "name", width: 230 }, { key: "company", width: 180 }, { key: "position", width: 160 }, { key: "phone", width: 140 }, { key: "hire", width: 110 },
   { key: "service", width: 130 }, { key: "balance", width: 130 }, { key: "idcard", width: 140 }, { key: "status", width: 120 },
 ];
-function personnelColumns(today: string): PersonnelColumn[] {
+// Phone, leave balance and ID card columns follow their parts of the card (Versiya 3.19): a column is left out when no card
+// shows it, and a card whose part may not be seen shows "—" there.
+const COLUMN_PART: Record<string, string> = { phone: "personal", balance: "balance", idcard: "idcard" };
+const seesColumn = (data: HrData, r: PersonnelRow, key: string) => {
+  const part = COLUMN_PART[key];
+  if (!part) return true;
+  const parts = partsOf(data, r.e.company_id);
+  return part === "balance" ? canSeeBalance(parts) : parts[part].view;
+};
+function personnelColumns(today: string, data: HrData): PersonnelColumn[] {
   const width = (key: string) => PERSONNEL_COLUMNS.find((c) => c.key === key)?.width || 140;
-  return [
+  const columns: PersonnelColumn[] = [
     { key: "name", label: "İşçi", width: width("name"), search: (r) => fullName(r.e), render: (r) => <span className="hrperson"><HrAvatar employee={r.e} /><span><b>{fullName(r.e)}</b>{r.e.fin && <small className="hrsub">FİN {r.e.fin}</small>}</span></span> },
     { key: "company", label: "Firma / şöbə", width: width("company"), search: (r) => r.e.company_name || "", render: (r) => <>{r.e.company_name || "—"}{r.e.department && <small className="hrsub">{r.e.department}</small>}</> },
     { key: "position", label: "Vəzifə", width: width("position"), search: (r) => r.e.position || "", render: (r) => <>{r.e.position || "—"}</> },
@@ -219,6 +253,7 @@ function personnelColumns(today: string): PersonnelColumn[] {
     { key: "idcard", label: "Vəsiqə etibarlıdır", width: width("idcard"), search: (r) => r.id.text, sort: (r) => r.e.id_valid_until || "", render: (r) => <span className={r.id.cls}>{r.id.text}</span> },
     { key: "status", label: "Status", width: width("status"), search: (r) => r.e.termination_date ? "İşdən çıxıb" : "İşləyir", render: (r) => r.e.termination_date ? <span className="hrtag off">Çıxıb {formatDay(r.e.termination_date)}</span> : <span className="hrtag on">İşləyir</span> },
   ];
+  return columns.map((c) => COLUMN_PART[c.key] ? { ...c, search: (r: PersonnelRow) => seesColumn(data, r, c.key) ? c.search?.(r) ?? "" : "—", render: (r: PersonnelRow) => seesColumn(data, r, c.key) ? c.render(r) : <>—</> } : c);
 }
 function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
   const today = todayIso();
@@ -244,8 +279,9 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
   const { order, widths, setWidth, moveColumn } = useTableColumns("hrpersonnel", PERSONNEL_COLUMNS.map((c) => c.key));
   const resize = useEdgeResize(setWidth, 60);
   const { dragProps } = useColumnDrag(moveColumn);
-  const columns = personnelColumns(today);
+  const columns = personnelColumns(today, data).filter((c) => !COLUMN_PART[c.key] || rows.some((r) => seesColumn(data, r, c.key)));
   const columnsByKey = Object.fromEntries(columns.map((c) => [c.key, c]));
+  const shownOrder = order.filter((key) => columnsByKey[key]);
   const defaultWidths = Object.fromEntries(columns.map((c) => [c.key, c.width]));
   const excel = useExcelFilters("hrpersonnel", columns, shown);
   const [exporting, setExporting] = useState("");
@@ -264,10 +300,10 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
       <label>Status<select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="active">İşləyənlər</option><option value="terminated">İşdən çıxanlar</option><option value="idalert">Vəsiqəsi bitənlər</option><option value="contractalert">Müqaviləsi bitənlər</option><option value="all">Hamısı</option></select></label>
       <label className="hrsearch">Axtarış<Input value={query} placeholder="Ad, FİN, vəzifə, şöbə..." onChange={(e) => setQuery(e.target.value)} /></label>
     </div>
-    <div className="tasktablewrap"><table className="tasktable hrtable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]} />
-      <thead><tr>{order.map((key) => <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(columnsByKey[key])}</SortableTh>)}<th {...resize("actions")} className={`opencolumn${resize("actions").className ? ` ${resize("actions").className}` : ""}`}><ActionsHeader /></th></tr></thead>
+    <div className="tasktablewrap"><table className="tasktable hrtable"><ColGroup order={shownOrder} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]} />
+      <thead><tr>{shownOrder.map((key) => <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(columnsByKey[key])}</SortableTh>)}<th {...resize("actions")} className={`opencolumn${resize("actions").className ? ` ${resize("actions").className}` : ""}`}><ActionsHeader /></th></tr></thead>
       <tbody>{excel.rows.map((row) => <tr key={row.e.id} className="hrrow" onClick={() => setOpenId(row.e.id)}>
-        {order.map((key) => <td key={key} data-label={columnsByKey[key].label}>{columnsByKey[key].render(row)}</td>)}
+        {shownOrder.map((key) => <td key={key} data-label={columnsByKey[key].label}>{columnsByKey[key].render(row)}</td>)}
         <td data-label="Əməliyyat" onClick={(ev) => ev.stopPropagation()}><div className="tableactions">
           <button className="editcompanybtn" title="Şəxsi kartı çap et" onClick={() => printEmployeeCard(row.e, data)}><Printer />Çap et</button>
           <button className="editcompanybtn" title="Şəxsi kartı Excel faylı kimi endir" disabled={Boolean(exporting)} onClick={() => void runExport(`card${row.e.id}`, () => downloadEmployeeCard(row.e, data))}><Download />{exporting === `card${row.e.id}` ? "..." : "XLS"}</button>
@@ -286,12 +322,16 @@ function PersonnelSection({ data, call }: { data: HrData; call: Call }) {
 type Tab = "card" | "family" | "leaves" | "salary" | "settlement";
 function EmployeeDialog({ employee, data, call, onSaved, onClose }: { employee: HrEmployee | null; data: HrData; call: Call; onSaved: (id: number) => void; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("card");
+  // A tab is shown only when the viewer may see something in it (Versiya 3.19).
+  const parts = partsOf(data, employee?.company_id);
+  const tabs = ([["card", "Şəxsi kart"], ["family", "Ailə və təhsil"], ["leaves", "Məzuniyyətlər"], ["salary", "Əmək haqqı"], ["settlement", "Son hesablaşma"]] as [Tab, string][])
+    .filter(([key]) => key === "card" || (key === "family" ? parts.family.view || parts.education.view : key === "leaves" ? parts.leaves.view || parts.sick.view : key === "salary" ? parts.salary.view : canSeeSettlement(parts)));
   return <>
     <DialogHeader className="businessdialogheader"><span className="formeyebrow">KADR UÇOTU</span><DialogTitle className="hrdialogtitle">{employee && <HrAvatar employee={employee} size={40} />}{employee ? fullName(employee) : "Yeni işçi"}</DialogTitle>
       <DialogDescription>{employee ? [employee.position, employee.company_name, `işə qəbul ${formatDay(employee.hire_date)}`].filter(Boolean).join(" · ") : "Şəxsiyyət vəsiqəsi, iş yeri və məzuniyyət məlumatlarını daxil edin. Bu işçi sistemə giriş almır."}</DialogDescription>
       {employee && <Button variant="outline" className="hrcardprint" title="Şəxsi kartı çap et (saxlanmış məlumatlarla)" onClick={() => printEmployeeCard(employee, data)}><Printer />Çap et</Button>}</DialogHeader>
     {employee && <div className="fixedsubtabs hrtabs">
-      {([["card", "Şəxsi kart"], ["family", "Ailə və təhsil"], ["leaves", "Məzuniyyətlər"], ["salary", "Əmək haqqı"], ["settlement", "Son hesablaşma"]] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>)}
+      {tabs.map(([key, label]) => <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>)}
     </div>}
     <div className="hrdialogbody">
       {tab === "card" && <CardTab employee={employee} data={data} call={call} onSaved={onSaved} onClose={onClose} />}
@@ -327,7 +367,7 @@ const toJobRows = (employee: HrEmployee | null, jobs: HrPriorJob[]): JobRow[] =>
   : [];
 const toPayload = (f: Record<string, string>, jobs: JobRow[]) => ({
   action: "employee", ...f, priorExperienceMonths: (Number(f.priorYears) || 0) * 12 + (Number(f.priorMonths) || 0), priorExperienceDays: Number(f.priorDays) || 0,
-  priorJobs: jobs.map((j) => ({ customerId: Number(j.customerId) || null, position: j.position, startDate: j.startDate, endDate: j.endDate, terminationReason: j.terminationReason })),
+  priorJobs: jobs.map((j) => ({ id: j.key.startsWith("db") ? Number(j.key.slice(2)) : null, customerId: Number(j.customerId) || null, position: j.position, startDate: j.startDate, endDate: j.endDate, terminationReason: j.terminationReason })),
 });
 const RELATIONS = ["Həyat yoldaşı", "Ata", "Ana", "Qardaş", "Bacı", "Övlad", "Digər qohum", "Dost"];
 const CUSTOMER_TYPES = ["Hüquqi şəxs", "Fərdi sahibkar", "Fiziki şəxs"];
@@ -341,8 +381,8 @@ function HrAvatar({ employee, size = 28 }: { employee: Pick<HrEmployee, "photo_k
 
 // A new row gets its key when the user adds it (never during render); rows from the database are keyed by their id.
 // One earlier employer: picked from the customer list by VÖEN or name; an unknown VÖEN can be added to that list on the spot.
-function PriorJobRow({ row, index, customers, onChange, onRemove, onCreateCustomer }: {
-  row: JobRow; index: number; customers: HrCustomer[]; onChange: (row: JobRow) => void; onRemove: () => void;
+function PriorJobRow({ row, index, customers, onChange, onRemove, onCreateCustomer, readOnly = false, canRemove = true }: {
+  row: JobRow; index: number; customers: HrCustomer[]; onChange: (row: JobRow) => void; onRemove: () => void; readOnly?: boolean; canRemove?: boolean;
   onCreateCustomer: (customer: Record<string, string>) => Promise<number>;
 }) {
   const [query, setQuery] = useState("");
@@ -366,19 +406,19 @@ function PriorJobRow({ row, index, customers, onChange, onRemove, onCreateCustom
     <div className="hrjobfields">
       <label className="field hrjobplace">İş yeri (müştəri siyahısından) *
         {chosen
-          ? <span className="hrjobchosen"><b>{chosen.name}</b><small>{chosen.voen ? `VÖEN ${chosen.voen}` : chosen.country || ""}</small><button type="button" className="hrlink" onClick={() => onChange({ ...row, customerId: "" })}>dəyiş</button></span>
+          ? <span className="hrjobchosen"><b>{chosen.name}</b><small>{chosen.voen ? `VÖEN ${chosen.voen}` : chosen.country || ""}</small>{!readOnly && <button type="button" className="hrlink" onClick={() => onChange({ ...row, customerId: "" })}>dəyiş</button>}</span>
           : <span className="hrjobpick"><Input value={query} placeholder="VÖEN və ya ad yazın" onChange={(e) => { setQuery(e.target.value); setCreating(null); }} />
             {matches.length > 0 && <span className="hrjobmatches">{matches.map((c) => <button type="button" key={c.id} onClick={() => pick(c.id)}><b>{c.name}</b><small>{c.voen || c.country || ""}</small></button>)}</span>}
             {unknownVoen && !creating && <small className="hrwarn">VÖEN {typedVoen} müştəri siyahısında yoxdur · <button type="button" className="hrlink hrlinkok" onClick={() => setCreating({ entityType: "Hüquqi şəxs", name: "", legalAddress: "", manager: "", phone: "" })}>müştəri kartını yarat</button></small>}
           </span>}
       </label>
-      <label className="field">Vəzifə *<Input value={row.position} onChange={(e) => onChange({ ...row, position: e.target.value })} /></label>
-      <label className="field">Başlama tarixi *<Input type="date" value={row.startDate} onChange={(e) => onChange({ ...row, startDate: e.target.value })} /></label>
-      <label className="field">Bitmə tarixi *<Input type="date" value={row.endDate} onChange={(e) => onChange({ ...row, endDate: e.target.value })} /></label>
-      <label className="field">İşdən çıxma əsası *<select value={row.terminationReason} onChange={(e) => onChange({ ...row, terminationReason: e.target.value })}><option value="">Seçin</option>{TERMINATION_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
+      <label className="field">Vəzifə *<Input value={row.position} disabled={readOnly} onChange={(e) => onChange({ ...row, position: e.target.value })} /></label>
+      <label className="field">Başlama tarixi *<Input type="date" value={row.startDate} disabled={readOnly} onChange={(e) => onChange({ ...row, startDate: e.target.value })} /></label>
+      <label className="field">Bitmə tarixi *<Input type="date" value={row.endDate} disabled={readOnly} onChange={(e) => onChange({ ...row, endDate: e.target.value })} /></label>
+      <label className="field">İşdən çıxma əsası *<select value={row.terminationReason} disabled={readOnly} onChange={(e) => onChange({ ...row, terminationReason: e.target.value })}><option value="">Seçin</option>{TERMINATION_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
       <span className="field hrjobservice">Staj<b>{own}</b></span>
     </div>
-    <button type="button" className="hrlink hrjobremove" title="Sətri sil" onClick={onRemove}>✕</button>
+    {canRemove && <button type="button" className="hrlink hrjobremove" title="Sətri sil" onClick={onRemove}>✕</button>}
     {creating && <div className="hrjobcreate">
       <b>Yeni müştəri kartı · VÖEN {typedVoen}</b>
       <div className="hrgrid">
@@ -405,6 +445,12 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
   const departments = [...new Set(structure.map((s) => s.department).filter(Boolean))];
   const positions = [...new Set(structure.filter((s) => !form.department || s.department === form.department).map((s) => s.title).filter(Boolean))];
   const params = normalizeParams(data.params);
+  // Versiya 3.19: a part is shown only when it may be seen and changed only when it may be changed (in the card's firm); on a
+  // new card every part seen in the chosen firm may be filled in. The firm, department, position and hire date are always shown.
+  const parts = partsOf(data, employee ? employee.company_id : form.companyId);
+  const may = (part: string) => (employee ? parts[part].edit : rightsOf(data).add && parts[part].view);
+  const jobRights = employee ? parts.priorJobs : { view: parts.priorJobs.view, add: may("priorJobs"), edit: may("priorJobs"), delete: may("priorJobs") };
+  const canChange = employee ? Object.values(parts).some((r) => r.edit) || jobRights.add || jobRights.delete : rightsOf(data).add;
   // With earlier employers listed, prior service comes from their dates and its fields are read-only.
   const prior = jobs.length ? priorService(jobs.map((j) => ({ start_date: j.startDate, end_date: j.endDate }))) : null;
   const upload = async (target: "Front" | "Back" | "Photo", file: File | undefined) => {
@@ -447,9 +493,11 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       {uploading === side ? <small>Yüklənir...</small> : form[`id${side}Key`] ? <small><a href={`/api/file?key=${encodeURIComponent(form[`id${side}Key`])}`} target="_blank" rel="noreferrer">{form[`id${side}Name`] || "Bax"}</a> · <button type="button" className="hrlink" onClick={() => setForm((f) => ({ ...f, [`id${side}Key`]: "", [`id${side}Name`]: "" }))}>götür</button></small> : null}</span></label>;
   const digitsOnly = (key: string, max?: number) => ({ inputMode: "numeric" as const, readOnly: Boolean(prior), onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(key)(e.target.value.replace(/\D/g, "").slice(0, max)) });
   const phoneProps = (key: string) => ({ inputMode: "tel", placeholder: "+99450 123 45 67", onBlur: () => set(key)(formatPhone(form[key])) });
-  const canSave = form.lastName.trim() && form.firstName.trim() && form.hireDate && form.phone.trim();
+  const canSave = form.lastName.trim() && form.firstName.trim() && form.hireDate && (!parts.personal.view || form.phone.trim());
+  const workplaceLocked = employee ? !parts.workplace.edit : !rightsOf(data).add;
   return <div className="hrcard">
-    <fieldset><legend>Şəxsi məlumatlar</legend><div className="hrpersonal">
+    {!employee && data.partRights && !form.companyId && <small className="hrhint hrwarn">Əvvəlcə “İş yeri” bölməsində firmanı seçin — kartın hansı hissələrini doldura biləcəyiniz həmin firmadakı icazələrinizdən asılıdır.</small>}
+    {parts.personal.view && <fieldset disabled={!may("personal")}><legend>Şəxsi məlumatlar</legend><div className="hrpersonal">
       <div className="hrphoto">
         {form.photoKey ? <img src={`/api/file?key=${encodeURIComponent(form.photoKey)}`} alt="" /> : <span>{initialsOf(`${form.firstName} ${form.lastName}`) || "📷"}</span>}
         <label className="hrphotobtn">{uploading === "Photo" ? "Yüklənir..." : form.photoKey ? "Şəkli dəyiş" : "Şəkil yüklə"}<input type="file" accept="image/*" disabled={Boolean(uploading)} onChange={(e) => { void upload("Photo", e.target.files?.[0]); e.target.value = ""; }} /></label>
@@ -461,13 +509,13 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
         <label className="field">Cins<select value={form.gender} onChange={(e) => set("gender")(e.target.value)}><option value="">—</option><option value="Kişi">Kişi</option><option value="Qadın">Qadın</option></select></label>
         {field("Telefon *", "phone", phoneProps("phone"))}
       </div>
-    </div></fieldset>
-    <fieldset><legend>Təcili əlaqə şəxsi</legend><div className="hrgrid">
+    </div></fieldset>}
+    {parts.emergency.view && <fieldset disabled={!may("emergency")}><legend>Təcili əlaqə şəxsi</legend><div className="hrgrid">
       {field("Adı, soyadı", "emergencyName")}
       <label className="field">Qohumluq<Input list="hr-relations" value={form.emergencyRelation} onChange={(e) => set("emergencyRelation")(e.target.value)} /><datalist id="hr-relations">{RELATIONS.map((r) => <option key={r} value={r} />)}</datalist></label>
       {field(form.emergencyName.trim() ? "Telefon *" : "Telefon", "emergencyPhone", phoneProps("emergencyPhone"))}
-    </div></fieldset>
-    <fieldset><legend>Şəxsiyyət vəsiqəsi</legend><div className="hrgrid">
+    </div></fieldset>}
+    {parts.idcard.view && <fieldset disabled={!may("idcard")}><legend>Şəxsiyyət vəsiqəsi</legend><div className="hrgrid">
       {field("FİN", "fin", { maxLength: 7, onChange: (e: React.ChangeEvent<HTMLInputElement>) => set("fin")(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7)) })}
       <label className="field">Seriya<select value={form.idSeries} onChange={(e) => set("idSeries")(e.target.value)}><option value="">—</option><option value="AA">AA</option><option value="AZE">AZE</option><option value="MYİ">MYİ (müvəqqəti yaşayış)</option><option value="DYİ">DYİ (daimi yaşayış)</option></select></label>
       {field("Nömrə", "idNumber")}
@@ -476,24 +524,25 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       {field("Etibarlıdır (tarixədək)", "idValidUntil", { type: "date" })}
       <label className="field hrwide">Qeydiyyat ünvanı<Input value={form.regAddress} onChange={(e) => set("regAddress")(e.target.value)} /></label>
       {scan("Front", "Vəsiqənin ön tərəfi (skan)")}{scan("Back", "Vəsiqənin arxa tərəfi (skan)")}
-    </div></fieldset>
+    </div></fieldset>}
     <fieldset><legend>İş yeri</legend><div className="hrgrid">
-      <label className="field">Firma<select value={form.companyId} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}><option value="">Seçin</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label className="field">Şöbə<Input list="hr-departments" value={form.department} onChange={(e) => set("department")(e.target.value)} placeholder={departments.length ? "Siyahıdan seçin və ya yazın" : ""} /><datalist id="hr-departments">{departments.map((d) => <option key={d} value={d} />)}</datalist></label>
-      <label className="field">Vəzifə<Input list="hr-positions" value={form.position} onChange={(e) => set("position")(e.target.value)} /><datalist id="hr-positions">{positions.map((p) => <option key={p} value={p} />)}</datalist></label>
-      {field("İşə qəbul tarixi *", "hireDate", { type: "date" })}
-      <label className="field">İş həftəsi<select value={form.workWeek} onChange={(e) => set("workWeek")(e.target.value)}><option value="5">5 günlük</option><option value="6">6 günlük</option></select></label>
-      {field("Vəzifə maaşı (₼)", "monthlySalary", { inputMode: "decimal" })}
-      <label className="field">Sistem istifadəçisi (istəyə bağlı)<select value={form.userEmployeeId} onChange={(e) => set("userEmployeeId")(e.target.value)}><option value="">— sistemdə işləmir —</option>{data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
+      <label className="field">Firma<select disabled={workplaceLocked} value={form.companyId} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}><option value="">Seçin</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label className="field">Şöbə<Input disabled={workplaceLocked} list="hr-departments" value={form.department} onChange={(e) => set("department")(e.target.value)} placeholder={departments.length ? "Siyahıdan seçin və ya yazın" : ""} /><datalist id="hr-departments">{departments.map((d) => <option key={d} value={d} />)}</datalist></label>
+      <label className="field">Vəzifə<Input disabled={workplaceLocked} list="hr-positions" value={form.position} onChange={(e) => set("position")(e.target.value)} /><datalist id="hr-positions">{positions.map((p) => <option key={p} value={p} />)}</datalist></label>
+      {field("İşə qəbul tarixi *", "hireDate", { type: "date", disabled: workplaceLocked })}
+      <label className="field">İş həftəsi<select disabled={workplaceLocked} value={form.workWeek} onChange={(e) => set("workWeek")(e.target.value)}><option value="5">5 günlük</option><option value="6">6 günlük</option></select></label>
+      {parts.salary.view && field("Vəzifə maaşı (₼)", "monthlySalary", { inputMode: "decimal", disabled: !(employee ? parts.salary.edit : may("salary")) })}
+      {parts.workplace.view && <label className="field">Sistem istifadəçisi (istəyə bağlı)<select disabled={workplaceLocked} value={form.userEmployeeId} onChange={(e) => set("userEmployeeId")(e.target.value)}><option value="">— sistemdə işləmir —</option>{data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}
     </div></fieldset>
-    <fieldset><legend>Əvvəlki iş yerləri</legend>
+    {parts.priorJobs.view && <fieldset><legend>Əvvəlki iş yerləri</legend>
       {jobs.length ? <div className="hrjobs">{jobs.map((row, i) => <PriorJobRow key={row.key} row={row} index={i} customers={data.customers}
+        readOnly={row.key.startsWith("db") && !jobRights.edit} canRemove={!row.key.startsWith("db") || jobRights.delete}
         onChange={(next) => setJobs((list) => list.map((j) => j.key === row.key ? next : j))} onRemove={() => setJobs((list) => list.filter((j) => j.key !== row.key))} onCreateCustomer={createCustomer} />)}</div>
         : <small className="hrhint">Əvvəlki iş yeri əlavə edilməyib. Əlavə etsəniz, əvvəlki staj onların tarixlərinə görə avtomatik hesablanacaq.</small>}
-      <div className="hractions left"><button type="button" className="hraddrow" onClick={() => setJobs((list) => [...list, newJobRow()])}><Plus />Əvvəlki iş yeri əlavə et</button>{prior && <span className="hrjobtotal">Əvvəlki iş yerlərindəki ümumi staj: <b>{serviceText(prior)}</b></span>}</div>
+      <div className="hractions left">{jobRights.add && <button type="button" className="hraddrow" onClick={() => setJobs((list) => [...list, newJobRow()])}><Plus />Əvvəlki iş yeri əlavə et</button>}{prior && <span className="hrjobtotal">Əvvəlki iş yerlərindəki ümumi staj: <b>{serviceText(prior)}</b></span>}</div>
       {prior && jobs.length > 1 && <small className="hrhint">Eyni vaxtda bir neçə yerdə işlənmiş dövrlər bir dəfə sayılır; günlər toplananda 30 gün 1 ay sayılır.</small>}
-    </fieldset>
-    <fieldset><legend>Əmək müqaviləsi</legend><div className="hrgrid">
+    </fieldset>}
+    {parts.contract.view && <fieldset disabled={!may("contract")}><legend>Əmək müqaviləsi</legend><div className="hrgrid">
       {field("Müqavilənin nömrəsi", "contractNo")}
       {field("Müqavilənin tarixi", "contractDate", { type: "date" })}
       <label className="field">Növü<select value={form.contractType} onChange={(e) => set("contractType")(e.target.value)}><option value="">—</option><option value="indefinite">Müddətsiz</option><option value="fixed">Müddətli</option></select></label>
@@ -501,8 +550,8 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       <label className="field">Sınaq müddəti<select value={form.probationMonths} onChange={(e) => set("probationMonths")(e.target.value)}><option value="">—</option><option value="0">Yoxdur</option><option value="1">1 ay</option><option value="2">2 ay</option><option value="3">3 ay</option></select></label>
       {field("İşə qəbul əmrinin nömrəsi", "hireOrderNo")}
       {field("Əmrin tarixi", "hireOrderDate", { type: "date" })}
-    </div></fieldset>
-    <fieldset><legend>Məzuniyyət hüququ</legend><div className="hrgrid">
+    </div></fieldset>}
+    {parts.entitlement.view && <fieldset disabled={!may("entitlement")}><legend>Məzuniyyət hüququ</legend><div className="hrgrid">
       <label className="field">Əvvəlki iş yerlərindəki staj{prior && <small> · iş yerlərindən avtomatik</small>}<span className="hrtriple">
         <Input value={prior ? String(prior.years) : form.priorYears} placeholder="il" {...digitsOnly("priorYears")} />
         <Input value={prior ? String(prior.months) : form.priorMonths} placeholder="ay" {...digitsOnly("priorMonths", 2)} />
@@ -513,16 +562,16 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       {field("Əlavə günlərin səbəbi", "extraLeaveNote", { placeholder: "məs. 14 yaşadək 2 uşaq" })}
       {field("Başlanğıc qalığın tarixi", "openingBalanceDate", { type: "date" })}
       {field("Həmin tarixə qalıq (gün)", "openingBalanceDays", { inputMode: "decimal" })}
-    </div><small className="hrhint">Staja görə əlavə günlər parametrlərə əsasən avtomatik hesablanır (əvvəlki stajın il və ayı nəzərə alınır). “Başlanğıc qalıq” köhnə məzuniyyət tarixçəsini daxil etmədən, sistemə köçürülən günə qalığı yazmaq üçündür; ondan əvvəlki məzuniyyətlər hesaba düşmür.</small></fieldset>
-    {employee && <fieldset><legend>İşdən çıxma</legend>
+    </div><small className="hrhint">Staja görə əlavə günlər parametrlərə əsasən avtomatik hesablanır (əvvəlki stajın il və ayı nəzərə alınır). “Başlanğıc qalıq” köhnə məzuniyyət tarixçəsini daxil etmədən, sistemə köçürülən günə qalığı yazmaq üçündür; ondan əvvəlki məzuniyyətlər hesaba düşmür.</small></fieldset>}
+    {employee && parts.termination.view && <fieldset><legend>İşdən çıxma</legend>
       {employee.termination_date
         ? <div className="hrgrid"><span className="field">İşdən çıxma tarixi<b className="hrreadonly">{formatDay(employee.termination_date)}</b></span><span className="field hrwide">Əsas<b className="hrreadonly">{reasonLabel(employee.termination_reason)}</b></span></div>
         : <small className="hrhint">İşçi işləyir.</small>}
       <small className="hrhint">İşdən çıxma yalnız əmr əsasında qeydə alınır: <b>Kadrlar → Əmrlər → İşdən çıxma əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə tarix və əsas buraya yazılır; əmr ləğv edilərsə, silinir.{employee.termination_date && !employee.termination_order_id ? " (Bu qeyd əmrlər bölməsindən əvvəl əl ilə yazılıb.)" : ""}</small>
     </fieldset>}
-    <label className="field">Qeyd<Input value={form.note} onChange={(e) => set("note")(e.target.value)} /></label>
+    {parts.personal.view && <label className="field">Qeyd<Input value={form.note} disabled={!may("personal")} onChange={(e) => set("note")(e.target.value)} /></label>}
     {error && <div className="errorbox">{error}</div>}
-    <div className="hractions">{employee && rightsOf(data).delete && <button className="deletetaskbtn" disabled={busy} onClick={() => void remove()}>Kartı sil</button>}{(employee ? rightsOf(data).edit : rightsOf(data).add) ? <>{!form.phone.trim() && <small className="hrwarn">Telefon nömrəsi məcburidir</small>}<Button disabled={busy || !canSave} onClick={() => void save()}>{busy ? "Saxlanılır..." : employee ? "Dəyişiklikləri saxla" : "İşçini əlavə et"}</Button></> : <small className="hrhint">Kartı dəyişmək icazəniz yoxdur — yalnız baxış.</small>}</div>
+    <div className="hractions">{employee && rightsOf(data).delete && <button className="deletetaskbtn" disabled={busy} onClick={() => void remove()}>Kartı sil</button>}{canChange ? <>{parts.personal.view && !form.phone.trim() && <small className="hrwarn">Telefon nömrəsi məcburidir</small>}<Button disabled={busy || !canSave} onClick={() => void save()}>{busy ? "Saxlanılır..." : employee ? "Dəyişiklikləri saxla" : "İşçini əlavə et"}</Button></> : <small className="hrhint">Kartı dəyişmək icazəniz yoxdur — yalnız baxış.</small>}</div>
   </div>;
 }
 
@@ -541,6 +590,8 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   const [education, setEducation] = useState(emptyEducation);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const parts = partsOf(data, employee.company_id);
+  const fr = parts.family, er = parts.education;
   const members = data.family.filter((f) => f.hr_employee_id === employee.id);
   const schools = data.education.filter((e) => e.hr_employee_id === employee.id);
   const under14 = members.filter((m) => (m.relation === "Oğlu" || m.relation === "Qızı") && (ageOn(m.birth_date, today) ?? 99) < 14).length;
@@ -567,12 +618,13 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   const edu = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setEducation((f) => ({ ...f, [key]: e.target.value }));
   const yearProps = (key: string) => ({ inputMode: "numeric" as const, placeholder: "il", value: education[key], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setEducation((f) => ({ ...f, [key]: e.target.value.replace(/\D/g, "").slice(0, 4) })) });
   return <div className="hrtab">
+    {fr.view && <>
     <div className="hrgrid hrfamilytop">
-      <label className="field">Ailə vəziyyəti<select value={employee.marital_status || ""} disabled={busy === "marital"} onChange={(e) => void run("marital", () => call("POST", { action: "marital", hrEmployeeId: employee.id, maritalStatus: e.target.value }))}><option value="">—</option>{MARITAL_STATUSES.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+      <label className="field">Ailə vəziyyəti<select value={employee.marital_status || ""} disabled={busy === "marital" || !fr.edit} onChange={(e) => void run("marital", () => call("POST", { action: "marital", hrEmployeeId: employee.id, maritalStatus: e.target.value }))}><option value="">—</option>{MARITAL_STATUSES.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
       {under14 > 0 && <small className="hrhint hrwarn hrwide">14 yaşadək {under14} uşaq. Bu, əlavə məzuniyyət günlərinə əsas ola bilər (qanuni şərtləri mühasiblə yoxlayın) — “Şəxsi kart” → “Digər əlavə günlər”.</small>}
     </div>
     <h4>{family.id ? "Ailə üzvünü redaktə et" : "Ailə üzvləri"}</h4>
-    <div className="hrgrid">
+    {(family.id ? fr.edit : fr.add) && <div className="hrgrid">
       <label className="field">Qohumluq *<select value={family.relation} onChange={fam("relation")}>{FAMILY_RELATIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select></label>
       <label className="field">Soyadı<Input value={family.lastName} onChange={fam("lastName")} /></label>
       <label className="field">Adı *<Input value={family.firstName} onChange={fam("firstName")} /></label>
@@ -580,14 +632,17 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <label className="field">Doğum tarixi<Input type="date" value={family.birthDate} onChange={fam("birthDate")} /></label>
       <label className="field">İş və ya təhsil yeri<Input value={family.workplace} onChange={fam("workplace")} /></label>
       <label className="field">Telefon<Input inputMode="tel" placeholder="+99450 123 45 67" value={family.phone} onChange={fam("phone")} onBlur={() => setFamily((f) => ({ ...f, phone: formatPhone(f.phone) }))} /></label>
-    </div>
-    {rightsOf(data).edit && <div className="hractions">{family.id && <button className="inlinecancel" onClick={() => setFamily(emptyFamily())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !family.firstName.trim()} onClick={() => void saveFamily()}>{busy === "family" ? "Saxlanılır..." : family.id ? "Yadda saxla" : "Ailə üzvünü əlavə et"}</Button></div>}
+    </div>}
+    {(family.id ? fr.edit : fr.add) && <div className="hractions">{family.id && <button className="inlinecancel" onClick={() => setFamily(emptyFamily())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !family.firstName.trim()} onClick={() => void saveFamily()}>{busy === "family" ? "Saxlanılır..." : family.id ? "Yadda saxla" : "Ailə üzvünü əlavə et"}</Button></div>}
     {members.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Qohumluq</th><th>Soyadı, adı, ata adı</th><th>Doğum tarixi</th><th>Yaşı</th><th>İş / təhsil yeri</th><th>Telefon</th><th></th></tr></thead><tbody>
       {members.map((m) => <tr key={m.id}><td>{m.relation}</td><td>{[m.last_name, m.first_name, m.patronymic].filter(Boolean).join(" ")}</td><td>{m.birth_date ? formatDay(m.birth_date) : "—"}</td><td>{ageOn(m.birth_date, today) ?? "—"}</td><td>{m.workplace || "—"}</td><td>{formatPhone(m.phone) || "—"}</td>
-        <td>{rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setFamily({ id: String(m.id), relation: m.relation, lastName: m.last_name || "", firstName: m.first_name, patronymic: m.patronymic || "", birthDate: m.birth_date || "", workplace: m.workplace || "", phone: m.phone || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeFamily(m)}>Sil</button></div>}</td></tr>)}
+        <td>{(fr.edit || fr.delete) && <div className="tableactions">{fr.edit && <button className="editcompanybtn" onClick={() => setFamily({ id: String(m.id), relation: m.relation, lastName: m.last_name || "", firstName: m.first_name, patronymic: m.patronymic || "", birthDate: m.birth_date || "", workplace: m.workplace || "", phone: m.phone || "" })}>Redaktə</button>}{fr.delete && <button className="deletetaskbtn" onClick={() => removeFamily(m)}>Sil</button>}</div>}</td></tr>)}
     </tbody></table></div>}
+    {!members.length && !fr.add && <small className="hrhint">Ailə üzvü qeyd olunmayıb.</small>}
+    </>}
+    {er.view && <>
     <h4>{education.id ? "Təhsil qeydini redaktə et" : "Təhsil"}</h4>
-    <div className="hrgrid">
+    {(education.id ? er.edit : er.add) && <div className="hrgrid">
       <label className="field">Səviyyə *<select value={education.level} onChange={edu("level")}>{EDUCATION_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
       <label className="field hrwide">Təhsil müəssisəsi *<Input value={education.institution} onChange={edu("institution")} /></label>
       <label className="field">İxtisas<Input value={education.specialty} onChange={edu("specialty")} /></label>
@@ -595,13 +650,15 @@ function FamilyTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <label className="field">Diplomun nömrəsi<Input value={education.diplomaNo} onChange={edu("diplomaNo")} /></label>
       <label className="field">Diplom (skan)<span className="hrscan"><Input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => uploadDiploma(e.target.files?.[0])} />
         {busy === "diploma" ? <small>Yüklənir...</small> : education.diplomaKey ? <small><a href={`/api/file?key=${encodeURIComponent(education.diplomaKey)}`} target="_blank" rel="noreferrer">{education.diplomaName || "Bax"}</a> · <button type="button" className="hrlink" onClick={() => setEducation((f) => ({ ...f, diplomaKey: "", diplomaName: "" }))}>götür</button></small> : null}</span></label>
-    </div>
-    {rightsOf(data).edit && <div className="hractions">{education.id && <button className="inlinecancel" onClick={() => setEducation(emptyEducation())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !education.institution.trim()} onClick={() => void saveEducation()}>{busy === "education" ? "Saxlanılır..." : education.id ? "Yadda saxla" : "Təhsil qeydini əlavə et"}</Button></div>}
+    </div>}
+    {(education.id ? er.edit : er.add) && <div className="hractions">{education.id && <button className="inlinecancel" onClick={() => setEducation(emptyEducation())}>Ləğv et</button>}<Button disabled={Boolean(busy) || !education.institution.trim()} onClick={() => void saveEducation()}>{busy === "education" ? "Saxlanılır..." : education.id ? "Yadda saxla" : "Təhsil qeydini əlavə et"}</Button></div>}
     {schools.length > 0 && <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Səviyyə</th><th>Müəssisə</th><th>İxtisas</th><th>İllər</th><th>Diplom</th><th></th></tr></thead><tbody>
       {schools.map((e) => <tr key={e.id}><td>{e.level}</td><td>{e.institution}</td><td>{e.specialty || "—"}</td><td>{e.start_year || e.end_year ? `${e.start_year || "…"} – ${e.end_year || "…"}` : "—"}</td>
         <td>{e.diploma_no ? `№ ${e.diploma_no}` : ""}{e.diploma_key ? <>{e.diploma_no ? " · " : ""}<a href={`/api/file?key=${encodeURIComponent(e.diploma_key)}`} target="_blank" rel="noreferrer">skan</a></> : ""}{!e.diploma_no && !e.diploma_key ? "—" : ""}</td>
-        <td>{rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setEducation({ id: String(e.id), level: e.level, institution: e.institution, specialty: e.specialty || "", startYear: e.start_year ? String(e.start_year) : "", endYear: e.end_year ? String(e.end_year) : "", diplomaNo: e.diploma_no || "", diplomaKey: e.diploma_key || "", diplomaName: e.diploma_name || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => removeEducation(e)}>Sil</button></div>}</td></tr>)}
+        <td>{(er.edit || er.delete) && <div className="tableactions">{er.edit && <button className="editcompanybtn" onClick={() => setEducation({ id: String(e.id), level: e.level, institution: e.institution, specialty: e.specialty || "", startYear: e.start_year ? String(e.start_year) : "", endYear: e.end_year ? String(e.end_year) : "", diplomaNo: e.diploma_no || "", diplomaKey: e.diploma_key || "", diplomaName: e.diploma_name || "" })}>Redaktə</button>}{er.delete && <button className="deletetaskbtn" onClick={() => removeEducation(e)}>Sil</button>}</div>}</td></tr>)}
     </tbody></table></div>}
+    {!schools.length && !er.add && <small className="hrhint">Təhsil qeydi yoxdur.</small>}
+    </>}
     {error && <div className="errorbox">{error}</div>}
   </div>;
 }
@@ -661,6 +718,8 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   const [form, setForm] = useState(emptyLeave);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const parts = partsOf(data, employee.company_id);
+  const sick = parts.sick;
   const leaves = data.leaves.filter((l) => l.hr_employee_id === employee.id);
   const balance = leaveBalance(employee, leaves, params, isIsoDate(asOf) ? asOf : todayIso());
   const autoDays = form.kind === "annual" ? leaveDaysBetween(form.startDate, form.endDate, calendar, params) : isIsoDate(form.startDate) && isIsoDate(form.endDate) && form.endDate >= form.startDate ? Math.round((Date.parse(form.endDate) - Date.parse(form.startDate)) / 86400000) + 1 : 0;
@@ -674,15 +733,18 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
     if (!window.confirm(`${formatDay(leave.start_date)} – ${formatDay(leave.end_date)} məzuniyyətini silmək istəyirsiniz?`)) return;
     try { await call("DELETE", `type=leave&id=${leave.id}`); } catch (e) { setError(e instanceof Error ? e.message : "Silinmədi."); }
   };
+  // The balance is shown with Məzuniyyət hüququ and Qeydə alınmış məzuniyyətlər both open (Versiya 3.19).
+  const showBalance = canSeeBalance(parts);
   return <div className="hrtab">
-    <div className="hrsummary">
+    {showBalance && <div className="hrsummary">
       <label className="field">Qalıq hansı tarixə<Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></label>
       <span><small>Məzuniyyət qalığı</small><b className={balance.balance < 0 ? "hrneg" : "hrpos"}>{days(balance.balance)} gün</b></span>
       <span><small>Qazanılıb</small><b>{days(balance.earned)}</b></span>
       <span><small>İstifadə olunub</small><b>{days(balance.used)}</b></span>
       {balance.current && <span><small>Cari iş ili</small><b className="hrsmall">{formatDay(balance.current.start)} – {formatDay(balance.current.end)}</b><small>{balance.current.entitlement} gün hüquq · ümumi staj {balance.current.stageYears} il</small></span>}
-    </div>
+    </div>}
     <small className="hrhint">Məzuniyyətlər yalnız əmr əsasında qeydə alınır: <b>Kadrlar → Əmrlər → Məzuniyyət əmrləri</b>. Əmrin imzalı nüsxəsi yüklənəndə məzuniyyət bu siyahıya düşür və qalıqdan çıxılır. Kartda yalnız xəstəlik vərəqəsi qeyd olunur.</small>
+    {(form.id ? sick.edit : sick.add) && <>
     <h4>{form.id ? "Xəstəlik vərəqəsini redaktə et" : "Xəstəlik vərəqəsi"}</h4>
     <div className="hrgrid hrleaveform">
       <label className="field">Başlama<Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></label>
@@ -694,22 +756,26 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
     </div>
     {holidaysInside.length > 0 && <small className="hrhint">Bu dövrə düşən {holidaysInside.length} bayram günü hesablanmır: {holidaysInside.map((d) => `${formatDay(d.date)}${d.name ? ` (${d.name})` : ""}`).join(", ")}.</small>}
     {form.kind === "unpaid" && params.unpaidExtendsWorkYear && <small className="hrhint">Ödənişsiz məzuniyyət günləri iş ilini uzadır (parametrlərdə dəyişmək olar).</small>}
+    <div className="hractions">{form.id && <button className="inlinecancel" onClick={() => setForm(emptyLeave())}>Ləğv et</button>}<Button disabled={busy || !form.startDate || !form.endDate} onClick={() => void save()}>{busy ? "Saxlanılır..." : form.id ? "Yadda saxla" : "Əlavə et"}</Button></div>
+    </>}
     {error && <div className="errorbox">{error}</div>}
-    {rightsOf(data).edit && <div className="hractions">{form.id && <button className="inlinecancel" onClick={() => setForm(emptyLeave())}>Ləğv et</button>}<Button disabled={busy || !form.startDate || !form.endDate} onClick={() => void save()}>{busy ? "Saxlanılır..." : form.id ? "Yadda saxla" : "Əlavə et"}</Button></div>}
-    <h4>Qeydə alınmış məzuniyyətlər</h4>
+    <h4>{parts.leaves.view && sick.view ? "Qeydə alınmış məzuniyyətlər" : parts.leaves.view ? "Qeydə alınmış məzuniyyətlər (xəstəlik vərəqələri göstərilmir)" : "Xəstəlik vərəqələri"}</h4>
     <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Növ</th><th>Dövr</th><th>Gün</th><th>Əmr</th><th>Qeyd</th><th></th></tr></thead><tbody>
       {leaves.map((l) => <tr key={l.id}><td>{leaveKindLabel(l.kind)}</td><td>{formatDay(l.start_date)} – {formatDay(l.end_date)}</td><td>{days(Number(l.days))}</td><td>{l.order_no ? `№ ${l.order_no}` : "—"}{l.order_date && <small className="hrsub">{formatDay(l.order_date)}</small>}</td><td>{l.note || "—"}</td>
-        <td>{l.order_id ? <small className="hrsub">əmrlə</small> : rightsOf(data).edit && <div className="tableactions"><button className="editcompanybtn" onClick={() => setForm({ id: String(l.id), kind: l.kind, startDate: l.start_date, endDate: l.end_date, days: String(l.days), orderNo: l.order_no || "", orderDate: l.order_date || "", note: l.note || "" })}>Redaktə</button><button className="deletetaskbtn" onClick={() => void remove(l)}>Sil</button></div>}</td></tr>)}
+        <td>{l.order_id ? <small className="hrsub">əmrlə</small> : (sick.edit || sick.delete) && <div className="tableactions">{sick.edit && <button className="editcompanybtn" onClick={() => setForm({ id: String(l.id), kind: l.kind, startDate: l.start_date, endDate: l.end_date, days: String(l.days), orderNo: l.order_no || "", orderDate: l.order_date || "", note: l.note || "" })}>Redaktə</button>}{sick.delete && <button className="deletetaskbtn" onClick={() => void remove(l)}>Sil</button>}</div>}</td></tr>)}
     </tbody></table>{!leaves.length && <div className="empty"><p>Hələ məzuniyyət qeydə alınmayıb.</p></div>}</div>
+    {showBalance && <>
     <h4>Qalığın hesablanması ({formatDay(balance.asOf)} tarixinə)</h4>
     <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Tarix</th><th>Əməliyyat</th><th>+ gün</th><th>− gün</th><th>Qalıq</th></tr></thead><tbody>
       {balance.ledger.map((r, i) => <tr key={i}><td>{formatDay(r.date)}</td><td>{r.label}</td><td>{r.plus ? days(r.plus) : ""}</td><td>{r.minus ? days(r.minus) : ""}</td><td><b className={r.balance < 0 ? "hrneg" : ""}>{days(r.balance)}</b></td></tr>)}
     </tbody></table></div>
+    </>}
   </div>;
 }
 
 function SalaryTab({ employee, data, call }: { employee: HrEmployee; data: HrData; call: Call }) {
   const params = normalizeParams(data.params);
+  const pay = partsOf(data, employee.company_id).salary;
   const salaries = data.salaries.filter((s) => s.hr_employee_id === employee.id);
   const byPeriod = new Map(salaries.map((s) => [s.period, s.amount]));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -739,10 +805,10 @@ function SalaryTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
       <span><small>Son {params.avgMonths} ayın cəmi</small><b>{money(average.total)}</b></span>
     </div>
     <small className="hrhint">Hər ay üçün işçiyə hesablanmış əmək haqqını yazın (orta əmək haqqına daxil olan ödənişlər). Orta əmək haqqı {formatDay(reference)} tarixindən əvvəlki {params.avgMonths} ay üzrə hesablanır; məbləğ yazılmayan aylar nəzərə alınmır. Dəyişiklik xanadan çıxanda saxlanılır.</small>
-    {rightsOf(data).edit && <div className="hractions left"><Button variant="outline" disabled={busy || !employee.monthly_salary} onClick={() => void fill()}>Boş ayları vəzifə maaşı ilə doldur (son {params.avgMonths} ay)</Button></div>}
+    {pay.add && <div className="hractions left"><Button variant="outline" disabled={busy || !employee.monthly_salary} onClick={() => void fill()}>Boş ayları vəzifə maaşı ilə doldur (son {params.avgMonths} ay)</Button></div>}
     {error && <div className="errorbox">{error}</div>}
     <div className="hrsalarygrid">{periods.map((p) => <label key={p} className={`field${counted.has(p) ? " counted" : ""}`}>{periodLabel(p)}{counted.has(p) && <small>ortaya daxildir</small>}
-      <Input inputMode="decimal" readOnly={!rightsOf(data).edit} value={drafts[p] ?? String(byPeriod.get(p) ?? "")} onChange={(e) => setDrafts((d) => ({ ...d, [p]: e.target.value }))} onBlur={() => void commit(p)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></label>)}</div>
+      <Input inputMode="decimal" readOnly={byPeriod.has(p) ? !pay.edit && !pay.delete : !pay.add} value={drafts[p] ?? String(byPeriod.get(p) ?? "")} onChange={(e) => setDrafts((d) => ({ ...d, [p]: e.target.value }))} onBlur={() => void commit(p)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></label>)}</div>
   </div>;
 }
 

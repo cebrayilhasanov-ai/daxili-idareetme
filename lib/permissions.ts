@@ -1,8 +1,8 @@
 import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import {
-  actionKey, deniedFromStored, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions,
-  type CompanyPermissions, type FirmSection, type SectionAction, type SectionKey,
+  ACTIONS, actionKey, allPartsRights, deniedFromStored, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions, partsRightsOf,
+  type CompanyPermissions, type FirmSection, type PartsRights, type SectionAction, type SectionKey,
 } from "@/lib/permission-model";
 
 // The keys, defaults and the stored format live in lib/permission-model.ts (the page uses the same rules).
@@ -65,20 +65,25 @@ export async function sectionRights(user: SessionUser, section: SectionKey) {
 }
 
 // ---------- Per firm (Versiya 2.99) ----------
-export type FirmRights = { view: boolean; add: boolean; edit: boolean; delete: boolean; types: Set<string> | null };
+// parts (Versiya 3.19): the rights in each part of the section (SECTION_PARTS in lib/permission-model.ts) — empty for other sections.
+export type FirmRights = { view: boolean; add: boolean; edit: boolean; delete: boolean; types: Set<string> | null; parts: PartsRights };
 export type FirmAccess = {
   admin: boolean;
   // The rights in one firm; types: the document types (lower-case template names) the work there is narrowed to, null = all.
   firm: (companyId: number) => FirmRights;
   // The firms where the right is given (null = every firm, for the admin).
   firms: (action: SectionAction) => number[] | null;
+  // The firms where a right of one part of the section is given (null = every firm).
+  partFirms: (part: string, action: SectionAction) => number[] | null;
 };
 
-const ALL_RIGHTS: FirmRights = { view: true, add: true, edit: true, delete: true, types: null };
 export const typeKey = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("az");
 
 export async function firmAccess(user: SessionUser, section: FirmSection): Promise<FirmAccess> {
-  if (user.role === "admin") return { admin: true, firm: () => ALL_RIGHTS, firms: () => null };
+  if (user.role === "admin") {
+    const all: FirmRights = { view: true, add: true, edit: true, delete: true, types: null, parts: allPartsRights(section) };
+    return { admin: true, firm: () => all, firms: () => null, partFirms: () => null };
+  }
   const { stored, firms, companyIds } = await storedRights(user);
   const rights = new Map<number, FirmRights>();
   if (firms) {
@@ -91,23 +96,25 @@ export async function firmAccess(user: SessionUser, section: FirmSection): Promi
     }
     for (const id of companyIds) {
       const r = firmSectionRights(firms, id, section);
-      rights.set(id, { view: r.view, add: r.add, edit: r.edit, delete: r.delete, types: r.types ? new Set(r.types.flatMap((t) => names.get(t) ?? [])) : null });
+      rights.set(id, { view: r.view, add: r.add, edit: r.edit, delete: r.delete, types: r.types ? new Set(r.types.flatMap((t) => names.get(t) ?? [])) : null, parts: r.parts });
     }
   } else {
     const denied = deniedFromStored(stored);
     const has = (action: SectionAction) => !denied.has(section) && !denied.has(actionKey(section, action));
-    for (const id of companyIds) rights.set(id, { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete"), types: null });
+    const parts = partsRightsOf(section, { actions: ACTIONS.filter(has) });
+    for (const id of companyIds) rights.set(id, { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete"), types: null, parts });
   }
-  const none: FirmRights = { view: false, add: false, edit: false, delete: false, types: null };
+  const none: FirmRights = { view: false, add: false, edit: false, delete: false, types: null, parts: partsRightsOf(section, null) };
   return {
     admin: false,
     firm: (companyId) => rights.get(Number(companyId)) ?? none,
     firms: (action) => [...rights].filter(([, r]) => r[action]).map(([id]) => id),
+    partFirms: (part, action) => [...rights].filter(([, r]) => r.view && r.parts[part]?.[action]).map(([id]) => id),
   };
 }
 
 // The firm's rights for a document of the given type: a type outside the firm's narrowed list gets none.
 export function rightsForType(rights: FirmRights, documentType: unknown): FirmRights {
   if (!rights.types || rights.types.has(typeKey(documentType))) return rights;
-  return { view: false, add: false, edit: false, delete: false, types: rights.types };
+  return { view: false, add: false, edit: false, delete: false, types: rights.types, parts: rights.parts };
 }

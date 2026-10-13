@@ -91,7 +91,43 @@ export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "do
 export type FirmSection = (typeof FIRM_SECTIONS)[number];
 export const TYPED_SECTIONS: readonly FirmSection[] = ["documents.outgoing", "documents.incoming"];
 export const isFirmSection = (section: string): section is FirmSection => (FIRM_SECTIONS as readonly string[]).includes(section);
-export type FirmSectionRights = { actions: SectionAction[]; types?: number[] };
+// Versiya 3.19: inside some sections each part has its own rights — the headings of the Personallar card (and, from 3.20, the
+// tabs of Əmrlər). "parts" lists, per part, the rights given there; without "parts" every part has what the section's rights
+// gave there before (legacyPartActions — that is how all stored rights read, so nothing changed for anyone on rollout).
+// A part missing from the list is closed.
+export type SectionPart = { key: string; label: string; actions: readonly SectionAction[] };
+export type SectionPartGroup = { key: string; label: string; parts: SectionPart[] };
+const FIXED: readonly SectionAction[] = ["view", "edit"];
+const VIEW_ONLY: readonly SectionAction[] = ["view"];
+export const SECTION_PARTS: Partial<Record<SectionKey, SectionPartGroup[]>> = {
+  "hr.personnel": [
+    { key: "card", label: "Şəxsi kart", parts: [
+      { key: "personal", label: "Şəxsi məlumatlar", actions: FIXED },
+      { key: "emergency", label: "Təcili əlaqə şəxsi", actions: FIXED },
+      { key: "idcard", label: "Şəxsiyyət vəsiqəsi", actions: FIXED },
+      { key: "workplace", label: "İş yeri", actions: FIXED },
+      { key: "priorJobs", label: "Əvvəlki iş yerləri", actions: ACTIONS },
+      { key: "contract", label: "Əmək müqaviləsi", actions: FIXED },
+      { key: "termination", label: "İşdən çıxma", actions: VIEW_ONLY },
+    ] },
+    { key: "family", label: "Ailə və təhsil", parts: [
+      { key: "family", label: "Ailə üzvləri", actions: ACTIONS },
+      { key: "education", label: "Təhsil", actions: ACTIONS },
+    ] },
+    { key: "leaves", label: "Məzuniyyətlər", parts: [
+      { key: "entitlement", label: "Məzuniyyət hüququ", actions: FIXED },
+      { key: "leaves", label: "Qeydə alınmış məzuniyyətlər", actions: VIEW_ONLY },
+      { key: "sick", label: "Xəstəlik vərəqəsi", actions: ACTIONS },
+    ] },
+    { key: "salary", label: "Əmək haqqı", parts: [{ key: "salary", label: "Əmək haqqı", actions: ACTIONS }] },
+    { key: "settlement", label: "Son hesablaşma", parts: [{ key: "settlement", label: "Son hesablaşma", actions: VIEW_ONLY }] },
+  ],
+};
+export const sectionParts = (section: string): SectionPart[] => (SECTION_PARTS[section as SectionKey] ?? []).flatMap((g) => g.parts);
+export type PartRights = Record<SectionAction, boolean>;
+export type PartsRights = Record<string, PartRights>;
+
+export type FirmSectionRights = { actions: SectionAction[]; types?: number[]; parts?: Record<string, SectionAction[]> };
 export type CompanyPermissions = Record<string, Partial<Record<FirmSection, FirmSectionRights>>>;
 
 export function parseCompanyPermissions(raw: unknown): CompanyPermissions {
@@ -111,18 +147,47 @@ export function parseCompanyPermissions(raw: unknown): CompanyPermissions {
       if (actions.length && !actions.includes("view")) actions.unshift("view");
       if (!actions.length) continue;
       const types = TYPED_SECTIONS.includes(section) && Array.isArray(entry?.types) ? [...new Set(entry.types.map(Number).filter((id) => id > 0))] : undefined;
-      firm[section] = types ? { actions, types } : { actions };
+      const rawParts = (entry as { parts?: unknown } | undefined)?.parts;
+      let parts: Record<string, SectionAction[]> | undefined;
+      if (sectionParts(section).length && rawParts && typeof rawParts === "object" && !Array.isArray(rawParts)) {
+        parts = {};
+        for (const part of sectionParts(section)) {
+          const list = (rawParts as Record<string, unknown>)[part.key];
+          const given = part.actions.filter((a) => Array.isArray(list) && list.includes(a));
+          if (given.length && !given.includes("view")) given.unshift("view");
+          if (given.length) parts[part.key] = given;
+        }
+      }
+      firm[section] = { actions, ...(types ? { types } : {}), ...(parts ? { parts } : {}) };
     }
     if (Object.keys(firm).length) result[String(Number(companyId))] = firm;
   }
   return result;
 }
 
+// What the section's own rights meant inside it before the parts had rights: in Personallar Baxış showed the whole card and
+// Dəyişiklik et changed everything in it, rows added and removed included (Əlavə et and Sil were the new card and deleting it).
+const legacyPartActions = (section: string, actions: SectionAction[]): SectionAction[] =>
+  section === "hr.personnel" ? (actions.includes("edit") ? [...ACTIONS] : actions.includes("view") ? ["view"] : []) : actions;
+
+// The rights of every part of a section in one firm entry: the part's own list, or (no "parts" stored) what the section's
+// rights gave there before.
+export function partsRightsOf(section: string, entry: FirmSectionRights | undefined | null): PartsRights {
+  const result: PartsRights = {};
+  for (const part of sectionParts(section)) {
+    const given = !entry ? [] : entry.parts ? entry.parts[part.key] ?? [] : legacyPartActions(section, entry.actions);
+    const has = (a: SectionAction) => part.actions.includes(a) && given.includes(a);
+    result[part.key] = { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete") };
+  }
+  return result;
+}
+export const allPartsRights = (section: string): PartsRights => partsRightsOf(section, { actions: [...ACTIONS] });
+
 // The rights of one firm section; types null = every document type.
 export function firmSectionRights(permissions: CompanyPermissions, companyId: number, section: FirmSection) {
   const entry = permissions[String(companyId)]?.[section];
   const has = (action: SectionAction) => Boolean(entry?.actions.includes(action));
-  return { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete"), types: entry?.types ?? null };
+  return { view: has("view"), add: has("add"), edit: has("edit"), delete: has("delete"), types: entry?.types ?? null, parts: partsRightsOf(section, entry) };
 }
 
 // What the old (pre-2.99) one-for-all rights meant, written out for each of the user's firms — the migration, so nobody's rights change.

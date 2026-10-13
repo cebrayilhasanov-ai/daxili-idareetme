@@ -14,7 +14,7 @@ import { HrPage, type HrSection } from "@/components/hr/hr-page";
 import { OrdersPage } from "@/components/hr/orders-page";
 import { DocumentsOverview, HrOverview, SectionOverview } from "@/components/section-overview";
 import { GuidesPage } from "@/components/guides";
-import { ACTIONS, ACTION_LABELS, FIRM_SECTIONS, LEVELED_SECTIONS, TYPED_SECTIONS, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions, type CompanyPermissions, type FirmSection, type FirmSectionRights, type SectionAction } from "@/lib/permission-model";
+import { ACTIONS, ACTION_LABELS, FIRM_SECTIONS, LEVELED_SECTIONS, SECTION_PARTS, TYPED_SECTIONS, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions, partsRightsOf, sectionParts, type CompanyPermissions, type FirmSection, type FirmSectionRights, type SectionAction, type SectionKey } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
 import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, FREQUENCY_TITLES, hasFixedDue, MONTH_NAMES, MONTH_ORDINALS, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, dueMonth, formatBakuDate, isLongPeriod, overdueDays, periodState, periodWindow, periodsOf, periodsOfYear, type FixedFrequency } from "@/lib/fixed-periods";
 
@@ -325,7 +325,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.18</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.19</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -2438,13 +2438,14 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
     onFirmsChange({...firms,[String(companyId)]:firm});
   };
   // One right: any of Əlavə et / Dəyişiklik et / Sil turns Baxış on; taking Baxış away takes all of them.
+  // In a section with parts (Personallar) the parts keep their own rights when a right of the section itself changes.
   const setFirmAction=(companyId:number,section:string,action:SectionAction,on:boolean)=>{
     const current=firms[String(companyId)]?.[section as FirmSection];
     let actions=new Set<SectionAction>(current?.actions||[]);
     if(on){actions.add(action);actions.add("view")}
     else if(action==="view")actions=new Set();
     else actions.delete(action);
-    setFirmEntry(companyId,section,{...(current?.types?{types:current.types}:{}),actions:ACTIONS.filter(a=>actions.has(a))});
+    setFirmEntry(companyId,section,{...(current?.types?{types:current.types}:{}),...(current&&sectionParts(section).length?{parts:current.parts??Object.fromEntries(Object.entries(partsRightsOf(section,current)).map(([k,r])=>[k,ACTIONS.filter(x=>r[x])]))}:{}),actions:ACTIONS.filter(a=>actions.has(a))});
   };
   // A section (or a whole group, or the whole firm) opens or closes with all of its rights.
   const setFirmAll=(companyId:number,sections:string[],on:boolean)=>{
@@ -2452,6 +2453,26 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
     for(const section of sections){const key=section as FirmSection;if(on)firm[key]={...(firm[key]?.types?{types:firm[key]!.types}:{}),actions:fullActions(section)};else delete firm[key]}
     onFirmsChange({...firms,[String(companyId)]:firm});
   };
+  // Versiya 3.19: the parts of a section (the Personallar card's headings), each with its own rights. Until the first change the
+  // parts follow the section's rights (nothing stored); the first change writes every part out.
+  const setPartsRights=(companyId:number,section:string,change:(parts:Record<string,SectionAction[]>)=>void)=>{
+    const current=firms[String(companyId)]?.[section as FirmSection];
+    const now=partsRightsOf(section,current);
+    const parts:Record<string,SectionAction[]>=Object.fromEntries(sectionParts(section).map(p=>[p.key,ACTIONS.filter(a=>now[p.key][a])]));
+    change(parts);
+    for(const key of Object.keys(parts))if(!parts[key].length)delete parts[key];
+    setFirmEntry(companyId,section,{...(current||{actions:["view"]}),parts});
+  };
+  const setPartAction=(companyId:number,section:string,part:string,action:SectionAction,on:boolean)=>setPartsRights(companyId,section,parts=>{
+    let actions=new Set<SectionAction>(parts[part]||[]);
+    if(on){actions.add(action);actions.add("view")}
+    else if(action==="view")actions=new Set();
+    else actions.delete(action);
+    parts[part]=ACTIONS.filter(a=>actions.has(a));
+  });
+  const setPartsAll=(companyId:number,section:string,keys:string[],on:boolean)=>setPartsRights(companyId,section,parts=>{
+    for(const p of sectionParts(section))if(keys.includes(p.key))parts[p.key]=on?[...p.actions]:[];
+  });
   const setFirmTypes=(companyId:number,section:string,types:number[]|null)=>{
     const current=firms[String(companyId)]?.[section as FirmSection];
     if(!current)return;
@@ -2460,12 +2481,12 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
   // Versiya 3.01: "Başqa firmadan köçür..." — this user's rights in another of their firms, copied into this firm (types do not carry over).
   const copyFromFirm=(sourceId:number,targetId:number)=>{
     const source=firms[String(sourceId)]||{};
-    onFirmsChange({...firms,[String(targetId)]:Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions]}]))});
+    onFirmsChange({...firms,[String(targetId)]:Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions],...((e as FirmSectionRights).parts?{parts:structuredClone((e as FirmSectionRights).parts)}:{})}]))});
   };
   const copyFirmToAll=(companyId:number)=>{
     const source=firms[String(companyId)]||{};
     // Document types are templates of one firm, so a narrowed list cannot be carried over: the other firms get every type.
-    const plain=Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions]}]));
+    const plain=Object.fromEntries(Object.entries(source).map(([s,e])=>[s,{actions:[...(e as FirmSectionRights).actions],...((e as FirmSectionRights).parts?{parts:structuredClone((e as FirmSectionRights).parts)}:{})}]));
     onFirmsChange(Object.fromEntries(companies.map(c=>[String(c.id),c.id===companyId?source:structuredClone(plain)])));
   };
   const firmTemplates=(companyId:number,section:string)=>templates.filter(t=>Number(t.company_id)===companyId&&templateGroupOf(t)===(section==="documents.incoming"?"incoming":"outgoing"));
@@ -2475,7 +2496,7 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
     const theirs=parseCompanyPermissions(source.company_permissions||"{}");
     onFirmsChange(Object.fromEntries(companies.filter(c=>theirs[String(c.id)]).map(c=>[String(c.id),theirs[String(c.id)]])));
   };
-  const fullFirm=(companyId:number)=>FIRM_SECTIONS.every(s=>fullActions(s).every(a=>rightsOf(companyId,s)[a])&&!rightsOf(companyId,s).types);
+  const fullFirm=(companyId:number)=>FIRM_SECTIONS.every(s=>fullActions(s).every(a=>rightsOf(companyId,s)[a])&&!rightsOf(companyId,s).types&&sectionParts(s).every(p=>p.actions.every(a=>rightsOf(companyId,s).parts[p.key][a])));
   const firmOpenCount=(companyId:number)=>FIRM_SECTIONS.filter(s=>rightsOf(companyId,s).view).length;
   const own=employee?assignments.filter(a=>a.employee_id===employee.id):[];
   const warnings:string[]=[];
@@ -2503,6 +2524,26 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
       {r.types&&<small className="permissiontypenote">Yalnız seçilmiş növlərin sənədlərini görür və qeydə alır; dəyişiklik və silmə yalnız özünün qeydə aldığı sənədlərdə.</small>}
     </div>;
   };
+  // "Kartın hissələri" under Personallar of a firm: every heading of the card with its own rights (Versiya 3.19).
+  const partPicker=(companyId:number,section:string)=>{
+    const groups=SECTION_PARTS[section as SectionKey];
+    if(!groups||!rightsOf(companyId,section).view)return null;
+    const pr=rightsOf(companyId,section).parts;
+    const fullOf=(keys:string[])=>sectionParts(section).filter(p=>keys.includes(p.key)).every(p=>p.actions.every(a=>pr[p.key][a]));
+    const anyOf=(keys:string[])=>keys.some(k=>pr[k].view);
+    const row=(part:{key:string;label:string;actions:readonly SectionAction[]},label:string)=>{const full=fullOf([part.key]);return <div key={part.key} className="permissionpart">
+      <label><input type="checkbox" checked={full} ref={el=>{if(el)el.indeterminate=pr[part.key].view&&!full}} onChange={()=>setPartsAll(companyId,section,[part.key],!full)}/><span>{label}</span></label>
+      <div className="permissionactions">{part.actions.map(a=><label key={a}><input type="checkbox" checked={pr[part.key][a]} onChange={e=>setPartAction(companyId,section,part.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
+    </div>};
+    return <div className="permissionparts">
+      <span className="permissionpartstitle">Kartın hissələri:</span>
+      {groups.map(g=>{const keys=g.parts.map(p=>p.key);const full=fullOf(keys);return g.parts.length===1?row(g.parts[0],g.label):<div key={g.key} className="permissionpartgroup">
+        <label className="permissionpartgrouphead"><input type="checkbox" checked={full} ref={el=>{if(el)el.indeterminate=anyOf(keys)&&!full}} onChange={()=>setPartsAll(companyId,section,keys,!full)}/><b>{g.label}</b></label>
+        {g.parts.map(p=>row(p,p.label))}
+      </div>})}
+      <small className="permissiontypenote">Yuxarıdakı hüquqlar: Əlavə et — yeni kart açmaq, Dəyişiklik et — İstehsalat təqvimi və Parametrlər, Sil — kartı bütövlükdə silmək. Kartın içində isə hər hissənin öz hüquqları var: baxışı olmayan hissə kartda, çapda, Excel faylında və siyahıda görünmür. Ad, firma, şöbə, vəzifə, işə qəbul tarixi və status həmişə görünür. Kartdakı “Vəzifə maaşı” Əmək haqqına tabedir. Məzuniyyət qalığı “Məzuniyyət hüququ” və “Qeydə alınmış məzuniyyətlər” ikisi də açıq olanda, Son hesablaşma isə əlavə olaraq Əmək haqqı da açıq olanda görünür.</small>
+    </div>;
+  };
   // One group of a firm (a box with a header checkbox, a count and its rows).
   const renderGroup=(companyId:number,group:SectionGroup)=>{
     const r=(key:string)=>rightsOf(companyId,key);
@@ -2525,6 +2566,7 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
         <label><input type="checkbox" checked={allOf(child.key)} ref={el=>{if(el)el.indeterminate=r(child.key).view&&!allOf(child.key)}} onChange={()=>setFirmAll(companyId,[child.key],!allOf(child.key))}/><span>{child.label}</span></label>
         <div className="permissionactions">{ACTIONS.map(a=><label key={a}><input type="checkbox" checked={r(child.key)[a]} onChange={e=>setFirmAction(companyId,child.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
         {typePicker(companyId,child.key)}
+        {partPicker(companyId,child.key)}
       </div>:<label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||r(child.key).view} disabled={child.locked} onChange={e=>setFirmAll(companyId,[child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}</label>)}</div>}
     </div>;
   };
