@@ -1,12 +1,15 @@
-import { cancelOrder, createLeaveOrder, createOtherOrder, createTerminationOrder, updateOtherOrder, getEmployeeSalaries, getOrdersData, orderLabel, saveOrderSettings, signOrder, updateLeaveOrder, updateTerminationOrder } from "@/db/hr-orders";
+import { cancelOrder, createLeaveOrder, createOtherOrder, createTerminationOrder, updateOtherOrder, getEmployeeSalaries, getOrdersData, orderGroup, orderLabel, saveOrderSettings, signOrder, updateLeaveOrder, updateTerminationOrder } from "@/db/hr-orders";
 import { requireUser } from "@/lib/auth";
-import { firmAccess, requireAction, requireSection, sectionRights, type SectionAction } from "@/lib/permissions";
+import { firmAccess, requireSection, type SectionAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { departmentScope, narrowScope, requireHrEmployeeInScope, requireOrderInScope, scopeHrData } from "@/db/department-scope";
 
 // HR orders (Əmrlər): the admin and employees given the separate "Əmrlər" permission (closed by default).
-// Rights (Versiya 2.62): Əlavə et — a new order; Dəyişiklik et — correcting an order, its signed copy, the numbering settings;
-// Sil — cancelling an order (orders are never deleted, a cancelled one stays in the register).
+// Rights (Versiya 2.62): Əlavə et — a new order; Dəyişiklik et — correcting an order, its signed copy; Sil — cancelling an order
+// (orders are never deleted, a cancelled one stays in the register). Since Versiya 3.20 these rights are given per tab —
+// Məzuniyyət, İşdən çıxma, Digər əmrlər — and Parametrlər (the numbering and the legal texts) has Baxış and Dəyişiklik et.
+// The final settlement of a termination order (salaries, average pay) is shown only to those who may see the worker's
+// Əmək haqqı in Personallar.
 // Since Versiya 2.65 only the orders and workers of the departments the user oversees (db/department-scope.ts).
 
 function authError(error: unknown) {
@@ -16,29 +19,59 @@ function authError(error: unknown) {
   return null;
 }
 
-// Versiya 2.99: the rights are per firm — each right reaches the workers of the firms where it is given.
-async function ordersScope(user: Awaited<ReturnType<typeof requireUser>>, action: SectionAction) {
-  const [scope, access] = await Promise.all([departmentScope(user), firmAccess(user, "hr.orders")]);
-  return narrowScope(scope, access.firms(action));
+type User = Awaited<ReturnType<typeof requireUser>>;
+const GROUPS = ["leave", "termination", "other"];
+
+// Versiya 2.99: the rights are per firm; Versiya 3.20: a tab's right reaches the workers of the firms where it is given.
+async function ordersContext(user: User) {
+  const [scope, access, personnel] = await Promise.all([departmentScope(user), firmAccess(user, "hr.orders"), firmAccess(user, "hr.personnel")]);
+  return {
+    access,
+    sectionScope: (action: SectionAction) => narrowScope(scope, access.firms(action)),
+    partScope: (part: string, action: SectionAction) => narrowScope(scope, access.partFirms(part, action)),
+    // Salaries and the settlement: Personallar → Əmək haqqı.
+    payScope: narrowScope(scope, personnel.partFirms("salary", "view")),
+    seesPay: (companyId: number) => personnel.admin || (personnel.firm(companyId).view && personnel.firm(companyId).parts.salary.view),
+  };
 }
 
 async function ordersUser(request: Request) {
   return requireSection(await requireUser(request), "hr.orders");
 }
 
-// Every answer carries the viewer's rights, so the page offers only what is allowed.
-async function ordersBody(user: Awaited<ReturnType<typeof requireUser>>, extra: Record<string, unknown> = {}) {
-  const [data, rights, scope] = await Promise.all([getOrdersData(), sectionRights(user, "hr.orders"), ordersScope(user, "view")]);
-  return { ...scopeHrData(data, scope), rights: { add: rights.add, edit: rights.edit, delete: rights.delete }, ...extra };
+type Row = Record<string, unknown>;
+// The settlement kept with a signed termination order is left out where the user may not see the worker's salaries.
+const withoutSettlement = (order: Row) => {
+  try { const extra = JSON.parse(String(order.extra || "{}")); delete extra.settlement; return { ...order, extra: JSON.stringify(extra) }; } catch { return order; }
+};
+
+// Every answer carries the viewer's rights, so the page offers only what is allowed: per firm, the rights in each tab and
+// whether the settlement may be seen (null for the admin — everything).
+async function ordersBody(user: User, extra: Record<string, unknown> = {}) {
+  const [data, ctx] = await Promise.all([getOrdersData(), ordersContext(user)]);
+  const scoped = scopeHrData(data, ctx.sectionScope("view"));
+  if (ctx.access.admin) return { ...scoped, partRights: null, paySeen: null, ...extra };
+  const companies = scoped.companies as Array<{ id: number }>;
+  const orders = (scoped.orders as Row[])
+    .filter((o) => ctx.access.firm(Number(o.company_id)).parts[String(o.grp)]?.view)
+    .map((o) => (o.grp === "termination" && !ctx.seesPay(Number(o.company_id)) ? withoutSettlement(o) : o));
+  return {
+    ...scoped, orders,
+    partRights: Object.fromEntries(companies.map((c) => [String(c.id), ctx.access.firm(c.id).parts])),
+    paySeen: Object.fromEntries(companies.map((c) => [String(c.id), ctx.seesPay(c.id)])),
+    ...extra,
+  };
 }
 
 export async function GET(request: Request) {
   try {
     const user = await ordersUser(request);
-    // The final settlement of a worker being dismissed needs that worker's salaries (and only theirs).
+    // The final settlement of a worker being dismissed needs that worker's salaries (and only theirs) — for those who may see them.
     const salariesOf = Number(new URL(request.url).searchParams.get("salaries"));
     if (salariesOf) {
-      await requireHrEmployeeInScope(await ordersScope(user, "view"), salariesOf);
+      const ctx = await ordersContext(user);
+      await requireHrEmployeeInScope(ctx.sectionScope("view"), salariesOf);
+      await requireHrEmployeeInScope(ctx.payScope, salariesOf);
       return Response.json(await getEmployeeSalaries(salariesOf));
     }
     return Response.json(await ordersBody(user));
@@ -49,11 +82,19 @@ export async function POST(request: Request) {
   try {
     const user = await ordersUser(request);
     const body = await request.json();
-    const creating = ["leave", "termination", "other"].includes(String(body.action)) && !body.id;
-    const action = creating ? "add" : body.action === "cancel" ? "delete" : "edit";
-    await requireAction(user, "hr.orders", action);
-    if (body.action !== "settings") {
-      const scope = await ordersScope(user, action);
+    const ctx = await ordersContext(user);
+    const creating = GROUPS.includes(String(body.action)) && !body.id;
+    const action: SectionAction = creating ? "add" : body.action === "cancel" ? "delete" : "edit";
+    if (body.action === "settings") {
+      const firms = ctx.access.partFirms("settings", "edit");
+      if (firms && !firms.length) throw new Error("FORBIDDEN");
+      // The numbering is changed only for the firms where Parametrlər may be changed.
+      if (firms && Array.isArray(body.numbering)) body.numbering = (body.numbering as Row[]).filter((n) => firms.includes(Number(n.companyId)));
+    } else {
+      // The tab of the order itself (a saved order is changed only as an order of its own tab).
+      const part = body.id ? await orderGroup(Number(body.id)) : String(body.action);
+      if (!GROUPS.includes(part) || (GROUPS.includes(String(body.action)) && part !== body.action)) return Response.json({ error: "Əməliyyat seçilməyib." }, { status: 400 });
+      const scope = ctx.partScope(part, action);
       if (body.id) await requireOrderInScope(scope, Number(body.id));
       if (body.hrEmployeeId) await requireHrEmployeeInScope(scope, Number(body.hrEmployeeId));
       else if (creating) throw new Error("İşçini seçin.");

@@ -14,7 +14,7 @@ import { HrPage, type HrSection } from "@/components/hr/hr-page";
 import { OrdersPage } from "@/components/hr/orders-page";
 import { DocumentsOverview, HrOverview, SectionOverview } from "@/components/section-overview";
 import { GuidesPage } from "@/components/guides";
-import { ACTIONS, ACTION_LABELS, FIRM_SECTIONS, LEVELED_SECTIONS, SECTION_PARTS, TYPED_SECTIONS, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions, partsRightsOf, sectionParts, type CompanyPermissions, type FirmSection, type FirmSectionRights, type SectionAction, type SectionKey } from "@/lib/permission-model";
+import { ACTIONS, ACTION_LABELS, FIRM_SECTIONS, LEVELED_SECTIONS, PARTS_ONLY_SECTIONS, SECTION_PARTS, TYPED_SECTIONS, deniedWithFirms, firmSectionRights, parseCompanyPermissions, parseStoredPermissions, partsRightsOf, sectionParts, type CompanyPermissions, type FirmSection, type FirmSectionRights, type SectionAction, type SectionKey } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
 import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, FREQUENCY_TITLES, hasFixedDue, MONTH_NAMES, MONTH_ORDINALS, WEEKDAY_NAMES, bakuToday, dueDay, dueLabel, dueMonth, formatBakuDate, isLongPeriod, overdueDays, periodState, periodWindow, periodsOf, periodsOfYear, type FixedFrequency } from "@/lib/fixed-periods";
 
@@ -325,7 +325,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.19</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.20</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -2496,7 +2496,10 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
     const theirs=parseCompanyPermissions(source.company_permissions||"{}");
     onFirmsChange(Object.fromEntries(companies.filter(c=>theirs[String(c.id)]).map(c=>[String(c.id),theirs[String(c.id)]])));
   };
-  const fullFirm=(companyId:number)=>FIRM_SECTIONS.every(s=>fullActions(s).every(a=>rightsOf(companyId,s)[a])&&!rightsOf(companyId,s).types&&sectionParts(s).every(p=>p.actions.every(a=>rightsOf(companyId,s).parts[p.key][a])));
+  // A section is fully open with all of its rights (in a parts-only section — Əmrlər — with Baxış and all rights of every part).
+  const partsFull=(companyId:number,section:string)=>sectionParts(section).every(p=>p.actions.every(a=>rightsOf(companyId,section).parts[p.key][a]));
+  const sectionFull=(companyId:number,section:string)=>(PARTS_ONLY_SECTIONS as readonly string[]).includes(section)?rightsOf(companyId,section).view&&partsFull(companyId,section):fullActions(section).every(a=>rightsOf(companyId,section)[a])&&partsFull(companyId,section);
+  const fullFirm=(companyId:number)=>FIRM_SECTIONS.every(s=>sectionFull(companyId,s)&&!rightsOf(companyId,s).types);
   const firmOpenCount=(companyId:number)=>FIRM_SECTIONS.filter(s=>rightsOf(companyId,s).view).length;
   const own=employee?assignments.filter(a=>a.employee_id===employee.id):[];
   const warnings:string[]=[];
@@ -2535,19 +2538,21 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
       <label><input type="checkbox" checked={full} ref={el=>{if(el)el.indeterminate=pr[part.key].view&&!full}} onChange={()=>setPartsAll(companyId,section,[part.key],!full)}/><span>{label}</span></label>
       <div className="permissionactions">{part.actions.map(a=><label key={a}><input type="checkbox" checked={pr[part.key][a]} onChange={e=>setPartAction(companyId,section,part.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
     </div>};
+    const tabs=(PARTS_ONLY_SECTIONS as readonly string[]).includes(section);
     return <div className="permissionparts">
-      <span className="permissionpartstitle">Kartın hissələri:</span>
+      <span className="permissionpartstitle">{tabs?"Tablar:":"Kartın hissələri:"}</span>
       {groups.map(g=>{const keys=g.parts.map(p=>p.key);const full=fullOf(keys);return g.parts.length===1?row(g.parts[0],g.label):<div key={g.key} className="permissionpartgroup">
         <label className="permissionpartgrouphead"><input type="checkbox" checked={full} ref={el=>{if(el)el.indeterminate=anyOf(keys)&&!full}} onChange={()=>setPartsAll(companyId,section,keys,!full)}/><b>{g.label}</b></label>
         {g.parts.map(p=>row(p,p.label))}
       </div>})}
-      <small className="permissiontypenote">Yuxarıdakı hüquqlar: Əlavə et — yeni kart açmaq, Dəyişiklik et — İstehsalat təqvimi və Parametrlər, Sil — kartı bütövlükdə silmək. Kartın içində isə hər hissənin öz hüquqları var: baxışı olmayan hissə kartda, çapda, Excel faylında və siyahıda görünmür. Ad, firma, şöbə, vəzifə, işə qəbul tarixi və status həmişə görünür. Kartdakı “Vəzifə maaşı” Əmək haqqına tabedir. Məzuniyyət qalığı “Məzuniyyət hüququ” və “Qeydə alınmış məzuniyyətlər” ikisi də açıq olanda, Son hesablaşma isə əlavə olaraq Əmək haqqı da açıq olanda görünür.</small>
+      {tabs?<small className="permissiontypenote">Əmrlərin hüquqları hər tab üçün ayrıcadır: Əlavə et — yeni əmr, Dəyişiklik et — imza gözləyən əmri düzəltmək və imzalı nüsxəni yükləmək, Sil — əmri ləğv etmək; Parametrlərdə — nömrələmə və hüquqi əsasların mətni. Baxışı olmayan tab görünmür. İşdən çıxma əmrinin son hesablaşma məbləğləri yalnız Personallarda həmin işçinin Əmək haqqına baxışı olanlara göstərilir və çap olunur.</small>
+      :<small className="permissiontypenote">Yuxarıdakı hüquqlar: Əlavə et — yeni kart açmaq, Dəyişiklik et — İstehsalat təqvimi və Parametrlər, Sil — kartı bütövlükdə silmək. Kartın içində isə hər hissənin öz hüquqları var: baxışı olmayan hissə kartda, çapda, Excel faylında və siyahıda görünmür. Ad, firma, şöbə, vəzifə, işə qəbul tarixi və status həmişə görünür. Kartdakı “Vəzifə maaşı” Əmək haqqına tabedir. Məzuniyyət qalığı “Məzuniyyət hüququ” və “Qeydə alınmış məzuniyyətlər” ikisi də açıq olanda, Son hesablaşma isə əlavə olaraq Əmək haqqı da açıq olanda görünür.</small>}
     </div>;
   };
   // One group of a firm (a box with a header checkbox, a count and its rows).
   const renderGroup=(companyId:number,group:SectionGroup)=>{
     const r=(key:string)=>rightsOf(companyId,key);
-    const allOf=(key:string)=>fullActions(key).every(a=>r(key)[a]);
+    const allOf=(key:string)=>sectionFull(companyId,key);
     const toggleable=group.children.length?group.children.filter(c=>!c.locked).map(c=>c.key):[group.key];
     const visibleCount=toggleable.filter(key=>r(key).view).length;
     const hasLocked=group.children.some(c=>c.locked);
@@ -2564,7 +2569,7 @@ function PermissionTree({onChange,firms,onFirmsChange,companies,employee,assignm
       </div>
       {expanded&&group.children.length>0&&<div className="permissionchildren">{group.children.map(child=>!child.locked&&isLeveled(child.key)?<div key={child.key} className="permissionleveled">
         <label><input type="checkbox" checked={allOf(child.key)} ref={el=>{if(el)el.indeterminate=r(child.key).view&&!allOf(child.key)}} onChange={()=>setFirmAll(companyId,[child.key],!allOf(child.key))}/><span>{child.label}</span></label>
-        <div className="permissionactions">{ACTIONS.map(a=><label key={a}><input type="checkbox" checked={r(child.key)[a]} onChange={e=>setFirmAction(companyId,child.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
+        <div className="permissionactions">{((PARTS_ONLY_SECTIONS as readonly string[]).includes(child.key)?["view"] as SectionAction[]:ACTIONS).map(a=><label key={a}><input type="checkbox" checked={r(child.key)[a]} onChange={e=>setFirmAction(companyId,child.key,a,e.target.checked)}/>{ACTION_LABELS[a]}</label>)}</div>
         {typePicker(companyId,child.key)}
         {partPicker(companyId,child.key)}
       </div>:<label key={child.key} className={child.locked?"locked":undefined}><input type="checkbox" checked={child.locked||r(child.key).view} disabled={child.locked} onChange={e=>setFirmAll(companyId,[child.key],e.target.checked)}/><span>{child.label}</span>{child.locked&&<small>🔒 həmişə açıq</small>}</label>)}</div>}

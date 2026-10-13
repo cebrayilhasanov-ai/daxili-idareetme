@@ -380,3 +380,11 @@ export async function orderLabel(id: number) {
   const row = await db().prepare("SELECT order_no, grp FROM hr_orders WHERE id = ?").bind(id).first<{ order_no: string; grp: string }>();
   return row ? `№ ${row.order_no}` : `#${id}`;
 }
+
+// The group (tab) of an order — its rights come from that tab (Versiya 3.20).
+export async function orderGroup(id: number) {
+  await ensureOrdersSchema();
+  const row = await db().prepare("SELECT grp FROM hr_orders WHERE id = ?").bind(id).first<{ grp: string }>();
+  if (!row) throw new Error("Əmr tapılmadı.");
+  return row.grp;
+}

@@ -15,6 +15,7 @@ import {
   type LeaveLegal, type OrderEmployee, type OrderGroup, type SettlementSnapshot, type TerminationExtra, type TerminationLegal,
 } from "@/lib/hr-orders";
 import { docxParagraphs } from "@/lib/docx-text";
+import { allPartsRights, partsRightsOf, type PartsRights, type SectionAction } from "@/lib/permission-model";
 
 // Kadrlar → Əmrlər: leave, termination and other orders are written here (never on the card), printed from the system and take
 // effect once their signed copy is uploaded — a leave then goes on the card, a termination fills the card's "İşdən çıxma".
@@ -32,10 +33,17 @@ type OrdersData = {
   children: { hr_employee_id: number; relation: string; birth_date: string | null }[]; companies: { id: number; name: string; manager: string | null }[];
   numbering: { company_id: number; grp: string; pattern: string }[]; params: HrParams; legal: LeaveLegal; terminationLegal: TerminationLegal;
   templates: { id: number; company_id: number | null; name: string; template1_key: string | null; template1_name: string | null }[];
-  // The viewer's rights in Əmrlər (Versiya 2.62): Sil is cancelling an order.
-  rights?: { add: boolean; edit: boolean; delete: boolean };
+  // Versiya 3.20: per firm, the viewer's rights in each tab (leave, termination, other, settings; Sil is cancelling an order) and
+  // whether the worker's salaries — the final settlement — may be seen (Personallar → Əmək haqqı); null for the admin.
+  partRights?: Record<string, PartsRights> | null;
+  paySeen?: Record<string, boolean> | null;
 };
-const rightsOf = (data: OrdersData) => data.rights ?? { add: true, edit: true, delete: true };
+const ALL_TABS = allPartsRights("hr.orders");
+const NO_TABS = partsRightsOf("hr.orders", null);
+const tabsOf = (data: OrdersData, companyId: number | string | null | undefined) => data.partRights ? data.partRights[String(companyId ?? "")] ?? NO_TABS : ALL_TABS;
+// A right of a tab in at least one firm (the buttons and the tabs themselves).
+const anyFirm = (data: OrdersData, tab: string, action: SectionAction) => !data.partRights || data.companies.some((c) => tabsOf(data, c.id)[tab][action]);
+const seesPay = (data: OrdersData, companyId: number | null | undefined) => !data.paySeen || Boolean(data.paySeen[String(companyId ?? "")]);
 type Send = (payload: Record<string, unknown>) => Promise<OrdersData & { savedId?: number }>;
 type Pay = { monthlySalary: number | null; salaries: SalaryRow[] };
 
@@ -83,16 +91,19 @@ export function OrdersPage() {
   if (!data) return <section className="panel pagepanel directorypanel"><div className="loading">Əmrlər yüklənir...</div></section>;
   const unsigned = data.orders.filter((o) => o.status === "pending");
   const count = (grp: OrderGroup) => unsigned.filter((o) => o.grp === grp).length;
+  // Only the tabs the viewer may see in at least one firm (Versiya 3.20).
+  const shownTabs = (["leave", "termination", "other", "settings"] as const).filter((key) => anyFirm(data, key, "view"));
+  const current = shownTabs.includes(tab) ? tab : shownTabs[0];
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Əmrlər</h2><p>Əmrlər sistemdə yazılır, çap olunur, imzalı nüsxəsi yüklənəndə qüvvəyə minir</p></div></div>
     {unsigned.length > 0 && <div className="hralert">⚠ {unsigned.length} əmrin imzalı nüsxəsi hələ yüklənməyib — imzalı nüsxə yüklənməyənə qədər əmr işçinin kartına təsir etmir.</div>}
     <div className="fixedsubtabs hrtabs ordertabs">
-      <button className={tab === "leave" ? "on" : ""} onClick={() => setTab("leave")}>Məzuniyyət əmrləri{count("leave") > 0 && <em>{count("leave")}</em>}</button>
-      <button className={tab === "termination" ? "on" : ""} onClick={() => setTab("termination")}>İşdən çıxma əmrləri{count("termination") > 0 && <em>{count("termination")}</em>}</button>
-      <button className={tab === "other" ? "on" : ""} onClick={() => setTab("other")}>Digər əmrlər{count("other") > 0 && <em>{count("other")}</em>}</button>
-      <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>Parametrlər</button>
+      {shownTabs.includes("leave") && <button className={current === "leave" ? "on" : ""} onClick={() => setTab("leave")}>Məzuniyyət əmrləri{count("leave") > 0 && <em>{count("leave")}</em>}</button>}
+      {shownTabs.includes("termination") && <button className={current === "termination" ? "on" : ""} onClick={() => setTab("termination")}>İşdən çıxma əmrləri{count("termination") > 0 && <em>{count("termination")}</em>}</button>}
+      {shownTabs.includes("other") && <button className={current === "other" ? "on" : ""} onClick={() => setTab("other")}>Digər əmrlər{count("other") > 0 && <em>{count("other")}</em>}</button>}
+      {shownTabs.includes("settings") && <button className={current === "settings" ? "on" : ""} onClick={() => setTab("settings")}>Parametrlər</button>}
     </div>
-    {tab === "leave" ? <LeaveOrders data={data} send={send} /> : tab === "termination" ? <TerminationOrders data={data} send={send} /> : tab === "other" ? <OtherOrders data={data} send={send} /> : <OrderSettings data={data} send={send} />}
+    {!current ? <div className="empty"><p>Əmrlərin heç bir tabına icazəniz yoxdur.</p></div> : current === "leave" ? <LeaveOrders data={data} send={send} /> : current === "termination" ? <TerminationOrders data={data} send={send} /> : current === "other" ? <OtherOrders data={data} send={send} /> : <OrderSettings data={data} send={send} />}
   </section>;
 }
 
@@ -142,7 +153,8 @@ function openPrint(title: string, body: string) {
 }
 async function printOrder(order: Order, data: OrdersData) {
   let body = orderHtml(order, data);
-  if (order.grp === "termination") {
+  // The settlement is printed only for those who may see the worker's salaries.
+  if (order.grp === "termination" && seesPay(data, order.company_id)) {
     const extra = parseExtra(order.extra);
     let snapshot = extra.settlement || null;
     const emp = data.employees.find((e) => e.id === order.hr_employee_id);
@@ -207,16 +219,16 @@ function OrderRegister({ grp, columns, data, send, onEdit, busy, run, setNotice 
   };
   return <div className="tasktablewrap"><table className="tasktable hrtable"><ColGroup order={order} defaultWidths={Object.fromEntries(columns.map((c) => [c.key, c.width]))} widths={widths} extraKeys={["actions"]} />
     <thead><tr>{order.map((key) => <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(columnsByKey[key])}</SortableTh>)}<th {...resize("actions")} className={`opencolumn${resize("actions").className ? ` ${resize("actions").className}` : ""}`}><ActionsHeader /></th></tr></thead>
-    <tbody>{excel.rows.map((o) => <tr key={o.id} className={o.status === "cancelled" ? "ordercancelled" : o.status === "pending" ? "orderpending" : ""}>
+    <tbody>{excel.rows.map((o) => { const may = tabsOf(data, o.company_id)[grp]; return <tr key={o.id} className={o.status === "cancelled" ? "ordercancelled" : o.status === "pending" ? "orderpending" : ""}>
       {order.map((key) => <td key={key} data-label={columnsByKey[key].label}>{columnsByKey[key].render(o)}</td>)}
       <td data-label="Əməliyyat"><div className="tableactions">
-        <button className="editcompanybtn" disabled={busy === `print${o.id}`} onClick={() => void run(`print${o.id}`, () => printOrder(o, data))}><Printer />{grp === "termination" ? "Əmr və hesablaşma" : "Çap et"}</button>
-        {o.status !== "cancelled" && rightsOf(data).edit && <label className={`editcompanybtn orderupload${o.status === "pending" ? " need" : ""}`}>{busy === `sign${o.id}` ? "Yüklənir..." : <><Upload />{o.signed_key ? "Nüsxəni dəyiş" : "İmzalı nüsxəni yüklə"}</>}<input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => { upload(o, e.target.files?.[0]); e.target.value = ""; }} /></label>}
-        {o.status === "pending" && rightsOf(data).edit && <button className="editcompanybtn" onClick={() => onEdit(o)}>Düzəlt</button>}
-        {o.status !== "cancelled" && rightsOf(data).delete && <button className="deletetaskbtn" disabled={Boolean(busy)} onClick={() => cancel(o)}>Ləğv et</button>}
+        <button className="editcompanybtn" disabled={busy === `print${o.id}`} onClick={() => void run(`print${o.id}`, () => printOrder(o, data))}><Printer />{grp === "termination" && seesPay(data, o.company_id) ? "Əmr və hesablaşma" : "Çap et"}</button>
+        {o.status !== "cancelled" && may.edit && <label className={`editcompanybtn orderupload${o.status === "pending" ? " need" : ""}`}>{busy === `sign${o.id}` ? "Yüklənir..." : <><Upload />{o.signed_key ? "Nüsxəni dəyiş" : "İmzalı nüsxəni yüklə"}</>}<input type="file" accept="image/*,application/pdf" disabled={Boolean(busy)} onChange={(e) => { upload(o, e.target.files?.[0]); e.target.value = ""; }} /></label>}
+        {o.status === "pending" && may.edit && <button className="editcompanybtn" onClick={() => onEdit(o)}>Düzəlt</button>}
+        {o.status !== "cancelled" && may.delete && <button className="deletetaskbtn" disabled={Boolean(busy)} onClick={() => cancel(o)}>Ləğv et</button>}
         {o.status === "cancelled" && o.cancel_reason && <small className="hrsub" title={o.cancel_reason}>Səbəb: {o.cancel_reason}</small>}
       </div></td>
-    </tr>)}</tbody></table>
+    </tr>; })}</tbody></table>
     {!excel.rows.length && <div className="empty"><p>{data.orders.some((o) => o.grp === grp) ? "Filtrə uyğun əmr tapılmadı." : grp === "leave" ? "Hələ məzuniyyət əmri yoxdur. “Yeni məzuniyyət əmri” düyməsi ilə başlayın." : grp === "termination" ? "Hələ işdən çıxma əmri yoxdur. “Yeni işdən çıxma əmri” düyməsi ilə başlayın." : "Hələ digər əmr yoxdur. “Yeni əmr” düyməsi ilə başlayın."}</p></div>}
   </div>;
 }
@@ -246,7 +258,8 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
   const params = useMemo(() => normalizeParams(data.params), [data.params]);
   const legal = useMemo(() => normalizeLeaveLegal(data.legal), [data.legal]);
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId));
+  // A new order is given only to workers of the firms where the tab's Əlavə et is given.
+  const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId) && (Boolean(form.id) || tabsOf(data, e.company_id).leave.add));
   const emp = data.employees.find((e) => String(e.id) === form.hrEmployeeId) || null;
   const leaves = emp ? data.leaves.filter((l) => l.hr_employee_id === emp.id && l.order_id !== Number(form.id || 0)) : [];
   const childrenUnder14 = emp && form.startDate ? data.children.filter((c) => {
@@ -276,13 +289,13 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
     setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
-    {!open && rightsOf(data).add && <div className="hractions left"><Button onClick={() => { setForm(emptyLeaveForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni məzuniyyət əmri</Button></div>}
+    {!open && anyFirm(data, "leave", "add") && <div className="hractions left"><Button onClick={() => { setForm(emptyLeaveForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni məzuniyyət əmri</Button></div>}
     {notice && <div className="hrok">{notice}</div>}
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
       <h4>{form.id ? "Məzuniyyət əmrini düzəlt" : "Yeni məzuniyyət əmri"}{nextNo && <small> · nömrəsi: № {nextNo}</small>}</h4>
       <div className="hrgrid">
-        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.filter((c) => Boolean(form.id) || tabsOf(data, c.id).leave.add).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={set("hrEmployeeId")}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
         <label className="field">Məzuniyyətin növü *<select value={form.kind} onChange={set("kind")}>{ORDER_LEAVE_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
         <label className="field">Başlama tarixi *<Input type="date" value={form.startDate} onChange={set("startDate")} /></label>
@@ -317,17 +330,21 @@ function TerminationOrders({ data, send }: { data: OrdersData; send: Send }) {
   const { busy, error, notice, setError, setNotice, run } = useRunner();
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const editing = form.id ? data.orders.find((o) => String(o.id) === form.id) : null;
-  const employees = data.employees.filter((e) => (!e.termination_date || e.id === editing?.hr_employee_id) && (!form.companyId || String(e.company_id) === form.companyId));
+  const employees = data.employees.filter((e) => (!e.termination_date || e.id === editing?.hr_employee_id) && (!form.companyId || String(e.company_id) === form.companyId) && (Boolean(form.id) || tabsOf(data, e.company_id).termination.add));
   const emp = data.employees.find((e) => String(e.id) === form.hrEmployeeId) || null;
   // The chosen worker's salaries are fetched once per worker; the settlement then updates as the form changes.
+  // Without the right to see the worker's salaries (Personallar → Əmək haqqı) the order is worked out without them: its text
+  // needs only the leave days, and no amounts are shown.
+  const paid = emp ? seesPay(data, emp.company_id) : false;
   useEffect(() => {
-    if (!emp || pay?.id === emp.id) return;
+    if (!emp || !paid || pay?.id === emp.id) return;
     let cancelled = false;
     void loadPay(emp.id).then((p) => { if (!cancelled) setPay({ id: emp.id, pay: p }); }).catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Əmək haqqı məlumatı açılmadı."); });
     return () => { cancelled = true; };
-  }, [emp, pay?.id, setError]);
+  }, [emp, pay?.id, paid, setError]);
   const extra: TerminationExtra = { severance: form.severance === "1", workedDays: form.workedDays.trim() === "" ? null : Number(form.workedDays), deductOverused: form.deductOverused === "1" };
-  const calc = emp && pay?.id === emp.id ? computeSettlement(emp, data, pay.pay, form.terminationDate, form.reasonKey, extra) : null;
+  const workerPay = emp && !paid ? { id: emp.id, pay: { monthlySalary: null, salaries: [] } } : pay;
+  const calc = emp && workerPay?.id === emp.id ? computeSettlement(emp, data, workerPay.pay, form.terminationDate, form.reasonKey, extra) : null;
   const legal = normalizeTerminationLegal(data.terminationLegal)[form.reasonKey] || "";
   const body = emp && calc ? terminationOrderText(emp, { date: form.terminationDate, reasonKey: form.reasonKey, basis: form.basis, severance: extra.severance, contractNo: emp.contract_no, contractDate: emp.contract_date }, calc.result) : null;
   const nextNo = !form.id && emp ? nextNumber(data, "termination", emp.company_id, form.orderDate) : "";
@@ -341,7 +358,7 @@ function TerminationOrders({ data, send }: { data: OrdersData; send: Send }) {
     const saved = done.orders.find((o) => o.id === done.savedId);
     setForm(emptyTerminationForm()); setOpen(false);
     setNotice(saved ? `Əmr № ${saved.order_no} ${isNew ? "qeydə alındı" : "düzəldildi"}. İmzalı nüsxə yüklənəndə işdən çıxma karta yazılacaq.` : "Əmr yadda saxlandı.");
-    if (saved && window.confirm(`Əmr № ${saved.order_no} ${isNew ? "qeydə alındı" : "düzəldildi"}. Əmr və son hesablaşma indi çap edilsin?`)) void run("print", () => printOrder(saved, done));
+    if (saved && window.confirm(`Əmr № ${saved.order_no} ${isNew ? "qeydə alındı" : "düzəldildi"}. ${seesPay(done, saved.company_id) ? "Əmr və son hesablaşma" : "Əmr"} indi çap edilsin?`)) void run("print", () => printOrder(saved, done));
   };
   const edit = (o: Order) => {
     const e = data.employees.find((x) => x.id === o.hr_employee_id);
@@ -350,13 +367,13 @@ function TerminationOrders({ data, send }: { data: OrdersData; send: Send }) {
     setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
-    {!open && rightsOf(data).add && <div className="hractions left"><Button onClick={() => { setForm(emptyTerminationForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni işdən çıxma əmri</Button></div>}
+    {!open && anyFirm(data, "termination", "add") && <div className="hractions left"><Button onClick={() => { setForm(emptyTerminationForm()); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni işdən çıxma əmri</Button></div>}
     {notice && <div className="hrok">{notice}</div>}
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
       <h4>{form.id ? "İşdən çıxma əmrini düzəlt" : "Yeni işdən çıxma əmri"}{nextNo && <small> · nömrəsi: № {nextNo}</small>}</h4>
       <div className="hrgrid">
-        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.filter((c) => Boolean(form.id) || tabsOf(data, c.id).termination.add).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={set("hrEmployeeId")}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
         <label className="field">İşdən çıxma tarixi (son iş günü) *<Input type="date" value={form.terminationDate} onChange={set("terminationDate")} /></label>
         <label className="field hrwide">İşdən çıxma əsası *<select value={form.reasonKey} onChange={(e) => pickReason(e.target.value)}>{TERMINATION_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
@@ -367,13 +384,16 @@ function TerminationOrders({ data, send }: { data: OrdersData; send: Send }) {
         {calc && calc.result.overusedDays > 0 && <label className="hrcheck"><input type="checkbox" checked={form.deductOverused === "1"} onChange={(e) => setForm((f) => ({ ...f, deductOverused: e.target.checked ? "1" : "" }))} />Artıq istifadə olunmuş məzuniyyətə görə tutulsun</label>}
       </div>
       {emp && <div className="orderplan">
-        {!calc ? <small className="hrhint">{pay?.id === emp.id ? "İşdən çıxma tarixini daxil edin." : "Əmək haqqı məlumatı yüklənir..."}</small> : <>
+        {!calc ? <small className="hrhint">{workerPay?.id === emp.id ? "İşdən çıxma tarixini daxil edin." : "Əmək haqqı məlumatı yüklənir..."}</small> : <>
           <div className="orderfacts">
             <span><small>Məzuniyyət qalığı</small><b className={calc.result.balance.balance < 0 ? "hrneg" : "hrpos"}>{Math.round(calc.result.balance.balance * 100) / 100} gün</b></span>
-            {calc.snapshot.lines.map((l) => <span key={l.label}><small>{l.label}</small><b>{money(l.amount)}</b></span>)}
-            <span className="ordertotal"><small>Cəmi hesablanıb</small><b>{money(calc.snapshot.total)}</b></span>
+            {paid ? <>
+              {calc.snapshot.lines.map((l) => <span key={l.label}><small>{l.label}</small><b>{money(l.amount)}</b></span>)}
+              <span className="ordertotal"><small>Cəmi hesablanıb</small><b>{money(calc.snapshot.total)}</b></span>
+            </> : <span><small>Kompensasiya olunacaq məzuniyyət</small><b>{Math.round(calc.result.compensationDays * 100) / 100} gün</b></span>}
           </div>
-          {!calc.result.average.months && <small className="hrhint hrwarn">⚠ Son aylar üzrə əmək haqqı qeyd olunmayıb — orta əmək haqqı 0 çıxır (kompensasiya və müavinət hesablanmır). “Personallar → Əmək haqqı” tabında aylıq məbləğləri daxil edin.</small>}
+          {!paid && <small className="hrhint">Məbləğlər (son hesablaşma) yalnız Personallarda işçinin Əmək haqqına baxmaq icazəsi olanlara göstərilir və çap olunur.</small>}
+          {paid && !calc.result.average.months && <small className="hrhint hrwarn">⚠ Son aylar üzrə əmək haqqı qeyd olunmayıb — orta əmək haqqı 0 çıxır (kompensasiya və müavinət hesablanmır). “Personallar → Əmək haqqı” tabında aylıq məbləğləri daxil edin.</small>}
           {legal ? <p className="orderlegal"><b>Hüquqi əsas:</b> {legal}</p> : <small className="hrhint hrwarn">⚠ Bu əsas üçün hüquqi əsasın mətni Parametrlərdə yazılmayıb.</small>}
           {body && <div className="orderpreview"><b>{body.title}</b><ol>{body.items.map((i) => <li key={i}>{i}</li>)}</ol></div>}
         </>}
@@ -392,7 +412,7 @@ function OtherOrders({ data, send }: { data: OrdersData; send: Send }) {
   const [missing, setMissing] = useState<string[]>([]);
   const { busy, error, notice, setError, setNotice, run } = useRunner();
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId));
+  const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId) && (Boolean(form.id) || tabsOf(data, e.company_id).other.add));
   const emp = data.employees.find((e) => String(e.id) === form.hrEmployeeId) || null;
   const nextNo = !form.id && emp ? nextNumber(data, "other", emp.company_id, form.orderDate) : "";
   // Only the templates of the worker's firm (Şablonlar → firm → Kadrlar).
@@ -437,14 +457,14 @@ function OtherOrders({ data, send }: { data: OrdersData; send: Send }) {
     setMissing([]); setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
-    {!open && rightsOf(data).add && <div className="hractions left"><Button onClick={() => { setForm(emptyOtherForm()); setMissing([]); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni əmr</Button></div>}
+    {!open && anyFirm(data, "other", "add") && <div className="hractions left"><Button onClick={() => { setForm(emptyOtherForm()); setMissing([]); setOpen(true); setError(""); setNotice(""); }}><Plus />Yeni əmr</Button></div>}
     {notice && <div className="hrok">{notice}</div>}
     {error && <div className="errorbox">{error}</div>}
     {open && <div className="orderform">
       <h4>{form.id ? "Əmri düzəlt" : "Yeni əmr"}{nextNo && <small> · nömrəsi: № {nextNo}</small>}</h4>
       {emp && !firmTemplates.length && <small className="hrhint hrwarn">⚠ {emp.company_name || "İşçinin firması"} üçün “Kadrlar” qrupunda şablon yoxdur. Sənədlər → Şablonlar bölməsində firmanı və “Kadrlar” qrupunu seçib şablon əlavə edin, Word (.docx) faylını “Sənədin şablonu 1” kimi yükləyin. Şablonsuz da mətni əl ilə yaza bilərsiniz.</small>}
       <div className="hrgrid">
-        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.filter((c) => Boolean(form.id) || tabsOf(data, c.id).other.add).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, hrEmployeeId: v, templateId: "" })); }}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
         <label className="field hrwide">Şablon<span className="ordertemplatepick"><select value={form.templateId} disabled={!emp || Boolean(busy)} onChange={(e) => { const v = e.target.value; if (v) readTemplate(v); else setForm((f) => ({ ...f, templateId: "" })); }}><option value="">{emp ? "— şablon seçin —" : "əvvəlcə işçini seçin"}</option>{firmTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>{form.templateId && <button type="button" className="hrlink hrlinkok" disabled={Boolean(busy)} onClick={() => readTemplate(form.templateId)}>yenidən oxu</button>}</span></label>
         <label className="field hrwide">Əmrin adı *<Input value={form.title} placeholder="məs. Mükafatlandırma haqqında" onChange={set("title")} /></label>
@@ -473,6 +493,10 @@ const LEGAL_FIELDS: { key: keyof LeaveLegal; label: string; hint: string }[] = [
   { key: "other", label: "Digər məzuniyyət", hint: "" },
 ];
 function OrderSettings({ data, send }: { data: OrdersData; send: Send }) {
+  // Versiya 3.20: the numbering of a firm is changed where Parametrlər may be changed in that firm; the legal texts, which are
+  // common to all firms, by anyone who may change Parametrlər somewhere.
+  const canEdit = anyFirm(data, "settings", "edit");
+  const firmEdit = (companyId: number) => tabsOf(data, companyId).settings.edit;
   const [patterns, setPatterns] = useState<Record<string, string>>(() => Object.fromEntries(data.numbering.map((n) => [`${n.company_id}:${n.grp}`, n.pattern])));
   const [legal, setLegal] = useState<LeaveLegal>(() => normalizeLeaveLegal(data.legal));
   const [terminationLegal, setTerminationLegal] = useState<TerminationLegal>(() => normalizeTerminationLegal(data.terminationLegal));
@@ -492,19 +516,19 @@ function OrderSettings({ data, send }: { data: OrdersData; send: Send }) {
     <fieldset><legend>Əmr nömrələri (hər firma üçün ayrıca)</legend>
       <small className="hrhint">Nömrə hər firma və hər qrup üzrə ayrıca, hər il 1-dən başlayır. Şablonda <b>{"{No}"}</b> sıra nömrəsidir (məcburi), <b>{"{İl}"}</b> — il, <b>{"{Ay}"}</b> — ay. Boş saxlanılan xana standart şablonla işləyir.</small>
       <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Firma</th>{ORDER_GROUPS.map((g) => <th key={g.key}>{g.label}</th>)}</tr></thead><tbody>
-        {data.companies.map((c) => <tr key={c.id}><td><b>{c.name}</b></td>{ORDER_GROUPS.map((g) => { const k = `${c.id}:${g.key}`; const value = patterns[k] || ""; return <td key={g.key}><Input value={value} placeholder={g.defaultPattern} onChange={(e) => setPatterns((p) => ({ ...p, [k]: e.target.value }))} /><small className="hrsub">nümunə: № {orderNumber(value || g.defaultPattern, 7, today)}</small></td>; })}</tr>)}
+        {data.companies.map((c) => <tr key={c.id}><td><b>{c.name}</b></td>{ORDER_GROUPS.map((g) => { const k = `${c.id}:${g.key}`; const value = patterns[k] || ""; return <td key={g.key}><Input value={value} disabled={!firmEdit(c.id)} placeholder={g.defaultPattern} onChange={(e) => setPatterns((p) => ({ ...p, [k]: e.target.value }))} /><small className="hrsub">nümunə: № {orderNumber(value || g.defaultPattern, 7, today)}</small></td>; })}</tr>)}
       </tbody></table></div>
     </fieldset>
     <fieldset><legend>Məzuniyyət əmrlərində Əmək Məcəlləsinin maddələri</legend>
       <small className="hrhint hrwarn">Maddə nömrələri standart olaraq doldurulub, amma qüvvədə olan redaksiya ilə hüquqşünas və ya mühasib tərəfindən yoxlanmalıdır. Bir neçə maddəni vergüllə yazın (məs. <b>112, 113, 114</b>); sistem “... və 114-cü maddələrinə əsasən” ifadəsini özü qurur.</small>
-      <div className="hrgrid">{LEGAL_FIELDS.map((f) => <label key={f.key} className="field">{f.label}{f.hint && <small>{f.hint}</small>}<Input value={legal[f.key]} onChange={(e) => setLegal((l) => ({ ...l, [f.key]: e.target.value }))} /></label>)}</div>
+      <div className="hrgrid">{LEGAL_FIELDS.map((f) => <label key={f.key} className="field">{f.label}{f.hint && <small>{f.hint}</small>}<Input value={legal[f.key]} disabled={!canEdit} onChange={(e) => setLegal((l) => ({ ...l, [f.key]: e.target.value }))} /></label>)}</div>
     </fieldset>
     <fieldset><legend>İşdən çıxma əmrlərində hüquqi əsas (hər əsas üçün tam mətn)</legend>
       <small className="hrhint hrwarn">Əmək Məcəlləsinə edilmiş son dəyişikliklərlə xitam əsasları əsasən 68-ci maddədə cəmlənib; standart mətnlər ümumidir. Hüquqşünas hər əsas üçün dəqiq maddə, hissə və bəndi yazmalıdır (məs. “... 68-ci maddəsinin 1-ci hissəsinin «a» bəndinə əsasən”). Mətn əmrdə olduğu kimi, sonuna vergül qoyularaq çap olunur.</small>
-      <div className="orderlegalgrid">{TERMINATION_REASONS.map((r) => <label key={r.key} className="field">{r.label}<Input value={terminationLegal[r.key] || ""} onChange={(e) => setTerminationLegal((l) => ({ ...l, [r.key]: e.target.value }))} /></label>)}</div>
+      <div className="orderlegalgrid">{TERMINATION_REASONS.map((r) => <label key={r.key} className="field">{r.label}<Input value={terminationLegal[r.key] || ""} disabled={!canEdit} onChange={(e) => setTerminationLegal((l) => ({ ...l, [r.key]: e.target.value }))} /></label>)}</div>
     </fieldset>
     {error && <div className="errorbox">{error}</div>}
     {saved && <div className="hrok">{saved}</div>}
-    {rightsOf(data).edit && <div className="hractions"><Button disabled={busy} onClick={() => void save()}>{busy ? "Saxlanılır..." : "Yadda saxla"}</Button></div>}
+    {canEdit && <div className="hractions"><Button disabled={busy} onClick={() => void save()}>{busy ? "Saxlanılır..." : "Yadda saxla"}</Button></div>}
   </div>;
 }

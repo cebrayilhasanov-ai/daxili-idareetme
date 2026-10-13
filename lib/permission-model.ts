@@ -122,7 +122,16 @@ export const SECTION_PARTS: Partial<Record<SectionKey, SectionPartGroup[]>> = {
     { key: "salary", label: "Əmək haqqı", parts: [{ key: "salary", label: "Əmək haqqı", actions: ACTIONS }] },
     { key: "settlement", label: "Son hesablaşma", parts: [{ key: "settlement", label: "Son hesablaşma", actions: VIEW_ONLY }] },
   ],
+  // Versiya 3.20: the tabs of Əmrlər (Sil is cancelling an order); the section itself then only opens the menu.
+  "hr.orders": [
+    { key: "leave", label: "Məzuniyyət əmrləri", parts: [{ key: "leave", label: "Məzuniyyət əmrləri", actions: ACTIONS }] },
+    { key: "termination", label: "İşdən çıxma əmrləri", parts: [{ key: "termination", label: "İşdən çıxma əmrləri", actions: ACTIONS }] },
+    { key: "other", label: "Digər əmrlər", parts: [{ key: "other", label: "Digər əmrlər", actions: ACTIONS }] },
+    { key: "settings", label: "Parametrlər", parts: [{ key: "settings", label: "Parametrlər", actions: FIXED }] },
+  ],
 };
+// Sections whose every right is given in their parts: the section's own checkbox only opens it (Baxış).
+export const PARTS_ONLY_SECTIONS: readonly SectionKey[] = ["hr.orders"];
 export const sectionParts = (section: string): SectionPart[] => (SECTION_PARTS[section as SectionKey] ?? []).flatMap((g) => g.parts);
 export type PartRights = Record<SectionAction, boolean>;
 export type PartsRights = Record<string, PartRights>;
@@ -166,7 +175,8 @@ export function parseCompanyPermissions(raw: unknown): CompanyPermissions {
 }
 
 // What the section's own rights meant inside it before the parts had rights: in Personallar Baxış showed the whole card and
-// Dəyişiklik et changed everything in it, rows added and removed included (Əlavə et and Sil were the new card and deleting it).
+// Dəyişiklik et changed everything in it, rows added and removed included (Əlavə et and Sil were the new card and deleting it);
+// in Əmrlər each right meant the same in every tab (Dəyişiklik et also covered the numbering settings).
 const legacyPartActions = (section: string, actions: SectionAction[]): SectionAction[] =>
   section === "hr.personnel" ? (actions.includes("edit") ? [...ACTIONS] : actions.includes("view") ? ["view"] : []) : actions;
 
