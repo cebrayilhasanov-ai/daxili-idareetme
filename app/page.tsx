@@ -197,6 +197,9 @@ export default function Home(){
   useEffect(()=>{if(!user)return;void load().then(()=>undefined)},[user]);
   // An approval made inside a task's or work's steps (Versiya 2.82) refreshes the lists without the loading screen.
   useEffect(()=>{const quiet=()=>void fetch("/api/data").then(r=>r.ok?r.json():null).then(body=>{if(body)setData(body)});window.addEventListener("app:data-changed",quiet);return()=>window.removeEventListener("app:data-changed",quiet)},[]);
+  // Versiya 3.21: the lists refresh themselves quietly every 5 minutes while the tab is in view, and at once when the user comes back
+  // to the tab — so a task given by someone else shows up without pressing Yenilə. Forms and open dialogs keep what was typed.
+  useEffect(()=>{if(!user)return;let last=Date.now();const refresh=()=>{if(document.visibilityState!=="visible")return;last=Date.now();window.dispatchEvent(new Event("app:data-changed"))};const timer=setInterval(refresh,5*60*1000);const back=()=>{if(document.visibilityState==="visible"&&Date.now()-last>15000)refresh()};document.addEventListener("visibilitychange",back);window.addEventListener("focus",back);return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",back);window.removeEventListener("focus",back)}},[user]);
   useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/chat?summary=1").then(r=>r.ok?r.json():null).then(v=>{if(!v)return;setChatUnread(Number(v.totalUnread||0));chatSummaryRef.current(v.latest??null)});check();const timer=setInterval(check,10000);return()=>clearInterval(timer)},[user]);
   // Director's badge on Daxil olan sənədlər: documents waiting for their dərkənar.
   useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/incoming?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setIncomingPending(Number(v.pending||0)));check();const timer=setInterval(check,30000);return()=>clearInterval(timer)},[user]);
@@ -325,7 +328,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.20</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.21</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
