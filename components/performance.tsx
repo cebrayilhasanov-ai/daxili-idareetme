@@ -1,15 +1,15 @@
 "use client";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Building2, CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Download, Mail, ShieldCheck, Star } from "lucide-react";
-import { DEFAULT_FIXED_START, FREQUENCY_TITLES, formatBakuDate, periodState, periodWindow, periodsOfYear, type FixedFrequency } from "@/lib/fixed-periods";
+import { DEFAULT_FIXED_START, FREQUENCY_TITLES, formatBakuDate, periodState, periodWindow, periodsOfYear, setFixedCalendar, type FixedFrequency } from "@/lib/fixed-periods";
 
 // Versiya 3.12: Ana səhifə → "Mənim performansım" — the user's own quarter, counted from what the program already holds: tasks
 // (approval score, submitted on time), fixed works (done by the deadline) and Nöqsanlar. Nobody fills anything in for it.
 
 type PerfTask = { id:number; title:string; status:string; due_at:string; created_at:string; completed_at:string|null; submitted_at:string|null; evaluation:number|null; evaluation_note:string|null; company_name:string|null; request_id:number|null };
-type PerfAssignment = { id:number; created_at:string; title:string; frequency:string; due_day:number|null; due_month:number|null; company_name:string };
+type PerfAssignment = { id:number; created_at:string; title:string; frequency:string; due_day:number|null; due_month:number|null; due_time?:string|null; company_name:string };
 type PerfData = { none?:boolean; employee:{ id:number; name:string; email:string|null; avatar_key:string|null }; positions:{ company_name:string; title:string|null; department:string|null }[];
-  tasks:PerfTask[]; assignments:PerfAssignment[]; completions:{ work_assignment_id:number; period_key:string; completed_at:string }[]; violations:{ id:number; title:string; created_at:string }[]; fixedWorksStart:string|null };
+  tasks:PerfTask[]; assignments:PerfAssignment[]; completions:{ work_assignment_id:number; period_key:string; completed_at:string }[]; violations:{ id:number; title:string; created_at:string }[]; fixedWorksStart:string|null; fixedCalendar?:{ date:string; kind:string }[] };
 type Quarter = { year:number; q:number };
 
 // The score's parts and weights; a part with nothing to count in the quarter drops out and the others share its weight.
@@ -53,8 +53,13 @@ function quarterStats(data:PerfData, p:Quarter, now:number) {
   }
   const settled = fixedRows.filter(r => r.state === "done" || r.state === "late-done" || r.state === "overdue");
   const fixedOnTime = settled.filter(r => r.state === "done").length;
+  // Versiya 3.22: a daily work weighs as one item per month — its days share that item (20 of 22 days on time = 91%), so a
+  // daily work does not outweigh all the monthly ones. Every other period is an item of its own.
+  const itemOf = (r:{ assignment:PerfAssignment; key:string }) => r.assignment.frequency === "daily" ? `${r.assignment.id}|${r.key.slice(6, 13)}` : `${r.assignment.id}|${r.key}`;
+  const itemSize = new Map<string, number>();
+  settled.forEach(r => itemSize.set(itemOf(r), (itemSize.get(itemOf(r)) || 0) + 1));
   // A late mark still counts for half.
-  const fixed = settled.length ? (fixedOnTime + settled.filter(r => r.state === "late-done").length/2) / settled.length * 100 : null;
+  const fixed = settled.length ? settled.reduce((s, r) => s + (r.state === "done" ? 1 : r.state === "late-done" ? 0.5 : 0) / (itemSize.get(itemOf(r)) || 1), 0) / itemSize.size * 100 : null;
   const violations = data.violations.filter(v => inQuarter(v.created_at));
   const discipline = Math.max(0, 100 - violations.length*25);
   const parts:[keyof typeof SCORE_WEIGHTS, number|null][] = [["grade", avg == null ? null : avg*10], ["onTime", onTime], ["fixed", fixed], ["discipline", discipline]];
@@ -116,7 +121,7 @@ export function PerformancePanel({ employeeId, lead }:{ employeeId:number|null; 
   const [period, setPeriod] = useState<Quarter>(currentQuarter);
   const [tab, setTab] = useState<Tab>("summary");
   useEffect(() => { let cancelled = false; setData(null); setError("");
-    fetch(`/api/performance${employeeId ? `?employeeId=${employeeId}` : ""}`).then(async r => { const body = await r.json(); if (!r.ok) throw new Error(body.error); if (!cancelled) setData(body); })
+    fetch(`/api/performance${employeeId ? `?employeeId=${employeeId}` : ""}`).then(async r => { const body = await r.json(); if (!r.ok) throw new Error(body.error); setFixedCalendar(body.fixedCalendar); if (!cancelled) setData(body); })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Performans məlumatı açıla bilmədi."); });
     return () => { cancelled = true; }; }, [employeeId]);
   const now = Date.now();

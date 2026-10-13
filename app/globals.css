@@ -1037,3 +1037,11 @@ body.chatresizing{user-select:none;cursor:grabbing}
 :is(.tasktable,.hrtable) td :is(.nodocument,.folderpath,.latedays,.requestsub,.tasktype,.hrtag){font-size:12px}:is(.tasktable,.hrtable) td .delegatedtag{font-size:11px}:is(.tasktable,.hrtable) td .sharedname{font-size:13px}:is(.tasktable,.hrtable) td :is(.sharedname small,.sharedname em){font-size:12px}:is(.tasktable,.hrtable) td .filelink small{font-size:11px}
 /* Versiya 3.17: Nöqsanlar — "Əlaqəli məlumat" faylları formada tam en */
 .violationrow .violationfiles{flex:1 1 100%;display:grid;gap:6px}.violationrow .violationfiles .filefield{max-width:520px}
+/* Versiya 3.22: daily fixed works — the hour of the deadline, files on a mark, the period's dialog. */
+.catalogdue .catalogtime{width:84px;flex:none;border:0;border-left:1px solid #d5e0ed;background:transparent;padding:0 6px;font-size:13px;color:#334155}
+.periodcell.done:not(:disabled),.periodcell.late-done:not(:disabled){cursor:pointer}
+.periodcell .periodfiles{font-size:10px;line-height:1;color:#fff;font-weight:700}
+.periodcell.active .periodfiles,.periodcell.overdue .periodfiles{color:#334155}
+.fixedmarkinfo{display:grid;gap:6px;padding:10px 12px;border:1px solid #d5e0ed;border-radius:10px;background:#f8fafc;color:#52647b;font-size:13px}
+.fixedmarkinfo b{color:#1e293b}
+.fixedmarkactions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}

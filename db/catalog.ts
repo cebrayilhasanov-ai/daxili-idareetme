@@ -1,6 +1,6 @@
 import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
-import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, hasFixedDue, isLongPeriod, periodCounts, periodWindow } from "@/lib/fixed-periods";
+import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, hasFixedDue, isLongPeriod, periodCounts, periodWindow, setFixedCalendar } from "@/lib/fixed-periods";
 import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { firmAccess, parseHiddenSections, rightsForType, typeKey, type FirmAccess } from "@/lib/permissions";
 import { companyPermissionsFromStored, parseCompanyPermissions } from "@/lib/permission-model";
@@ -442,6 +442,10 @@ async function ensureSchema() {
   if (!workDefinitionColumns.results.some((column) => column.name === "due_month")) {
     await db().prepare("ALTER TABLE work_definitions ADD COLUMN due_month INTEGER").run();
   }
+  // Versiya 3.22: a daily work's hour ("HH:MM", NULL = 18:00); its due_day says the same day (0) or the next working day (1).
+  if (!workDefinitionColumns.results.some((column) => column.name === "due_time")) {
+    await db().prepare("ALTER TABLE work_definitions ADD COLUMN due_time TEXT").run();
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     work_definition_id INTEGER NOT NULL REFERENCES work_definitions(id) ON DELETE CASCADE,
@@ -603,13 +607,13 @@ export async function getAllData() {
     db().prepare(`SELECT work_definitions.*,
       (SELECT group_concat(company_id) FROM work_definition_companies WHERE work_definition_id = work_definitions.id) AS company_ids
       FROM work_definitions ORDER BY id DESC`).all(),
-    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, d.due_day, d.due_month, e.name AS employee_name, c.name AS company_name
+    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, d.due_day, d.due_month, d.due_time, e.name AS employee_name, c.name AS company_name
       FROM work_assignments a
       JOIN work_definitions d ON d.id = a.work_definition_id
       JOIN employees e ON e.id = a.employee_id
       JOIN companies c ON c.id = a.company_id
       ORDER BY a.id DESC`).all(),
-    db().prepare("SELECT work_assignment_id, period_key, completed_at FROM work_assignment_completions").all<{work_assignment_id:number;period_key:string;completed_at:string}>(),
+    db().prepare("SELECT rowid AS id, work_assignment_id, period_key, completed_at FROM work_assignment_completions").all<{id:number;work_assignment_id:number;period_key:string;completed_at:string}>(),
     db().prepare(`SELECT tasks.*, employees.name AS employee_name,
       COALESCE((SELECT p.title FROM employee_companies ec JOIN company_structure_positions p ON p.id = ec.position_id
         WHERE ec.employee_id = tasks.employee_id AND ec.company_id = tasks.company_id), '') AS employee_position,
@@ -636,7 +640,7 @@ export async function getAllData() {
     const currentPeriod = periodKey({ frequency: String(item.frequency) });
     return { ...item, period_key: currentPeriod, is_completed: Number(completedKeys.has(`${item.id}:${currentPeriod}`)) };
   });
-  return { fixedWorksStart: await getFixedWorksStart(), employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: workCompletions.results, tasks: await withFiles(await withFiles(await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), "task"), "task_submission", "submission_files"), dateRequests: dateRequests.results };
+  return { fixedWorksStart: await getFixedWorksStart(), fixedCalendar: await fixedCalendar(), employees: employeeRows as typeof employees.results, companies: companies.results, recurring: recurring.results, workItems: workItems.results, workAssignments: currentAssignments, workCompletions: await withFiles(workCompletions.results, "fixed_completion"), tasks: await withFiles(await withFiles(await attachAssignerChains(tasks.results as Array<Record<string, unknown>>), "task"), "task_submission", "submission_files"), dateRequests: dateRequests.results };
 }
 
 const FREQUENCIES: readonly string[] = [...FIXED_FREQUENCIES, "daily"];
@@ -650,6 +654,7 @@ function normalizeDueMonth(frequency: string, dueMonth: unknown) {
 function normalizeDueDay(frequency: string, dueDay: unknown) {
   if (dueDay === undefined || dueDay === null) return null;
   const day = Number(dueDay);
+  if (frequency === "daily") return day === 1 ? 1 : 0;
   if (!Number.isInteger(day) || day < 1 || day > (frequency === "weekly" ? 7 : 31)) throw new Error("Son tarix düzgün deyil.");
   return day;
 }
@@ -663,7 +668,7 @@ export async function createWorkItem(input: { title: string; description?: strin
     .bind(title, input.description?.trim() || null, frequency, normalizeDueDay(frequency, input.dueDay), new Date().toISOString()).run();
 }
 
-export async function updateWorkItem(input: { id: number; frequency?: string; dueDay?: number | null; dueMonth?: number | null; title?: string; description?: string | null }) {
+export async function updateWorkItem(input: { id: number; frequency?: string; dueDay?: number | null; dueMonth?: number | null; dueTime?: string | null; title?: string; description?: string | null }) {
   const current = await db().prepare("SELECT title, frequency, due_day FROM work_definitions WHERE id = ?").bind(input.id).first<{title:string;frequency:string;due_day:number|null}>();
   if (!current) throw new Error("İş tapılmadı.");
   // Versiya 2.90: the admin corrects a work's name and description; the new text shows at once for everyone it is assigned to.
@@ -676,6 +681,11 @@ export async function updateWorkItem(input: { id: number; frequency?: string; du
   const frequency = input.frequency || current.frequency;
   if (!FREQUENCIES.includes(frequency)) throw new Error("Dövr seçimi düzgün deyil.");
   if (hasFixedDue(frequency) && (input.dueDay != null || input.dueMonth != null)) throw new Error("Rüblük işin son tarixi dəyişmir: növbəti rübün 1-ci ayının 20-si.");
+  if (input.dueTime !== undefined) {
+    const time = String(input.dueTime || "");
+    if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("Saat düzgün deyil.");
+    await db().prepare("UPDATE work_definitions SET due_time = ? WHERE id = ?").bind(time || null, input.id).run();
+  }
   if (input.dueMonth !== undefined) await db().prepare("UPDATE work_definitions SET due_month = ? WHERE id = ?").bind(normalizeDueMonth(frequency, input.dueMonth), input.id).run();
   // Switching monthly <-> weekly resets the deadline to that frequency's default, since the numbers mean different things.
   const dueDay = input.dueDay !== undefined ? input.dueDay : frequency === current.frequency ? current.due_day : null;
@@ -738,9 +748,10 @@ export async function setFixedWorksStart(value: string) {
 async function fixedAssignment(assignmentId: number, employeeId: number | null) {
   if (!assignmentId) throw new Error("Sabit iş seçilməyib.");
   const statement = employeeId
-    ? db().prepare(`SELECT a.id, a.created_at, d.title, d.frequency, d.due_day, d.due_month FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ? AND a.employee_id = ?`).bind(assignmentId, employeeId)
-    : db().prepare(`SELECT a.id, a.created_at, d.title, d.frequency, d.due_day, d.due_month FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?`).bind(assignmentId);
-  const assignment = await statement.first<{id:number;created_at:string|null;title:string;frequency:string;due_day:number|null;due_month:number|null}>();
+    ? db().prepare(`SELECT a.id, a.created_at, d.title, d.frequency, d.due_day, d.due_month, d.due_time FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ? AND a.employee_id = ?`).bind(assignmentId, employeeId)
+    : db().prepare(`SELECT a.id, a.created_at, d.title, d.frequency, d.due_day, d.due_month, d.due_time FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id WHERE a.id = ?`).bind(assignmentId);
+  const assignment = await statement.first<{id:number;created_at:string|null;title:string;frequency:string;due_day:number|null;due_month:number|null;due_time:string|null}>();
+  if (assignment?.frequency === "daily") setFixedCalendar(await fixedCalendar());
   if (!assignment) throw new Error("Bu sabit iş sizə təyin edilməyib.");
   return assignment;
 }
@@ -753,20 +764,44 @@ export async function uncompleteWorkAssignment(input: { assignmentId:number; per
   const window = periodWindow(assignment, key);
   if (!window) throw new Error("Dövr seçimi düzgün deyil.");
   if (employeeId && Date.now() >= window.due) throw new Error("Son tarix keçib — icra qeydini yalnız admin geri götürə bilər.");
+  const mark = await completionId(assignment.id, key);
   const result = await db().prepare("DELETE FROM work_assignment_completions WHERE work_assignment_id = ? AND period_key = ?").bind(assignment.id, key).run();
   if (!result.meta.changes) throw new Error("Bu dövr üzrə icra qeydi yoxdur.");
+  if (mark) await removeFiles("fixed_completion", mark);
   return assignment.title;
 }
 
-export async function completeWorkAssignment(input: { assignmentId:number; periodKey?:string }, employeeId:number|null) {
+// Versiya 3.22: the HR production calendar, for the working days of daily works (empty while HR has not been opened).
+export async function fixedCalendar() {
+  try { return (await db().prepare("SELECT date, kind FROM hr_calendar").all<{ date: string; kind: string }>()).results; } catch { return []; }
+}
+
+async function completionId(assignmentId: number, key: string) {
+  const row = await db().prepare("SELECT rowid AS id FROM work_assignment_completions WHERE work_assignment_id = ? AND period_key = ?").bind(assignmentId, key).first<{ id: number }>();
+  return row ? Number(row.id) : null;
+}
+
+// Versiya 3.22: the files put with a mark (optional) — the person changes them at any time, the admin too.
+export async function setWorkCompletionFiles(input: { assignmentId:number; periodKey?:string; files:FileRef[] }, employeeId:number|null) {
+  const assignment = await fixedAssignment(input.assignmentId, employeeId);
+  const mark = await completionId(assignment.id, String(input.periodKey || ""));
+  if (!mark) throw new Error("Bu dövr üzrə icra qeydi yoxdur.");
+  await setFiles("fixed_completion", mark, input.files);
+  return assignment.title;
+}
+
+export async function completeWorkAssignment(input: { assignmentId:number; periodKey?:string; files?:FileRef[] }, employeeId:number|null) {
   const assignment = await fixedAssignment(input.assignmentId, employeeId);
   const key = String(input.periodKey || "");
   const window = periodWindow(assignment, key);
   if (!window) throw new Error("Dövr seçimi düzgün deyil.");
   if (Date.now() < window.start) throw new Error("Bu dövr hələ açılmayıb.");
   if (!periodCounts(assignment, key, { start: await getFixedWorksStart(), assignedAt: assignment.created_at })) throw new Error("Bu dövr hesablanmır (hesablama başlanğıcından və ya işin təyinindən əvvəldir).");
-  await db().prepare("INSERT OR IGNORE INTO work_assignment_completions (work_assignment_id, period_key, completed_at) VALUES (?, ?, ?)")
+  const inserted = await db().prepare("INSERT OR IGNORE INTO work_assignment_completions (work_assignment_id, period_key, completed_at) VALUES (?, ?, ?)")
     .bind(assignment.id, key, new Date().toISOString()).run();
+  // A new mark may reuse the rowid of one that went with its work — setFiles replaces whatever was left under it.
+  const mark = inserted.meta.changes ? await completionId(assignment.id, key) : null;
+  if (mark) await setFiles("fixed_completion", mark, input.files ?? []);
 }
 
 export async function createCompany(input: { name: string; voen?: string; manager?: string }) {
@@ -1201,17 +1236,17 @@ export async function getTeamFixedWorks(employeeId: number | null) {
   const subordinates = await subordinatesByCompany(employeeId);
   if (!subordinates.size) return none;
   const [assignments, completions] = await Promise.all([
-    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, d.due_day, d.due_month, e.name AS employee_name, c.name AS company_name
+    db().prepare(`SELECT a.*, d.title, d.description, d.frequency, d.due_day, d.due_month, d.due_time, e.name AS employee_name, c.name AS company_name
       FROM work_assignments a
       JOIN work_definitions d ON d.id = a.work_definition_id
       JOIN employees e ON e.id = a.employee_id
       JOIN companies c ON c.id = a.company_id
       WHERE a.employee_id != ? ORDER BY a.id DESC`).bind(employeeId).all<Record<string, unknown> & { id: number; employee_id: number; company_id: number }>(),
-    db().prepare("SELECT work_assignment_id, period_key, completed_at FROM work_assignment_completions").all<{ work_assignment_id: number; period_key: string; completed_at: string }>(),
+    db().prepare("SELECT rowid AS id, work_assignment_id, period_key, completed_at FROM work_assignment_completions").all<{ id: number; work_assignment_id: number; period_key: string; completed_at: string }>(),
   ]);
   const team = assignments.results.filter((a) => subordinates.get(Number(a.company_id))?.has(Number(a.employee_id)));
   const ids = new Set(team.map((a) => a.id));
-  return { hasTeam: true, assignments: team, completions: completions.results.filter((c) => ids.has(c.work_assignment_id)) };
+  return { hasTeam: true, fixedCalendar: await fixedCalendar(), assignments: team, completions: await withFiles(completions.results.filter((c) => ids.has(c.work_assignment_id)), "fixed_completion") };
 }
 
 // The owner and the admin may open a work; a head may look at (and write notes on) the works of their staff.
@@ -2948,7 +2983,7 @@ export async function getPerformanceData(employeeId: number) {
     db().prepare(`SELECT t.id, t.title, t.status, t.due_at, t.created_at, t.completed_at, t.submitted_at, t.evaluation, t.evaluation_note, c.name AS company_name,
       (SELECT id FROM work_requests WHERE work_requests.task_id = t.id) AS request_id
       FROM tasks t LEFT JOIN companies c ON c.id = t.company_id WHERE t.employee_id = ? ORDER BY t.due_at DESC`).bind(employeeId).all(),
-    db().prepare(`SELECT a.id, a.employee_id, a.company_id, a.created_at, d.title, d.frequency, d.due_day, d.due_month, c.name AS company_name
+    db().prepare(`SELECT a.id, a.employee_id, a.company_id, a.created_at, d.title, d.frequency, d.due_day, d.due_month, d.due_time, c.name AS company_name
       FROM work_assignments a JOIN work_definitions d ON d.id = a.work_definition_id JOIN companies c ON c.id = a.company_id
       WHERE a.employee_id = ?`).bind(employeeId).all(),
     db().prepare(`SELECT x.work_assignment_id, x.period_key, x.completed_at FROM work_assignment_completions x
@@ -2957,5 +2992,5 @@ export async function getPerformanceData(employeeId: number) {
   ]);
   if (!employee) throw new Error("İşçi kartı tapılmadı.");
   return { employee, positions: positions.results, tasks: tasks.results, assignments: assignments.results, completions: completions.results,
-    violations: violations.results, fixedWorksStart: await getFixedWorksStart() };
+    violations: violations.results, fixedWorksStart: await getFixedWorksStart(), fixedCalendar: await fixedCalendar() };
 }

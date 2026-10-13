@@ -1,8 +1,9 @@
-import { canApproveTask, completeWorkAssignment, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
+import { canApproveTask, completeWorkAssignment, setWorkCompletionFiles, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { firmAccess, requireSection } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { parseFiles } from "@/db/attachments";
 
 async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
@@ -15,7 +16,7 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const given = await tasksGivenBy(user);
   const approvals = data.tasks.filter((item: any) => given.has(Number(item.id)) && item.status === "Təqdim edilib");
   const ownCompanyIds = new Set(((data.employees.find((item: any) => item.id === user.employeeId) as { company_ids?: string } | undefined)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { fixedWorksStart: data.fixedWorksStart, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
+  return { fixedWorksStart: data.fixedWorksStart, fixedCalendar: data.fixedCalendar, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
 }
 
 function authError(error: unknown) {
@@ -72,7 +73,7 @@ export async function PATCH(request: Request) {
       return Response.json(await scopedData(user));
     }
     if (user.role !== "admin") {
-      if (body.action === "work-completion" || body.action === "work-uncompletion") {
+      if (body.action === "work-completion" || body.action === "work-uncompletion" || body.action === "work-completion-files") {
         await requireSection(user, "tasks.fixed");
         // Only a work of a firm where Sabit işlər is open (Versiya 3.00).
         const assignment = await env.DB.prepare("SELECT company_id FROM work_assignments WHERE id = ?").bind(Number(body.assignmentId)).first<{ company_id: number }>();
@@ -81,7 +82,11 @@ export async function PATCH(request: Request) {
           // Versiya 2.89: one's own mark, until the period's deadline.
           const title = await uncompleteWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
           await logAudit(user, "Sabit işin icra qeydi geri götürüldü", "work-assignment", `${title} — ${body.periodKey}`);
-        } else await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, user.employeeId);
+        } else if (body.action === "work-completion-files") {
+          // Versiya 3.22: the files of one's own mark.
+          const title = await setWorkCompletionFiles({assignmentId:Number(body.assignmentId), periodKey:body.periodKey, files:parseFiles(body.files)}, user.employeeId);
+          await logAudit(user, "Sabit işin icra qeydinin faylları dəyişdirildi", "work-assignment", `${title} — ${body.periodKey}`);
+        } else await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey, files:parseFiles(body.files)}, user.employeeId);
         return Response.json(await scopedData(user));
       }
       // Whoever gave the task approves it or sends it back (Versiya 2.82); otherwise one moves only one's own task.
@@ -96,7 +101,11 @@ export async function PATCH(request: Request) {
       const task = await env.DB.prepare("SELECT employee_id FROM tasks WHERE id = ?").bind(Number(body.id)).first<{ employee_id: number }>();
       if (!task || task.employee_id !== user.employeeId) return Response.json({ error: "İcazə yoxdur." }, { status: 403 });
     }
-    if (body.action === "work-completion") await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, null);
+    if (body.action === "work-completion") await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey, files:parseFiles(body.files)}, null);
+    else if (body.action === "work-completion-files") {
+      const title = await setWorkCompletionFiles({assignmentId:Number(body.assignmentId), periodKey:body.periodKey, files:parseFiles(body.files)}, null);
+      await logAudit(user, "Sabit işin icra qeydinin faylları dəyişdirildi", "work-assignment", `${title} — ${body.periodKey}`);
+    }
     else if (body.action === "work-uncompletion") {
       const title = await uncompleteWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey}, null);
       await logAudit(user, "Sabit işin icra qeydi geri götürüldü", "work-assignment", `${title} — ${body.periodKey}`);
