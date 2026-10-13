@@ -8,6 +8,7 @@ import { BookOpen, Bell, Briefcase, Maximize2, Minimize2, Minus, Volume2, Volume
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PerformancePanel } from "@/components/performance";
+import { CustomerImport, type ImportCustomer } from "@/components/customer-import";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HrPage, type HrSection } from "@/components/hr/hr-page";
@@ -334,7 +335,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.23</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.24</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -390,7 +391,7 @@ export default function Home(){
           {key:"avatar",title:"Profil şəkli",text:"Adınızın yanında görünən şəkil.",onOpen:()=>{setOwnAvatarFile(null);setDialog("avatar")}},
         ]}/>}
         {page==="companies"&&<CompaniesPage companies={data.companies} tasks={data.tasks} onNew={()=>open("company")} onEdit={c=>open("company",{id:String(c.id),name:c.name,voen:c.voen||"",manager:c.manager||""})} onToggle={c=>void request("PATCH",{action:"company",id:c.id,active:!Boolean(c.active)})}/>}
-        {pageAllowed&&page==="customers"&&<CustomersPage isAdmin={isAdmin} canSeePersonnel={can("hr.personnel")} rights={{add:can("dashboard.customers:add"),edit:can("dashboard.customers:edit"),remove:can("dashboard.customers:delete")}}/>}
+        {pageAllowed&&page==="customers"&&<CustomersPage isAdmin={isAdmin&&!viewAs} canSeePersonnel={can("hr.personnel")} rights={{add:can("dashboard.customers:add"),edit:can("dashboard.customers:edit"),remove:can("dashboard.customers:delete")}}/>}
         {page==="audit"&&<AuditPage/>}
         {page==="guides"&&<GuidesPage ctx={{isAdmin:isAdmin&&!viewAs,viewEmployeeId:viewAs?.id??null,
           sections:{"dashboard":true,"chat":can("chat")&&!viewAs,"settings":true,"tasks.manager":true,"tasks.mine":can("tasks.mine"),"tasks.requests":can("tasks.requests")&&!viewAs,"tasks.fixed":can("tasks.fixed"),"documents.incoming":canDocument("incoming"),"documents.outgoing":canDocument("outgoing"),"documents.templates":canTemplates,"dashboard.customers":can("dashboard.customers")},
@@ -1238,7 +1239,7 @@ const customerColumns:Array<{key:string;label:string;width:number;search:(item:C
   {key:"phone",label:"Telefon",width:140,search:i=>formatPhone(i.phone),render:i=><>{formatPhone(i.phone)||"—"}</>},
 ];
 // Open to every user (the companies are all in one group): everyone can view and add customers; editing and deleting stay admin-only.
-function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePersonnel?:boolean;rights:{add:boolean;edit:boolean;remove:boolean}}){
+function CustomersPage({isAdmin,canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePersonnel?:boolean;rights:{add:boolean;edit:boolean;remove:boolean}}){
   // Which of our people worked at each customer (HR prior jobs) — only for users who may see personnel data.
   const [formerStaff,setFormerStaff]=useState<Map<number,FormerStaff[]>|null>(null);
   const [formerOpen,setFormerOpen]=useState<number|null>(null);
@@ -1352,6 +1353,29 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
     if(!rule)return value;
     return value.split("").filter(ch=>rule.charPattern.test(ch)).join("").slice(0,rule.length);
   };
+  // Versiya 3.24: a row of an Excel file (admin's import) is checked by the same rules as the form above, and against the
+  // customers already in the system (the same VÖEN/FİN is never created twice).
+  const importCheck=(r:ImportCustomer):string|null=>{
+    if(!entityTypeOptions.includes(r.entityType))return r.entityType?"Statusu düzgün deyil (Hüquqi şəxs, Fərdi sahibkar, Fiziki şəxs, Xarici təchizatçı).":"Statusu yazılmayıb.";
+    if(r.entityType===FOREIGN_SUPPLIER){
+      if(!r.country)return "Xarici təchizatçının ölkəsi yazılmayıb.";
+      if(!COUNTRIES.includes(r.country))return `“${r.country}” ölkələrin siyahısında tapılmadı.`;
+      if(r.voen){const rule=taxRule(r.country);if(r.voen.split("").some(ch=>!rule.chars.test(ch)))return `Vergi nömrəsi: ${rule.hint}.`;const problem=taxNumberError({voen:r.voen,country:r.country});if(problem)return `Vergi nömrəsi: ${problem}.`}
+    }else{
+      const rule=voenRule(r.entityType);
+      if(!r.voen)return "VÖEN/FİN yazılmayıb.";
+      if(rule&&(r.voen.length!==rule.length||r.voen.split("").some(ch=>!rule.charPattern.test(ch))))return `VÖEN/FİN: ${rule.hint}.`;
+    }
+    if(!r.name)return "Adı yazılmayıb.";
+    if(!r.legalAddress)return "Hüquqi ünvan yazılmayıb.";
+    if(!r.manager)return "Rəhbər yazılmayıb.";
+    if(!r.phone)return "Telefon yazılmayıb.";
+    if(!/^\+?[\d\s()-]+$/.test(r.phone))return "Telefon yalnız rəqəm, boşluq, “+”, “-” və mötərizədən ibarət ola bilər.";
+    const phoneDigits=r.phone.replace(/\D/g,"").length;
+    if(phoneDigits<7||phoneDigits>15)return "Telefon 7–15 rəqəmdən ibarət olmalıdır.";
+    const same=r.voen?items.find(i=>(i.voen||"").trim()===r.voen&&(i.country||"")===(r.country||"")):undefined;
+    return same?`Bu VÖEN/FİN artıq sistemdə var: “${same.name}”.`:null;
+  };
   const fieldRenderers:Record<string,(values:Record<string,string>,set:(next:Record<string,string>)=>void)=>React.ReactNode>={
     status:(values,set)=><label className="field statusfield" key="status">Statusu<select value={values.entityType||""} onChange={e=>{const entityType=e.target.value;const wasForeign=values.entityType===FOREIGN_SUPPLIER,isForeign=entityType===FOREIGN_SUPPLIER;set({...values,entityType,country:isForeign?values.country||"":"",voen:wasForeign!==isForeign?"":isForeign?values.voen||"":sanitizeVoen(values.voen||"",entityType)})}}><option value="">Seçin</option>{entityTypeOptions.map(o=><option key={o} value={o}>{o}</option>)}</select></label>,
     country:(values,set)=>values.entityType===FOREIGN_SUPPLIER?<label className="field countryfield" key="country">Ölkə<select value={values.country||""} onChange={e=>set({...values,country:e.target.value,voen:sanitizeTaxNumber(values.voen||"",e.target.value)})}><option value="">Ölkəni seçin</option>{COUNTRIES.map(c=><option key={c} value={c}>{c}</option>)}</select></label>:<label className="field countryfield" key="country">Ölkə<Input value={values.entityType?"Azərbaycan":""} disabled/></label>,
@@ -1365,7 +1389,7 @@ function CustomersPage({canSeePersonnel=false,rights}:{isAdmin:boolean;canSeePer
   const excel=useExcelFilters("customers",columns,items);
   const filtered=excel.rows;
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştərilər</h2><p>{filtered.length} müştəri göstərilir</p></div>{rights.add&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">DAXİLİ İDARƏETMƏ</span><h2>Müştərilər</h2><p>{filtered.length} müştəri göstərilir</p></div><div className="customerheadactions">{isAdmin&&<CustomerImport entityTypes={entityTypeOptions} foreignType={FOREIGN_SUPPLIER} countries={COUNTRIES} check={importCheck} onDone={next=>setItems(next as Customer[])}/>}{rights.add&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni müştəri</Button>}</div></div>
     {creating&&<div className="inlinetaskrow documentrow customerrow">{fields(form,setForm)}<div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({})}}>Ləğv et</button><Button disabled={busy||!requiredFilled(form)} onClick={()=>void create()}>{busy?"Yaradılır...":"Əlavə et"}</Button></div></div>}
     {error&&<div className="errorbox">{error}</div>}
     {loading?<div className="loading">Yüklənir...</div>:<div className="tasktablewrap"><table className="tasktable documenttable customertable"><ColGroup order={order} defaultWidths={defaultWidths} widths={widths} extraKeys={["actions"]}/><thead><tr>{order.map(key=>{const col=columnsByKey[key];return <SortableTh key={key} resize={resize(key)} drag={dragProps(key)}>{excel.header(col)}</SortableTh>})}<th {...resize("actions")} className={`opencolumn${resize("actions").className?` ${resize("actions").className}`:""}`}><ActionsHeader/></th></tr></thead><tbody>{filtered.map(item=>editingId===item.id?<tr key={item.id}><td colSpan={order.length+1}><div className="inlinetaskrow documentrow customerrow documenteditrow">{fields(editForm,setEditForm)}<div className="inlineactions"><button className="inlinecancel" disabled={editBusy} onClick={cancelEdit}>Ləğv et</button><Button disabled={editBusy||!requiredFilled(editForm)} onClick={()=>void saveEdit(item.id)}>{editBusy?"Yadda saxlanılır...":"Yadda saxla"}</Button></div></div></td></tr>:<Fragment key={item.id}><tr>

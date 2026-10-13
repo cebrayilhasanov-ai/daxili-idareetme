@@ -1045,3 +1045,17 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .fixedmarkinfo{display:grid;gap:6px;padding:10px 12px;border:1px solid #d5e0ed;border-radius:10px;background:#f8fafc;color:#52647b;font-size:13px}
 .fixedmarkinfo b{color:#1e293b}
 .fixedmarkactions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}
+/* Versiya 3.24: Müştərilər → Excel-dən yükləmə (admin). */
+.customerheadactions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px}
+.customerheadactions .editcompanybtn{display:inline-flex;align-items:center;gap:6px}
+.customerheadactions svg{width:16px;height:16px}
+.customerimportdialog{width:min(1200px,96vw);max-width:96vw}
+.importwrap{max-height:55vh;overflow:auto;border:1px solid #d5e0ed;border-radius:10px}
+.importtable{width:100%;border-collapse:collapse;font-size:13px}
+.importtable th{position:sticky;top:0;background:#eef3f9;color:#334155;text-align:left;padding:7px 8px;font-weight:700;border-bottom:1px solid #d5e0ed;white-space:nowrap}
+.importtable td{padding:6px 8px;border-bottom:1px solid #edf1f6;vertical-align:top;color:#1e293b}
+.importtable tr.bad td{background:#fff5f5}
+.importtable .bad{color:#b91c1c;font-weight:600}
+.importtable .ok{color:#15803d;font-weight:700}
+.importresult{display:grid;gap:10px}
+.importresult p{margin:0;font-size:14px}
