@@ -46,6 +46,9 @@ async function ensureAppealSchema() {
     handled_at TEXT
   )`).run();
   await db().prepare("CREATE INDEX IF NOT EXISTS head_appeals_source ON head_appeals (source_type, source_id)").run();
+  // Versiya 3.28: the status the sender last saw — an answer (a status other than this one) shows in their bell until then.
+  const columns = (await db().prepare("PRAGMA table_info(head_appeals)").all<{ name: string }>()).results;
+  if (!columns.some((column) => column.name === "sender_seen_status")) await db().prepare("ALTER TABLE head_appeals ADD COLUMN sender_seen_status TEXT").run();
   schemaReady = true;
 }
 
@@ -177,7 +180,18 @@ export async function appealSummary(user: SessionUser) {
     : user.employeeId
       ? (await db().prepare("SELECT id, title, from_name, urgent FROM head_appeals WHERE status = ? AND to_employee_ids LIKE ? ORDER BY urgent DESC, created_at DESC").bind(APPEAL_SENT, `%,${user.employeeId},%`).all<{ id: number; title: string; from_name: string; urgent: number }>()).results
       : [];
-  return { pending: rows.length, items: rows.slice(0, 5) };
+  // Versiya 3.28: the sender's side — appeals the head has answered (taken, "Məlumat alındı", or done) since the sender last looked.
+  const sent = (await present((await db().prepare(`${APPEAL_SQL} WHERE a.from_user_id = ? AND a.status != ? ORDER BY COALESCE(a.handled_at, a.created_at) DESC`).bind(user.id, APPEAL_SENT).all<Record<string, unknown> & { id: number }>()).results))
+    .filter((row) => row.status !== row.sender_seen_status)
+    .map((row) => ({ id: row.id, title: String(row.title), status: String(row.status), handled_by_name: row.handled_by_name ? String(row.handled_by_name) : null }));
+  return { pending: rows.length, items: rows.slice(0, 5), answered: sent.length, answers: sent.slice(0, 5) };
+}
+
+// The sender opened "Göndərdiyim müraciətlər": every answer there counts as seen (until the status changes again).
+export async function markAppealAnswersSeen(user: SessionUser) {
+  await ensureAppealSchema();
+  const rows = await present((await db().prepare(`${APPEAL_SQL} WHERE a.from_user_id = ? AND a.status != ?`).bind(user.id, APPEAL_SENT).all<Record<string, unknown> & { id: number }>()).results);
+  for (const row of rows) if (row.status !== row.sender_seen_status) await db().prepare("UPDATE head_appeals SET sender_seen_status = ? WHERE id = ?").bind(String(row.status), row.id).run();
 }
 
 // The ✉ marks on fixed works' cells: the appeals sent from a period, for whoever may see them (sender, recipient, admin).

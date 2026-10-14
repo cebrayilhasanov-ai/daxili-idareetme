@@ -1,4 +1,4 @@
-import { appealSummary, createAppeal, fixedAppealMarks, getAppeals, noteAppeal, takeAppeal, withdrawAppeal } from "@/db/appeals";
+import { appealSummary, createAppeal, markAppealAnswersSeen, fixedAppealMarks, getAppeals, noteAppeal, takeAppeal, withdrawAppeal } from "@/db/appeals";
 import { parseFiles } from "@/db/attachments";
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireSection } from "@/lib/permissions";
@@ -41,6 +41,10 @@ export async function PATCH(request: Request) {
       if (row && firms && !firms.includes(Number(row.company_id))) throw new Error("Bu firmada Şəxsi işlərim bölməsi sizə açıq deyil.");
       const workId = await takeAppeal(user, id);
       return Response.json({ workId, ...(await getAppeals(user)) });
+    }
+    if (body.action === "seen") {
+      await markAppealAnswersSeen(user);
+      return Response.json({ ok: true });
     }
     if (body.action === "note") {
       await noteAppeal(user, id, String(body.reply || ""));
