@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -139,6 +139,26 @@ const GUIDES: Guide[] = [
         { note: "Admin hesabı bu bölməni görür, amma iş əlavə etmir, addımı həvalə etmir və şöbəyə sorğu göndərmir — bunu öz istifadəçi hesabınızdan edin." },
         { note: "İşləriniz rəhbərlərinizə görünür. Rəhbər işi dəyişə, silə və ya addımlara ✓ qoya bilməz; yazdığı qeyd işin tarixçəsində “Rəhbərin qeydi” kimi çıxır." },
       ] },
+      { audience: "all", title: "Rəhbərə müraciət", blocks: [
+        { p: "Əməkdaş öz rəhbərinə tapşırıq vermir, sorğu da yalnız başqa şöbəyə gedir. İşlə bağlı rəhbərin həll etməli olduğu məsələ üçün “Rəhbərə müraciət” var: sabit işin dövrünün pəncərəsindən və ya şəxsi işin addımının yanındakı “Rəhbərə müraciət” düyməsindən (iş firmaya bağlı olmalıdır)." },
+        { list: [
+          "Müraciətdə mövzu, izah, “Təcili” işarəsi və fayllar olur (ekran görüntüsü Ctrl+V ilə). Addımdan göndərəndə mövzu, izah və addımın faylları hazır gəlir — dəyişə bilərsiniz.",
+          "Müraciət strukturda tabe olduğunuz vəzifəyə (bilavasitə rəhbərinizə) gedir; o vəzifə boşdursa — bir pillə yuxarıya, yuxarıda heç kim yoxdursa — adminə.",
+          "Göndərdiklərinizi “Göndərdiyim müraciətlər” tabında görürsünüz: Göndərilib → İşə götürülüb → İcra olunub (rəhbərin işi tamamlananda), və ya “Məlumat alındı” (rəhbərin cavabı ilə). Rəhbər baxana qədər “Müraciəti geri çağır” ilə silə bilərsiniz.",
+        ] },
+      ] },
+      { audience: "head", title: "Mənə müraciətlər", blocks: [
+        { p: "Əməkdaşlarınızın müraciətləri Şəxsi işlərim → “Mənə müraciətlər” tabında (gözləyənlərin sayı ilə) və 🔔-də görünür; təcili olanlar qırmızıdır və siyahının yuxarısındadır." },
+        { steps: [
+          "Müraciəti “Aç” ilə açın: kim, haradan (sabit iş və dövr və ya şəxsi işin addımı), izah və fayllar.",
+          "“Şəxsi işə çevir” — müraciət öz Şəxsi işlərinizə iş kimi düşür: adı — müraciətin mövzusu, açıqlaması — kim göndərib, haradan və izah, faylları — müraciətin faylları, firma — müraciətin firması; 1-ci addım da avtomatik yaranır. Bundan sonra hər şey adi qaydadadır: özünüz icra edin, addımı əməkdaşa “Ver” ilə tapşırın və ya “Şöbəyə sorğu” göndərin.",
+          "İş açmağa ehtiyac yoxdursa — qısa cavab yazıb “Məlumat alındı”; müraciət bağlanır, əməkdaş cavabı görür.",
+        ] },
+        { note: "Müraciətin statusu yaratdığınız işə bağlıdır: iş tamamlananda əməkdaşda “İcra olunub” görünür. İşi “Yeni” ikən silsəniz, müraciət yenidən “Mənə müraciətlər”ə qayıdır. Əməkdaş işinizin içini (addımlar, tarixçə, Qeydlərim) görmür." },
+      ] },
+      { audience: "admin", title: "Admin və müraciətlər", blocks: [
+        { p: "Əməkdaşın üstündə heç bir vəzifə tutulmayıbsa, müraciəti admin alır. Admin hesabı şəxsi iş yaratmadığı üçün müraciəti yalnız “Məlumat alındı” ilə cavablandırır." },
+      ] },
       { audience: "all", title: "Qeydlərim", blocks: [
         { p: "“Aç” pəncərəsində, iş axınının altında “Qeydlərim” bölməsi var — işlə bağlı öz qeydlərinizi orada yazırsınız." },
         { list: [
@@ -241,6 +261,20 @@ const GUIDES: Guide[] = [
           "Rüblük işdə isə dövr iş həmin rübün son tarixinədək təyin edilibsə hesablanır. Məsələn, rüblük iş 9 oktyabr 2026-da təyin edilibsə, III rüb 2026 (1 oktyabrda açılır, son tarix 20 oktyabr) hesablanır və açıqdır; 21 oktyabrda təyin edilibsə, ilk dövr IV rüb olur. Yarımillik və illik işdə isə dövr açılmazdan əvvəl təyin edilməlidir.",
           "Hesablanmayan dövrdə əvvəllər qoyulmuş qeyd yaşıl (icra edilib) göstərilir, gecikmə rəngi olmadan.",
         ] },
+      ] },
+      { audience: "all", title: "Rəhbərə müraciət", blocks: [
+        { p: "İşi görəndə rəhbərin bilməli olduğu bir şey tapılıbsa (məsələn, E-məhkəmədə məhkəmədən yeni bildiriş), bunu proqramda rəhbərinizə göndərin." },
+        { steps: [
+          "Dövrün xanasına basın — pəncərədə “✉ Rəhbərə müraciət” basın.",
+          "Mövzunu və izahı yazın (nə gəlib, nəyə aiddir, son tarixi varsa nə vaxtdır), lazım olsa “Təcili” işarələyin, fayl əlavə edin — ekran görüntüsünü Ctrl+V ilə də əlavə edə bilərsiniz. “Göndər”.",
+          "Yoxlamanın özünü həmişəki kimi “İcra edildi kimi işarələ” ilə qeyd edin — müraciət icra qeydini əvəz etmir.",
+        ] },
+        { list: [
+          "Müraciət strukturda tabe olduğunuz vəzifəyə (bilavasitə rəhbərinizə) gedir; o vəzifə boşdursa — bir pillə yuxarıya, yuxarıda heç kim yoxdursa — adminə.",
+          "Müraciət göndərilən xanada ✉ görünür; pəncərədə həmin dövrün müraciətləri statusu ilə göstərilir.",
+          "Nəticəni Şəxsi işlərim → “Göndərdiyim müraciətlər”də görürsünüz: Göndərilib → İşə götürülüb → İcra olunub, və ya “Məlumat alındı” (rəhbərin cavabı ilə). Rəhbər baxana qədər müraciəti geri çağırmaq olar.",
+        ] },
+        { note: "Rəhbər müraciəti Şəxsi işlərim → “Mənə müraciətlər”də görür (🔔-də də; təcili olanlar qırmızı). Ətraflı: Təlimatlar → Şəxsi işlərim." },
       ] },
       { audience: "all", title: "İşin icrasını necə qeyd etməli", blocks: [
         { steps: [

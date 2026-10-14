@@ -13,7 +13,8 @@ function db() {
 export type FileRef = { key: string; name: string; size: number; type: string };
 // Versiya 3.17: "violation" — the files of a Nöqsan ("Əlaqəli məlumat"); it has no single-file columns to mirror.
 // Versiya 3.22: "fixed_completion" — the files put with a fixed work's mark (owner id = the mark's rowid).
-export type AttachmentKind = "personal_work" | "personal_work_item" | "task" | "task_submission" | "task_item" | "request" | "violation" | "fixed_completion";
+// Versiya 3.27: "appeal" — the files of a "Rəhbərə müraciət".
+export type AttachmentKind = "personal_work" | "personal_work_item" | "task" | "task_submission" | "task_item" | "request" | "violation" | "fixed_completion" | "appeal";
 export const MAX_FILES = 10;
 
 // Where each kind's first file is mirrored: table and column prefix.

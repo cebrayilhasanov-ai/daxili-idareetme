@@ -1407,6 +1407,7 @@ export async function createPersonalWork(input: { userId: number; actorName?: st
   const stepFiles = input.files?.length ? await copyFiles(input.files) : [];
   if (stepFiles.length) await setFiles("personal_work_item", stepId, stepFiles);
   await recordPersonalWorkEvent(workId, input.actorName, "Addım əlavə edildi", `${title} (iş yaradılanda avtomatik)${stepFiles.length ? `\nFayl: ${fileNames(stepFiles)}` : ""}`);
+  return workId;
 }
 
 // What changed in a list of files, for the history.
@@ -1472,6 +1473,8 @@ export async function deletePersonalWork(input: { id: number; userId: number }) 
   if (current.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu iş silinə bilər.");
   const steps = (await db().prepare("SELECT id FROM personal_work_checklist_items WHERE personal_work_id = ?").bind(input.id).all<{ id: number }>()).results;
   await db().prepare("DELETE FROM personal_work_notes WHERE personal_work_id = ?").bind(input.id).run();
+  // Versiya 3.27: a work made from a "Rəhbərə müraciət" and deleted while still "Yeni" gives the appeal back to the head's list.
+  try { await db().prepare("UPDATE head_appeals SET status = 'Göndərilib', personal_work_id = NULL, handled_by_user_id = NULL, handled_by_name = NULL, handled_at = NULL WHERE personal_work_id = ?").bind(input.id).run(); } catch { /* no appeals yet */ }
   await db().prepare("DELETE FROM personal_works WHERE id = ?").bind(input.id).run();
   await removeFiles("personal_work", input.id);
   for (const step of steps) await removeFiles("personal_work_item", step.id);

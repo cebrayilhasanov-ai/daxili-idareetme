@@ -1073,3 +1073,20 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .ownnotehead button.danger{color:#dc2626}
 .ownnotehead button:disabled{opacity:.5;cursor:default}
 .ownnotemark{display:inline-block;margin-left:6px;color:#b45309;font-size:12px;white-space:nowrap}
+.appealform,.appealdetail{display:grid;gap:10px}
+.appealform textarea,.appealchoice textarea{min-height:90px}
+.appealurgent{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#b91c1c}
+.appealurgentbadge{display:inline-block;margin-left:6px;border-radius:10px;padding:2px 8px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700}
+.appealurgentrow td{background:#fff5f5}
+.appealsource{margin:0;color:#475569;font-size:13px}
+.appealtext{margin:0;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.appealactions{display:grid;gap:10px}
+.appealchoice{display:grid;gap:6px;padding:12px 14px;border:1px solid #d6e1ed;border-radius:10px;background:#fff}
+.appealchoice small{color:#64748b;font-size:13px}
+.appealchoice .inlineactions,.appealdetail>.inlineactions{justify-content:flex-end}
+.appealbtn{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+.periodappeals{font-size:12px;line-height:1;color:#c2410c;font-weight:700}
+.fixedappeals{display:grid;gap:6px;margin:4px 0 0;padding:0;list-style:none}
+.fixedappeals li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px}
+.fixedappeals small{color:#64748b}
+.notifsection button.notifurgent{background:#fee2e2;color:#b91c1c;font-weight:600}
