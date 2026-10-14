@@ -101,6 +101,15 @@ export const personalWorkChecklistItems = sqliteTable("personal_work_checklist_i
   createdAt: text("created_at").notNull(),
 });
 
+export const personalWorkNotes = sqliteTable("personal_work_notes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  personalWorkId: integer("personal_work_id").notNull().references(() => personalWorks.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
+  text: text("text").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
 export const chatThreads = sqliteTable("chat_threads", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   type: text("type").notNull(),

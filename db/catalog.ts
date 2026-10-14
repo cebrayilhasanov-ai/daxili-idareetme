@@ -260,6 +260,15 @@ async function ensureSchema() {
     done INTEGER DEFAULT 0 NOT NULL,
     created_at TEXT NOT NULL
   )`).run();
+  // Versiya 3.26: "Qeydlərim" — the owner's private notes on a work; seen by no one else (not the head, not the admin).
+  await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT
+  )`).run();
   const checklistItemColumns = await db().prepare("PRAGMA table_info(personal_work_checklist_items)").all<{ name: string }>();
   if (!checklistItemColumns.results.some((column) => column.name === "delegated_task_id")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN delegated_task_id INTEGER REFERENCES tasks(id)").run();
   if (!checklistItemColumns.results.some((column) => column.name === "delegated_employee_id")) await db().prepare("ALTER TABLE personal_work_checklist_items ADD COLUMN delegated_employee_id INTEGER REFERENCES employees(id)").run();
@@ -1462,9 +1471,55 @@ export async function deletePersonalWork(input: { id: number; userId: number }) 
   if (current.user_id !== input.userId) throw new Error("Bu iş sizə aid deyil.");
   if (current.status !== "Yeni") throw new Error("Yalnız “Yeni” statuslu iş silinə bilər.");
   const steps = (await db().prepare("SELECT id FROM personal_work_checklist_items WHERE personal_work_id = ?").bind(input.id).all<{ id: number }>()).results;
+  await db().prepare("DELETE FROM personal_work_notes WHERE personal_work_id = ?").bind(input.id).run();
   await db().prepare("DELETE FROM personal_works WHERE id = ?").bind(input.id).run();
   await removeFiles("personal_work", input.id);
   for (const step of steps) await removeFiles("personal_work_item", step.id);
+}
+
+// Versiya 3.26: the owner's private notes ("Qeydlərim"). Only the work's owner reaches these (checked in the route);
+// they are not written to the work's history, which the heads see.
+export type PersonalWorkOwnNote = { id: number; text: string; created_at: string; updated_at: string | null };
+function ownNoteText(value: string) {
+  const text = value.trim();
+  if (!text) throw new Error("Qeydi yazın.");
+  if (text.length > 4000) throw new Error("Qeyd 4000 simvoldan uzun ola bilməz.");
+  return text;
+}
+export async function personalWorkOwnerId(personalWorkId: number) {
+  await ensureSchema();
+  return (await db().prepare("SELECT user_id FROM personal_works WHERE id = ?").bind(personalWorkId).first<{ user_id: number }>())?.user_id ?? null;
+}
+export async function getPersonalWorkOwnNotes(personalWorkId: number, userId: number) {
+  await ensureSchema();
+  return (await db().prepare("SELECT id, text, created_at, updated_at FROM personal_work_notes WHERE personal_work_id = ? AND user_id = ? ORDER BY created_at DESC, id DESC")
+    .bind(personalWorkId, userId).all<PersonalWorkOwnNote>()).results;
+}
+export async function addPersonalWorkOwnNote(input: { personalWorkId: number; userId: number; text: string }) {
+  await ensureSchema();
+  await db().prepare("INSERT INTO personal_work_notes (personal_work_id, user_id, text, created_at) VALUES (?, ?, ?, ?)")
+    .bind(input.personalWorkId, input.userId, ownNoteText(input.text), new Date().toISOString()).run();
+  return getPersonalWorkOwnNotes(input.personalWorkId, input.userId);
+}
+export async function updatePersonalWorkOwnNote(input: { id: number; userId: number; text: string }) {
+  await ensureSchema();
+  const note = await db().prepare("SELECT personal_work_id FROM personal_work_notes WHERE id = ? AND user_id = ?").bind(input.id, input.userId).first<{ personal_work_id: number }>();
+  if (!note) throw new Error("Qeyd tapılmadı.");
+  await db().prepare("UPDATE personal_work_notes SET text = ?, updated_at = ? WHERE id = ?").bind(ownNoteText(input.text), new Date().toISOString(), input.id).run();
+  return getPersonalWorkOwnNotes(note.personal_work_id, input.userId);
+}
+export async function deletePersonalWorkOwnNote(input: { id: number; userId: number }) {
+  await ensureSchema();
+  const note = await db().prepare("SELECT personal_work_id FROM personal_work_notes WHERE id = ? AND user_id = ?").bind(input.id, input.userId).first<{ personal_work_id: number }>();
+  if (!note) throw new Error("Qeyd tapılmadı.");
+  await db().prepare("DELETE FROM personal_work_notes WHERE id = ?").bind(input.id).run();
+  return getPersonalWorkOwnNotes(note.personal_work_id, input.userId);
+}
+// How many notes the user has on each of their works — for the 📝 mark in their own list.
+export async function personalWorkOwnNoteCounts(userId: number) {
+  await ensureSchema();
+  const rows = (await db().prepare("SELECT personal_work_id, COUNT(*) AS count FROM personal_work_notes WHERE user_id = ? GROUP BY personal_work_id").bind(userId).all<{ personal_work_id: number; count: number }>()).results;
+  return new Map(rows.map((row) => [row.personal_work_id, Number(row.count)]));
 }
 
 export async function getPersonalWorkChecklist(personalWorkId: number) {

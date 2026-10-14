@@ -1,4 +1,4 @@
-import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPersonalWorks, updatePersonalWork, updatePersonalWorkFile, updatePersonalWorkStatus } from "@/db/catalog";
+import { createPersonalWork, deletePersonalWork, getPersonalWorks, getTeamPersonalWorks, personalWorkOwnNoteCounts, updatePersonalWork, updatePersonalWorkFile, updatePersonalWorkStatus } from "@/db/catalog";
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireSection } from "@/lib/permissions";
 import { env } from "@/lib/runtime";
@@ -32,9 +32,14 @@ async function teamViewer(user: Awaited<ReturnType<typeof requireUser>>, request
 
 // Versiya 3.00: Şəxsi işlərim is given per firm — only the works of the firms where it is open (a work without a firm stays).
 async function ownWorks(user: Awaited<ReturnType<typeof requireUser>>, request: Request) {
-  const items = await getPersonalWorks(await scopeUserId(user, request));
+  const scopeId = await scopeUserId(user, request);
+  const items = await getPersonalWorks(scopeId);
   const firms = (await firmAccess(user, "tasks.mine")).firms("view");
-  return firms ? items.filter((work) => { const companyId = (work as { company_id?: unknown }).company_id; return !companyId || firms.includes(Number(companyId)); }) : items;
+  const shown = firms ? items.filter((work) => { const companyId = (work as { company_id?: unknown }).company_id; return !companyId || firms.includes(Number(companyId)); }) : items;
+  // Versiya 3.26: the count of "Qeydlərim" goes only with the owner's own list — not to an admin viewing as them.
+  if (scopeId !== user.id) return shown;
+  const notes = await personalWorkOwnNoteCounts(user.id);
+  return shown.map((work) => ({ ...work, note_count: notes.get(work.id) ?? 0 }));
 }
 async function requireWorkFirm(user: Awaited<ReturnType<typeof requireUser>>, companyId: unknown) {
   if (!Number(companyId)) return;
