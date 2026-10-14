@@ -335,7 +335,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.24</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.25</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -1353,7 +1353,7 @@ function CustomersPage({isAdmin,canSeePersonnel=false,rights}:{isAdmin:boolean;c
     if(!rule)return value;
     return value.split("").filter(ch=>rule.charPattern.test(ch)).join("").slice(0,rule.length);
   };
-  // Versiya 3.24: a row of an Excel file (admin's import) is checked by the same rules as the form above, and against the
+  // Versiya 3.25: a row of an Excel file (admin's import) is checked by the same rules as the form above, and against the
   // customers already in the system (the same VÖEN/FİN is never created twice).
   const importCheck=(r:ImportCustomer):string|null=>{
     if(!entityTypeOptions.includes(r.entityType))return r.entityType?"Statusu düzgün deyil (Hüquqi şəxs, Fərdi sahibkar, Fiziki şəxs, Xarici təchizatçı).":"Statusu yazılmayıb.";
