@@ -28,6 +28,19 @@ export function ViewSwitch({ value, onChange }: { value: ListOrBoard; onChange: 
 
 type Firm = { id: number; name: string };
 
+// Versiya 3.35: every firm keeps its own colour on the board (picked by its id, so it does not change between visits).
+const FIRM_COLORS = [
+  { accent: "#0C8599", tint: "#E6F6F8" },
+  { accent: "#4F46E5", tint: "#EEF0FE" },
+  { accent: "#D97706", tint: "#FDF4E3" },
+  { accent: "#DB2777", tint: "#FDEEF5" },
+  { accent: "#059669", tint: "#E7F7F0" },
+  { accent: "#7C3AED", tint: "#F3EEFE" },
+  { accent: "#0284C7", tint: "#E7F3FB" },
+  { accent: "#EA580C", tint: "#FEF0E7" },
+];
+const firmColor = (id: number) => FIRM_COLORS[Math.abs(id) % FIRM_COLORS.length];
+
 export function FirmBoard<T>({ rows, firmOf, keyOf, renderCard, extraFirms = [], onAdd, filtered = false, emptyText }: {
   rows: T[];
   firmOf: (row: T) => { id: number | null; name: string | null };
@@ -56,7 +69,7 @@ export function FirmBoard<T>({ rows, firmOf, keyOf, renderCard, extraFirms = [],
       {firmless > 0 && <small>Firması olmayan {firmless} qeyd lövhədə göstərilmir — onlara “Siyahı”da baxın.</small>}
     </div>}
     {ordered.length ? <div className="firmboard">
-      {ordered.map(({ firm, rows: cards }) => <section key={firm.id} className="boardcol">
+      {ordered.map(({ firm, rows: cards }) => <section key={firm.id} className="boardcol" style={{ "--col": firmColor(firm.id).accent, "--coltint": firmColor(firm.id).tint } as React.CSSProperties}>
         <header><b title={firm.name}>{firm.name}</b><em>{cards.length}</em></header>
         <div className="boardcards">
           {cards.map(row => <div key={keyOf(row)} className="boardcardslot">{renderCard(row)}</div>)}

@@ -1149,3 +1149,25 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .fixedsubtabs{align-items:center}
 .fixedsubtabs .viewswitch{margin-left:auto;display:flex;gap:8px}
 @media(max-width:600px){.fixedsubtabs{flex-wrap:wrap}}
+
+/* Versiya 3.35: a livelier board — each firm column has its own colour (header, soft background, add button); cards lift on hover,
+   their details sit in small chips, the deadline chip turns red when late. */
+.firmboard{gap:16px;padding:4px 2px 14px}
+.boardcol{--col:#0C8599;--coltint:#E6F6F8;background:var(--coltint);border:1px solid color-mix(in srgb,var(--col) 22%,transparent);border-radius:16px;overflow:hidden;box-shadow:0 2px 8px #0f172a0f}
+.boardcol>header{background:linear-gradient(135deg,var(--col),color-mix(in srgb,var(--col) 72%,#0f172a));border-bottom:0;padding:13px 15px}
+.boardcol>header b{color:#fff;font-size:15px;letter-spacing:.01em}
+.boardcol>header em{background:#ffffff33;color:#fff;border:1px solid #ffffff55}
+.boardcards{padding:12px;gap:10px}
+.boardcard{border:1px solid #e3e9f1;border-left-width:5px;border-radius:12px;padding:11px 13px;gap:7px;box-shadow:0 1px 3px #0f172a12;transition:transform .15s ease,box-shadow .15s ease}
+.boardcard:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--col) 40%,#e3e9f1);box-shadow:0 8px 18px #0f172a1f}
+.boardcard strong{font-size:14.5px}
+.boardowner{display:inline-flex;align-items:center;gap:6px;color:var(--col)}
+.boardowner::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--col)}
+.boardmeta{gap:6px}
+.boardmeta>*{display:inline-flex;align-items:center;gap:4px;border-radius:8px;background:#f1f5f9;padding:3px 7px;color:#475569}
+.boardmeta time.late{background:#feecec;color:#dc2626}
+.boardpeople{border-top:1px dashed #e3e9f1;padding-top:6px}
+.boardempty{color:color-mix(in srgb,var(--col) 55%,#94a3b8);text-align:center;padding:14px 0;border:1px dashed color-mix(in srgb,var(--col) 30%,transparent);border-radius:10px}
+.boardempty.wide{border:0;color:#94a3b8}
+.boardadd{border-color:color-mix(in srgb,var(--col) 45%,transparent);color:var(--col);background:#ffffff99}
+.boardadd:hover{background:#fff;border-style:solid}
