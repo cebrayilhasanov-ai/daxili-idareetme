@@ -72,10 +72,11 @@ function compareSortValues(x:string|number|null,y:string|number|null){
   if(empty(x)||empty(y))return empty(x)===empty(y)?0:empty(x)?1:-1;
   return typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"az",{numeric:true,sensitivity:"base"});
 }
-export function useExcelFilters<T>(storageKey:string,columns:ExcelColumn<T>[],rows:T[],options:{sortable?:boolean}={}){
+// `initialExcluded`: values unticked when the page opens (Versiya 3.33: Şəxsi işlərim hides "Tamamlanıb" until it is ticked).
+export function useExcelFilters<T>(storageKey:string,columns:ExcelColumn<T>[],rows:T[],options:{sortable?:boolean;initialExcluded?:Record<string,string[]>}={}){
   const sortable=options.sortable!==false;
   const {sort,setSortTo,applySort}=useColumnSort(storageKey);
-  const [excluded,setExcluded]=useState<Record<string,string[]>>({});
+  const [excluded,setExcluded]=useState<Record<string,string[]>>(()=>options.initialExcluded||{});
   const byKey=new Map(columns.map(c=>[c.key,c]));
   const cellText=(col:ExcelColumn<T>,row:T)=>{const text=(col.search?col.search(row):"").trim();return text&&text!=="—"?text:EMPTY_VALUE};
   const cellValues=(col:ExcelColumn<T>,row:T)=>{if(!col.values)return [cellText(col,row)];const list=col.values(row).map(v=>v.trim()).filter(Boolean);return list.length?list:[EMPTY_VALUE]};

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { LayoutGrid, List, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 // Versiya 3.31: "Lövhə" — the same rows as the list (same tabs, filters and visibility), only laid out in one column per firm.
 // Rows without a firm have no column, so the board leaves them out and says how many stay in the list.
@@ -21,8 +21,8 @@ export function useListOrBoard(storageKey: string) {
 
 export function ViewSwitch({ value, onChange }: { value: ListOrBoard; onChange: (next: ListOrBoard) => void }) {
   return <div className="viewswitch" role="group" aria-label="Görünüş">
-    <button type="button" className={value === "list" ? "on" : ""} onClick={() => onChange("list")}><List />Siyahı</button>
-    <button type="button" className={value === "board" ? "on" : ""} onClick={() => onChange("board")}><LayoutGrid />Lövhə</button>
+    <button type="button" className={value === "list" ? "on" : ""} onClick={() => onChange("list")}>Siyahı</button>
+    <button type="button" className={value === "board" ? "on" : ""} onClick={() => onChange("board")}>Lövhə</button>
   </div>;
 }
 

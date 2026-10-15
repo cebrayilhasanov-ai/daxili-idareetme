@@ -1138,3 +1138,9 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .prioritybadge.mid{background:#fff4d8;color:#b76a00}
 .prioritybadge.low{background:#eef2f6;color:#64748b}
 .boardbadges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+
+/* Versiya 3.33: Siyahı | Lövhə look like the section tabs (Mənim işlərim, Əməkdaşlarımın işləri …) and sit beside "Yeni iş". */
+.viewswitch{gap:8px;border:0;border-radius:0;overflow:visible;background:transparent}
+.viewswitch button{border:1px solid #dbe3ee;border-radius:20px;background:#f8fafc;color:#52647b;padding:8px 15px;font-size:13px;font-weight:700}
+.viewswitch button+button{border-left:1px solid #dbe3ee}
+.viewswitch button.on{border-color:#0A7B8C;background:#0A7B8C;color:#fff}

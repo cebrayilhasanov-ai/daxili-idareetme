@@ -345,7 +345,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.32</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.33</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -802,10 +802,11 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
   const scopeCompany=!isAdmin||Boolean(viewAsEmployeeId);
   const inScope=(item:PersonalWork)=>!scopeCompany||!activeCompanyId||item.company_id===activeCompanyId;
   const team=tab==="team"&&hasTeam;
-  const excelMine=useExcelFilters("personalworks",personalWorkColumns.filter(c=>c.key!=="owner"),items.filter(inScope));
+  // Versiya 3.33: completed works are hidden at first — tick "Tamamlanıb" in the Status filter to see them.
+  const excelMine=useExcelFilters("personalworks",personalWorkColumns.filter(c=>c.key!=="owner"),items.filter(inScope),{initialExcluded:{status:["Tamamlanıb"]}});
   const teamScoped=teamItems.filter(inScope);
   const teamLate=teamScoped.filter(workLate).length;
-  const excelTeam=useExcelFilters("personalworksteam",personalWorkColumns,onlyLate?teamScoped.filter(workLate):teamScoped);
+  const excelTeam=useExcelFilters("personalworksteam",personalWorkColumns,onlyLate?teamScoped.filter(workLate):teamScoped,{initialExcluded:{status:["Tamamlanıb"]}});
   const excel=team?excelTeam:excelMine;
   const filtered=excel.rows;
   const visibleOrder=team?order:order.filter(key=>key!=="owner");
