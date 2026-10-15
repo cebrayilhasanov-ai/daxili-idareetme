@@ -5,6 +5,7 @@ import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadI
 import { firmAccess, parseHiddenSections, rightsForType, typeKey, type FirmAccess } from "@/lib/permissions";
 import { companyPermissionsFromStored, parseCompanyPermissions } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
+import { toPriority } from "@/lib/priority";
 import { copyFiles, fileNames, filesOf, filesOfMany, parseFiles, removeFiles, setFiles, withFiles, type FileRef } from "@/db/attachments";
 
 function db() {
@@ -39,6 +40,8 @@ async function ensureSchema() {
   if (!columns.results.some((column) => column.name === "overdue_notified_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN overdue_notified_at TEXT").run();
   // Versiya 3.12: when the worker last submitted the task — "Vaxtında icra" on Ana səhifə goes by it, not by the approval.
   if (!columns.results.some((column) => column.name === "submitted_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN submitted_at TEXT").run();
+  // Versiya 3.32: Vaciblik — taken from the work, task or request the task came from.
+  if (!columns.results.some((column) => column.name === "priority")) await db().prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
   if (!columns.results.some((column) => column.name === "original_due_at")) {
     await db().prepare("ALTER TABLE tasks ADD COLUMN original_due_at TEXT").run();
     await db().prepare("UPDATE tasks SET original_due_at = due_at WHERE original_due_at IS NULL").run();
@@ -253,6 +256,7 @@ async function ensureSchema() {
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_name")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_name TEXT").run();
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_size")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_size INTEGER").run();
   if (!personalWorksColumns2.results.some((column) => column.name === "attachment_type")) await db().prepare("ALTER TABLE personal_works ADD COLUMN attachment_type TEXT").run();
+  if (!personalWorksColumns2.results.some((column) => column.name === "priority")) await db().prepare("ALTER TABLE personal_works ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS personal_work_checklist_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     personal_work_id INTEGER NOT NULL REFERENCES personal_works(id) ON DELETE CASCADE,
@@ -1167,8 +1171,8 @@ export async function delegateTaskChecklistItem(input: { id: number; isAdmin: bo
   // The new task gets its own copies of the step's files so deleting either side never orphans the other.
   const files = await copyFiles(await filesOf("task_item", input.id));
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
-    .bind(input.employeeId, task.company_id, `${task.title} — ${item.title}`, input.comment?.trim() || null, task.due_at, task.due_at, new Date().toISOString()).run();
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, priority) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?)`)
+    .bind(input.employeeId, task.company_id, `${task.title} — ${item.title}`, input.comment?.trim() || null, task.due_at, task.due_at, new Date().toISOString(), toPriority(task.priority)).run();
   const newTaskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (files.length) await setFiles("task", newTaskId, files);
   await db().prepare("UPDATE task_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(newTaskId, input.employeeId, input.id).run();
@@ -1387,17 +1391,18 @@ export async function getPersonalWorkHistory(personalWorkId: number) {
   });
 }
 
-export async function createPersonalWork(input: { userId: number; actorName?: string; title: string; description?: string; companyId?: number; dueAt?: string; files?: FileRef[] }) {
+export async function createPersonalWork(input: { userId: number; actorName?: string; title: string; description?: string; companyId?: number; dueAt?: string; files?: FileRef[]; priority?: unknown }) {
   await ensureSchema();
   const title = input.title?.trim();
   if (!title) throw new Error("İşin adını yazın.");
-  const result = await db().prepare(`INSERT INTO personal_works (user_id, title, description, company_id, due_at, status, created_at)
-    VALUES (?, ?, ?, ?, ?, 'Yeni', ?)`)
-    .bind(input.userId, title, input.description?.trim() || null, input.companyId || null, input.dueAt || null, new Date().toISOString()).run();
+  const priority = toPriority(input.priority);
+  const result = await db().prepare(`INSERT INTO personal_works (user_id, title, description, company_id, due_at, status, created_at, priority)
+    VALUES (?, ?, ?, ?, ?, 'Yeni', ?, ?)`)
+    .bind(input.userId, title, input.description?.trim() || null, input.companyId || null, input.dueAt || null, new Date().toISOString(), priority).run();
   const workId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   // Versiya 3.04: up to 10 files (db/attachments.ts).
   if (input.files?.length) await setFiles("personal_work", workId, input.files);
-  await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", `${title}${input.files?.length ? `\nFayl: ${fileNames(input.files)}` : ""}`);
+  await recordPersonalWorkEvent(workId, input.actorName, "İş yaradıldı", `${title}\nVaciblik: ${priority}${input.files?.length ? `\nFayl: ${fileNames(input.files)}` : ""}`);
   // Versiya 3.05: the work starts with its first step — its name, description and copies of its files — so it can be done,
   // handed to an employee or sent to a department straight away. Later edits of the work do not change the step.
   // Versiya 3.09: it is the work's main step (auto_created) — it is only edited, and goes only with the work itself.
@@ -1431,7 +1436,7 @@ export async function updatePersonalWorkFile(input: { id: number; userId: number
   if (change) await recordPersonalWorkEvent(input.id, input.actorName, "Fayllar dəyişdirildi", change);
 }
 
-export async function updatePersonalWork(input: { id: number; userId: number; actorName?: string; title: string; description?: string; companyId?: number | null; dueAt?: string | null; files?: FileRef[] }) {
+export async function updatePersonalWork(input: { id: number; userId: number; actorName?: string; title: string; description?: string; companyId?: number | null; dueAt?: string | null; files?: FileRef[]; priority?: unknown }) {
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM personal_works WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("İş tapılmadı.");
@@ -1439,14 +1444,43 @@ export async function updatePersonalWork(input: { id: number; userId: number; ac
   if (current.status === "Tamamlanıb") throw new Error("Tamamlanmış iş redaktə edilə bilməz.");
   const title = input.title?.trim();
   if (!title) throw new Error("İşin adını yazın.");
-  await db().prepare(`UPDATE personal_works SET title = ?, description = ?, company_id = ?, due_at = ? WHERE id = ?`)
-    .bind(title, input.description?.trim() || null, input.companyId ?? null, input.dueAt ?? null, input.id).run();
+  const before = toPriority(current.priority);
+  const priority = input.priority === undefined ? before : toPriority(input.priority);
+  await db().prepare(`UPDATE personal_works SET title = ?, description = ?, company_id = ?, due_at = ?, priority = ? WHERE id = ?`)
+    .bind(title, input.description?.trim() || null, input.companyId ?? null, input.dueAt ?? null, priority, input.id).run();
   let change = "";
   if (input.files) {
     const { before, after } = await setFiles("personal_work", input.id, input.files);
     change = filesChange(before, after);
   }
+  if (priority !== before) change = `Vaciblik: ${before} → ${priority}${change ? `\n${change}` : ""}`;
   await recordPersonalWorkEvent(input.id, input.actorName, "İş məlumatları redaktə edildi", `${title}${change ? `\n${change}` : ""}`);
+  if (priority !== before) await spreadWorkPriority(input.id, priority);
+}
+
+// Versiya 3.32: a new importance of a work reaches what came out of it and is not finished yet — the tasks its steps were handed
+// over as, the requests they were sent as (and those requests' tasks), and further the tasks handed on from those tasks.
+async function spreadWorkPriority(workId: number, priority: string) {
+  await ensureRequestSchema();
+  const steps = (await db().prepare("SELECT id, delegated_task_id FROM personal_work_checklist_items WHERE personal_work_id = ?").bind(workId).all<{ id: number; delegated_task_id: number | null }>()).results;
+  const taskIds = steps.map((s) => s.delegated_task_id).filter((id): id is number => Boolean(id));
+  for (const step of steps) {
+    const requests = (await db().prepare("SELECT id, task_id, status FROM work_requests WHERE personal_work_item_id = ?").bind(step.id).all<{ id: number; task_id: number | null; status: string }>()).results;
+    for (const request of requests) {
+      if (request.status === "Bağlandı" || request.status === "İmtina edildi") continue;
+      await db().prepare("UPDATE work_requests SET priority = ? WHERE id = ?").bind(priority, request.id).run();
+      if (request.task_id) taskIds.push(request.task_id);
+    }
+  }
+  const seen = new Set<number>();
+  while (taskIds.length) {
+    const taskId = taskIds.pop() as number;
+    if (seen.has(taskId)) continue;
+    seen.add(taskId);
+    await db().prepare("UPDATE tasks SET priority = ? WHERE id = ? AND status <> 'Təsdiqlənib'").bind(priority, taskId).run();
+    const handed = (await db().prepare("SELECT delegated_task_id FROM task_checklist_items WHERE task_id = ? AND delegated_task_id IS NOT NULL").bind(taskId).all<{ delegated_task_id: number }>()).results;
+    taskIds.push(...handed.map((h) => h.delegated_task_id));
+  }
 }
 
 export async function updatePersonalWorkStatus(input: { id: number; userId: number; actorName?: string; status: string }) {
@@ -1606,6 +1640,7 @@ export async function requestPersonalWorkChecklistItem(user: SessionUser, input:
     desiredDueAt: input.desiredDueAt,
     files,
     personalWorkItemId: input.id,
+    priority: toPriority(work.priority),
   });
   return getPersonalWorkChecklist(Number(item.personal_work_id));
 }
@@ -1663,8 +1698,8 @@ export async function delegatePersonalWorkChecklistItem(input: { id: number; use
   // The task gets the files chosen in the dialog (Versiya 3.05; the step's ones as copies) — never the work's own.
   const files = await stepFilesToSend(input.id, input.files);
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
-    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString()).run();
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, priority) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?)`)
+    .bind(input.employeeId, work.company_id, `${work.title} — ${item.title}`, input.comment?.trim() || null, work.due_at, work.due_at, new Date().toISOString(), toPriority(work.priority)).run();
   const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (files.length) await setFiles("task", taskId, files);
   await db().prepare("UPDATE personal_work_checklist_items SET delegated_task_id = ?, delegated_employee_id = ? WHERE id = ?").bind(taskId, input.employeeId, input.id).run();

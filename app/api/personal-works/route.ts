@@ -72,6 +72,7 @@ export async function POST(request: Request) {
       description: body.description,
       companyId: body.companyId ? Number(body.companyId) : undefined,
       dueAt: body.dueAt || undefined,
+      priority: body.priority,
       files: parseFiles(body.files, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }),
     });
     const items = await ownWorks(user, request);
@@ -99,6 +100,7 @@ export async function PATCH(request: Request) {
         description: body.description,
         companyId: body.companyId ? Number(body.companyId) : null,
         dueAt: body.dueAt || null,
+        priority: body.priority,
         files: Array.isArray(body.files) ? parseFiles(body.files) : undefined,
       });
     }

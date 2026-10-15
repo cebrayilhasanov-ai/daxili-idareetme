@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       title: String(body.title || ""),
       description: body.description,
       desiredDueAt: body.desiredDueAt,
+      priority: body.priority,
       files: parseFiles(body.files, { key: body.attachmentKey, name: body.attachmentName, size: body.attachmentSize, type: body.attachmentType }),
     });
     return Response.json(await listFor(user));

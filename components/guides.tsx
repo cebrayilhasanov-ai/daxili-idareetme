@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -61,6 +61,13 @@ const GUIDES: Guide[] = [
     id: "tasks", group: "Tapşırıqlar", title: "Verilən tapşırıqlar", path: "Tapşırıqlar → Verilən tapşırıqlar", section: "tasks.manager",
     intro: "Sizə verilmiş tapşırıqlar: rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
     parts: [
+      { audience: "all", title: "Vaciblik", blocks: [
+        { list: [
+          "Tapşırığın vacibliyi (Yüksək, Orta, Aşağı) əl ilə seçilmir — haradan gəlibsə, oradan götürülür: şəxsi işin addımından — işin vacibliyi, sorğudan — sorğunun vacibliyi, başqa tapşırığın addımından — həmin tapşırığın vacibliyi. Direktorun dərkənarı ilə gələn tapşırıq “Orta” olur.",
+          "Mənbə işin vacibliyi dəyişəndə bitməmiş tapşırığın vacibliyi də dəyişir; təsdiqlənmiş tapşırıq olduğu kimi qalır.",
+          "Siyahıda “Vaciblik” sütunu ilə süzmək və sıralamaq olar; lövhədə kartda və “Aç” pəncərəsində rəngli nişan görünür.",
+        ] },
+      ] },
       { audience: "all", title: "Siyahı və Lövhə", blocks: [
         { list: [
           "Səhifənin yuxarısındakı “Siyahı | Lövhə” düyməsi ilə tapşırıqları cədvəl kimi və ya lövhə kimi görə bilərsiniz. Bu, yalnız görünüşdür — məlumatlar, tablar, görünmə qaydaları və düymələr eynidir; seçiminiz yadda qalır.",
@@ -127,6 +134,15 @@ const GUIDES: Guide[] = [
     id: "personal", group: "Tapşırıqlar", title: "Şəxsi işlərim", path: "Tapşırıqlar → Şəxsi işlərim", section: "tasks.mine",
     intro: "Özünüz üçün yazdığınız işlər və onların iş axını (addımlar). Addımı tabeliyinizdəki əməkdaşa həvalə edə və ya başqa şöbəyə sorğu kimi göndərə bilərsiniz. İşlərinizi siz, firmanın strukturuna görə rəhbərləriniz (şöbə rəisi, direktor) və admin görür — rəhbər yalnız baxır və qeyd yaza bilər.",
     parts: [
+      { audience: "all", title: "Vaciblik", blocks: [
+        { list: [
+          "Hər işin vacibliyi var: Yüksək, Orta və ya Aşağı. Yeni işdə “Orta” seçilir — “Əlavə et” və “Redaktə et” formasında dəyişə bilərsiniz (tamamlanmış işdə dəyişmir). Dəyişiklik işin tarixçəsinə yazılır.",
+          "Siyahıda “Vaciblik” sütunu var: başlığından süzün (məs. yalnız Yüksək) və ya sıralayın — lövhədə də kartlar həmin sıra ilə düzülür. Kartda və “Aç” pəncərəsində rəngli nişan görünür.",
+          "Addımı “Ver” ilə işçiyə versəniz, tapşırıq işin vacibliyi ilə gedir; “Şöbəyə sorğu” ilə göndərilən sorğu da. İşin vacibliyini sonra dəyişsəniz, ondan çıxan bitməmiş tapşırıq və sorğular da dəyişir (bitmişlər olduğu kimi qalır).",
+          "“Təcili” müraciəti “Şəxsi işə çevir” ilə götürəndə iş “Yüksək” olur, adi müraciətdə — “Orta”.",
+          "Rəhbəriniz işlərinizin vacibliyini görür, amma dəyişə bilmir.",
+        ] },
+      ] },
       { audience: "all", title: "Siyahı və Lövhə", blocks: [
         { list: [
           "Səhifənin yuxarısındakı “Siyahı | Lövhə” düyməsi ilə işlərinizi (rəhbərsinizsə, “Əməkdaşlarımın işləri”ni də) cədvəl kimi və ya lövhə kimi görə bilərsiniz. Bu, yalnız görünüşdür — məlumatlar, tablar, görünmə qaydaları və düymələr eynidir; seçiminiz yadda qalır.",
@@ -212,6 +228,13 @@ const GUIDES: Guide[] = [
     id: "requests", group: "Tapşırıqlar", title: "Sorğular", path: "Tapşırıqlar → Sorğular", section: "tasks.requests",
     intro: "Şöbələrarası iş tələbləri və məlumat sorğuları (məsələn, Təchizat → Mühasibatlıq). Tapşırıq yuxarıdan aşağı verilir, sorğu isə eyni firmanın başqa şöbəsinə gedir: o şöbənin rəhbəri qəbul edib icraçı seçir, icraçı cavablandırır, göndərən cavabı təsdiqləyir.",
     parts: [
+      { audience: "all", title: "Vaciblik", blocks: [
+        { list: [
+          "Yeni sorğuda vacibliyi seçirsiniz: Yüksək, Orta (əvvəlcədən seçilir) və ya Aşağı. Şəxsi işin addımından “Şöbəyə sorğu” ilə göndərilən sorğu işin vacibliyini avtomatik alır.",
+          "Sorğunu qəbul edən şöbə vacibliyi görür; sorğu qəbul edilib icraçıya düşəndə tapşırıq da həmin vacibliklə gedir.",
+          "Siyahıda “Vaciblik” sütunu ilə süzmək və sıralamaq olar; “Aç” pəncərəsində də göstərilir.",
+        ] },
+      ] },
       { audience: "all", title: "Statuslar", blocks: [
         { list: [
           "Yeni — göndərilib, şöbə rəhbəri hələ baxmayıb.",

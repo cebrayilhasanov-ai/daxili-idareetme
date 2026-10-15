@@ -1130,3 +1130,11 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .boardadd:hover{background:#fff}
 .boardadd svg{width:15px;height:15px}
 @media(max-width:600px){.firmboardwrap{padding:12px 10px 4px}.boardcol{flex-basis:82vw;max-height:calc(100vh - 200px)}}
+
+/* Versiya 3.32: Vaciblik — Yüksək / Orta / Aşağı. */
+.prioritybadge{display:inline-flex;align-items:center;gap:5px;border-radius:12px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap}
+.prioritybadge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.prioritybadge.high{background:#feecec;color:#dc2626}
+.prioritybadge.mid{background:#fff4d8;color:#b76a00}
+.prioritybadge.low{background:#eef2f6;color:#64748b}
+.boardbadges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}

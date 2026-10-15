@@ -1,6 +1,7 @@
 import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { copyFiles, filesOf, removeFiles, setFiles, withFiles, type FileRef } from "@/db/attachments";
+import { toPriority } from "@/lib/priority";
 
 // "Sorğular": horizontal requests between departments (e.g. Təchizat → Mühasibatlıq). Unlike tasks, which go down the
 // hierarchy, a request goes to a department of a company; that department's head accepts it (and picks who handles it)
@@ -57,6 +58,10 @@ export async function ensureRequestSchema() {
   if (!columns.results.some((column) => column.name === "personal_work_item_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN personal_work_item_id INTEGER").run();
   // A request a department raised on an incoming document (Daxil olan sənədlər → "Sorğu yarat").
   if (!columns.results.some((column: { name: string }) => column.name === "incoming_id")) await db().prepare("ALTER TABLE work_requests ADD COLUMN incoming_id INTEGER").run();
+  // Versiya 3.32: Vaciblik — chosen by the sender, or the work's when sent from a step; its task takes it over.
+  if (!columns.results.some((column: { name: string }) => column.name === "priority")) await db().prepare("ALTER TABLE work_requests ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
+  const taskColumns = await db().prepare("PRAGMA table_info(tasks)").all<{ name: string }>();
+  if (!taskColumns.results.some((column) => column.name === "priority")) await db().prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
   // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
   await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
   schemaReady = true;
@@ -238,8 +243,8 @@ async function createLinkedTask(row: RequestRow, employeeId: number, dueDate: st
   // End of the agreed day, Baku time (UTC+4).
   const dueAt = new Date(`${dueDate}T18:00:00+04:00`).toISOString();
   const result = await db().prepare(`INSERT INTO tasks
-    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?)`)
-    .bind(employeeId, row.company_id, `Sorğu №${row.id}: ${row.title}`, description, dueAt, dueAt, new Date().toISOString()).run();
+    (employee_id, company_id, title, description, due_at, original_due_at, status, created_at, priority) VALUES (?, ?, ?, ?, ?, ?, 'Yeni', ?, ?)`)
+    .bind(employeeId, row.company_id, `Sorğu №${row.id}: ${row.title}`, description, dueAt, dueAt, new Date().toISOString(), toPriority(row.priority)).run();
   const taskId = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (files.length) await setFiles("task", taskId, files);
   return taskId;
@@ -363,7 +368,7 @@ const dateOnly = (value: unknown) => {
   return text;
 };
 
-export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; files?: FileRef[]; personalWorkItemId?: number; incomingId?: number }) {
+export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; files?: FileRef[]; personalWorkItemId?: number; incomingId?: number; priority?: unknown }) {
   await ensureRequestSchema();
   const title = input.title?.trim();
   const toDepartment = input.toDepartment?.trim();
@@ -377,13 +382,13 @@ export async function createRequest(user: SessionUser, input: { companyId: numbe
   if (input.personalWorkItemId && fromDepartment === toDepartment) throw new Error("Öz şöbənizə sorğu göndərmək olmaz — addımı “İşçiyə həvalə et” ilə verin.");
   const now = new Date().toISOString();
   const result = await db().prepare(`INSERT INTO work_requests
-    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, created_at, updated_at, personal_work_item_id, incoming_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?)`)
+    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, created_at, updated_at, personal_work_item_id, incoming_id, priority)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
     .bind(input.companyId, user.id, user.employeeId, fromDepartment, toDepartment, title, input.description?.trim() || null, dateOnly(input.desiredDueAt),
-      now, now, input.personalWorkItemId || null, input.incomingId || null).run();
+      now, now, input.personalWorkItemId || null, input.incomingId || null, toPriority(input.priority)).run();
   const id = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.files?.length) await setFiles("request", id, input.files);
-  await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə`);
+  await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə • Vaciblik: ${toPriority(input.priority)}`);
   return id;
 }
 

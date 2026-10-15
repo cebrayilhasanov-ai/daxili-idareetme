@@ -212,7 +212,7 @@ export async function takeAppeal(user: SessionUser, id: number) {
   const [appealFiles] = await withFiles([row], "appeal");
   const files = await copyFiles((appealFiles.files as FileRef[]) || []);
   const description = [`Müraciət: ${row.from_name}${row.urgent ? " (təcili)" : ""}`, String(row.source_label || ""), String(row.description || "")].filter(Boolean).join("\n");
-  const workId = await createPersonalWork({ userId: user.id, actorName: user.name, title: String(row.title), description, companyId: Number(row.company_id), files });
+  const workId = await createPersonalWork({ userId: user.id, actorName: user.name, title: String(row.title), description, companyId: Number(row.company_id), files, priority: row.urgent ? "Yüksək" : "Orta" });
   await db().prepare("UPDATE head_appeals SET status = ?, handled_by_user_id = ?, handled_by_name = ?, personal_work_id = ?, handled_at = ? WHERE id = ?")
     .bind(APPEAL_TAKEN, user.id, user.name, workId, new Date().toISOString(), id).run();
   return workId;
