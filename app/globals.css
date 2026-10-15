@@ -1093,3 +1093,9 @@ body.chatresizing{user-select:none;cursor:grabbing}
 /* Versiya 3.29: the conversation keeps its height and scrolls — the message area no longer grows past the panel (it was cut off with no scrollbar). */
 .chatroom{min-height:0;overflow:hidden;grid-template-rows:auto minmax(0,1fr);grid-auto-rows:auto}
 .chatroom>.messages{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+/* Versiya 3.30: the conversation list (people and chats) also scrolls inside the panel; its title and search stay on top. */
+.chatpanel{grid-template-rows:minmax(0,1fr)}
+.chatlist{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.chatlist>.chatlisthead{position:sticky;top:0;z-index:3}
+.chatlist>.chatsearch{position:sticky;top:86px;z-index:2;background:#f7faf9}
+.chatlist>.threadlist{overflow:visible;flex:none}
