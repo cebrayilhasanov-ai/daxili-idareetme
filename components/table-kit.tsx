@@ -99,7 +99,7 @@ export function useExcelFilters<T>(storageKey:string,columns:ExcelColumn<T>[],ro
     return <ExcelFilterHeader label={col.label} values={values} excluded={excluded[col.key]||[]} sortable={sortable} sortDir={sortable&&sort?.key===col.key?sort.dir:null}
       onSort={dir=>setSortTo(dir?{key:col.key,dir}:null)} onApply={next=>setExcluded(current=>({...current,[col.key]:next}))}/>;
   };
-  return {rows:sorted,header};
+  return {rows:sorted,header,active:Object.values(excluded).some(values=>values.length>0)};
 }
 export function ExcelFilterHeader({label,values,excluded,sortable,sortDir,onSort,onApply}:{label:string;values:ExcelValue[];excluded:string[];sortable:boolean;sortDir:"asc"|"desc"|null;onSort:(dir:"asc"|"desc"|null)=>void;onApply:(excluded:string[])=>void}){
   const [open,setOpen]=useState(false);

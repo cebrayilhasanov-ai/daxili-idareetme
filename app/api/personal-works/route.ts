@@ -62,6 +62,8 @@ export async function POST(request: Request) {
     // Versiya 2.97: the admin account keeps no personal works.
     if (user.role === "admin") return Response.json({ error: "Admin hesabı iş və tapşırıq yaratmır — bunu öz istifadəçi hesabınızdan edin." }, { status: 403 });
     const body = await request.json();
+    // Versiya 3.31: every new work belongs to a firm (the board shows works by firm).
+    if (!Number(body.companyId)) return Response.json({ error: "İşin firmasını seçin." }, { status: 400 });
     await requireWorkFirm(user, body.companyId);
     await createPersonalWork({
       userId: user.id,
@@ -88,6 +90,7 @@ export async function PATCH(request: Request) {
     } else if (body.status) {
       await updatePersonalWorkStatus({ id: Number(body.id), userId: user.id, actorName: user.name, status: String(body.status || "") });
     } else {
+      if (!Number(body.companyId)) return Response.json({ error: "İşin firmasını seçin." }, { status: 400 });
       await updatePersonalWork({
         id: Number(body.id),
         userId: user.id,
