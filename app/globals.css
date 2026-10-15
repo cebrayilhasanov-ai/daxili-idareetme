@@ -1144,3 +1144,8 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .viewswitch button{border:1px solid #dbe3ee;border-radius:20px;background:#f8fafc;color:#52647b;padding:8px 15px;font-size:13px;font-weight:700}
 .viewswitch button+button{border-left:1px solid #dbe3ee}
 .viewswitch button.on{border-color:#0A7B8C;background:#0A7B8C;color:#fff}
+
+/* Versiya 3.34: Siyahı | Lövhə in the tabs row, on its right, the same size as the tabs. */
+.fixedsubtabs{align-items:center}
+.fixedsubtabs .viewswitch{margin-left:auto;display:flex;gap:8px}
+@media(max-width:600px){.fixedsubtabs{flex-wrap:wrap}}
