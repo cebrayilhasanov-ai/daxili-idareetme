@@ -1090,3 +1090,6 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .fixedappeals li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px}
 .fixedappeals small{color:#64748b}
 .notifsection button.notifurgent{background:#fee2e2;color:#b91c1c;font-weight:600}
+/* Versiya 3.29: the conversation keeps its height and scrolls — the message area no longer grows past the panel (it was cut off with no scrollbar). */
+.chatroom{min-height:0;overflow:hidden;grid-template-rows:auto minmax(0,1fr);grid-auto-rows:auto}
+.chatroom>.messages{min-height:0;overflow-y:auto;overscroll-behavior:contain}
