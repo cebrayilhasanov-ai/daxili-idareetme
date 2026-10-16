@@ -1618,7 +1618,7 @@ async function stepFilesToSend(itemId: number, chosen?: FileRef[]) {
 
 // Sends a step of "İşlərim" as a request to another department of the work's firm. It is an ordinary request (Sorğular);
 // the step only keeps the link, shows the progress and the answer, and the owner ticks it off once satisfied.
-export async function requestPersonalWorkChecklistItem(user: SessionUser, input: { id: number; toDepartment: string; title?: string; description?: string; desiredDueAt?: string; files?: FileRef[] }) {
+export async function requestPersonalWorkChecklistItem(user: SessionUser, input: { id: number; toDepartment: string; title?: string; description?: string; desiredDueAt?: string; files?: FileRef[]; requestType?: unknown }) {
   await ensureSchema();
   const item = await db().prepare("SELECT * FROM personal_work_checklist_items WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!item) throw new Error("İş addımı tapılmadı.");
@@ -1640,6 +1640,7 @@ export async function requestPersonalWorkChecklistItem(user: SessionUser, input:
     desiredDueAt: input.desiredDueAt,
     files,
     personalWorkItemId: input.id,
+    requestType: input.requestType,
     priority: toPriority(work.priority),
   });
   return getPersonalWorkChecklist(Number(item.personal_work_id));
@@ -2831,12 +2832,12 @@ export async function directIncomingDocument(user: SessionUser, input: { id: num
 }
 
 // A related department asks another department for something on this document; the request carries a link back to it.
-export async function createIncomingRequest(user: SessionUser, input: { id: number; toDepartment: string; title: string; description?: string; dueDate?: string }) {
+export async function createIncomingRequest(user: SessionUser, input: { id: number; toDepartment: string; title: string; description?: string; dueDate?: string; requestType?: unknown }) {
   await ensureSchema();
   const { record, rights } = await incomingForAction(user, input.id);
   if (!rights.member && !rights.director) throw new Error("Sorğunu yalnız aidiyyatı şöbənin əməkdaşı və ya rəhbər yarada bilər.");
   const description = [input.description?.trim() || "", `Daxil olan sənəd №${record.incoming_no}: ${record.sender_name}${record.summary ? ` — ${record.summary}` : ""}. Sənədin skanı sorğunun “Daxil olan sənəd” linkindən açılır.`].filter(Boolean).join("\n\n");
-  return createRequest(user, { companyId: Number(record.company_id), toDepartment: input.toDepartment, title: input.title, description, desiredDueAt: input.dueDate, incomingId: input.id });
+  return createRequest(user, { companyId: Number(record.company_id), toDepartment: input.toDepartment, title: input.title, description, desiredDueAt: input.dueDate, incomingId: input.id, requestType: input.requestType });
 }
 
 export async function saveIncomingFile(user: SessionUser, input: { id: number; fileName: string; contentType: string; data: Uint8Array }) {

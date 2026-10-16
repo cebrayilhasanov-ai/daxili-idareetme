@@ -1137,6 +1137,16 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .prioritybadge.high{background:#feecec;color:#dc2626}
 .prioritybadge.mid{background:#fff4d8;color:#b76a00}
 .prioritybadge.low{background:#eef2f6;color:#64748b}
+/* Versiya 3.36: Sorğunun növü */
+.requesttypebadge{display:inline-flex;align-items:center;border-radius:12px;padding:3px 9px;font-size:12px;font-weight:700;white-space:nowrap;background:#e8f1fb;color:#1d5fa8}
+.requestheadactions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.requesttypes ul{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:6px}
+.requesttypes li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e3e8ef;border-radius:10px;flex-wrap:wrap}
+.requesttypes li small{color:#64748b;margin-left:auto}
+.requesttypes li input{flex:1;min-width:160px}
+.requesttypeactions{display:flex;gap:6px;margin-left:auto}
+.requesttypeadd{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.requesttypeadd .field{flex:1;min-width:200px}
 .boardbadges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 
 /* Versiya 3.33: Siyahı | Lövhə look like the section tabs (Mənim işlərim, Əməkdaşlarımın işləri …) and sit beside "Yeni iş". */

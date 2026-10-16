@@ -70,7 +70,7 @@ export async function PATCH(request: Request) {
     if (body.requestDepartment) {
       await requireAction(user, "tasks.requests", "add");
       if (!(await mayRequestFrom(user, existing.personal_work_id))) throw new Error("FORBIDDEN");
-      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, files: sentFiles(body) });
+      const items = await requestPersonalWorkChecklistItem(user, { id, toDepartment: String(body.requestDepartment), title: body.title, description: body.description, desiredDueAt: body.desiredDueAt, requestType: body.requestType, files: sentFiles(body) });
       return Response.json({ items });
     }
     const items = body.delegateEmployeeId

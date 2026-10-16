@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -206,7 +206,7 @@ const GUIDES: Guide[] = [
       { audience: "all", title: "Addımı başqasına vermək", blocks: [
         { list: [
           "Həvalə: addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basın — addım ona tapşırıq kimi düşür (Verilən tapşırıqlar). Əməkdaş təqdim edəndə onu siz təsdiqləyirsiniz (addımın altında və ya “Təsdiqimi gözləyir” tabında) — bundan sonra addımın ✓-u avtomatik qoyulur.",
-          "“Şöbəyə sorğu” — addım işin firmasının başqa şöbəsinə sorğu kimi gedir (Sorğular). İş icrada olmalı və firması seçilməlidir.",
+          "“Şöbəyə sorğu” — addım işin firmasının başqa şöbəsinə sorğu kimi gedir (Sorğular). Şöbəni və sorğunun növünü (Ödəmə, Məlumat və s.) seçin. İş icrada olmalı və firması seçilməlidir.",
           "“Ver” və “Şöbəyə sorğu” pəncərəsində şərh / izah addımın açıqlaması ilə dolu gəlir (dəyişə bilərsiniz). Addımın faylları siyahıda görünür: göndərmək istəmədiyinizi ✕ ilə çıxarın, yenilərini əlavə edin (ən çox 10). Bu seçim yalnız göndərilənə aiddir — addımın öz faylları yerində qalır; nə göndərildiyi işin tarixçəsinə yazılır.",
           "Sorğu açıq olduğu müddətdə addımı silmək, həvalə etmək və ya yenidən göndərmək olmur. Cavabı təsdiqləyəndə addımın ✓-u avtomatik qoyulur.",
         ] },
@@ -229,6 +229,14 @@ const GUIDES: Guide[] = [
     id: "requests", group: "Tapşırıqlar", title: "Sorğular", path: "Tapşırıqlar → Sorğular", section: "tasks.requests",
     intro: "Şöbələrarası iş tələbləri və məlumat sorğuları (məsələn, Təchizat → Mühasibatlıq). Tapşırıq yuxarıdan aşağı verilir, sorğu isə eyni firmanın başqa şöbəsinə gedir: o şöbənin rəhbəri qəbul edib icraçı seçir, icraçı cavablandırır, göndərən cavabı təsdiqləyir.",
     parts: [
+      { audience: "all", title: "Sorğunun növü", blocks: [
+        { list: [
+          "Hər sorğunun növü olur (məsələn, Ödəmə, Məlumat, Sənəd, Digər). Növü göndərən seçir və seçmədən sorğu getmir: “Yeni sorğu”da, şəxsi işin addımından “Şöbəyə sorğu”da və daxil olan sənədin “Sorğu yarat”ında.",
+          "Növ sorğunun işləmə qaydasını dəyişmir — qəbul, icraçı, cavab və qiymətləndirmə əvvəlki kimidir.",
+          "Siyahıda “Növ” sütunu ilə süzmək və sıralamaq olar; “Aç” pəncərəsində və sorğunun tarixçəsində də göstərilir.",
+          "Növlər əlavə olunmazdan əvvəl göndərilmiş sorğuların növü “Digər”dir.",
+        ] },
+      ] },
       { audience: "all", title: "Vaciblik", blocks: [
         { list: [
           "Yeni sorğuda vacibliyi seçirsiniz: Yüksək, Orta (əvvəlcədən seçilir) və ya Aşağı. Şəxsi işin addımından “Şöbəyə sorğu” ilə göndərilən sorğu işin vacibliyini avtomatik alır.",
@@ -249,7 +257,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Sorğu göndərmək və cavabı qəbul etmək", blocks: [
         { steps: [
-          "“Yeni sorğu”: firmanı, şöbəni, mövzunu, təsviri, istədiyiniz tarixi yazın, lazım olsa fayllar əlavə edin (ən çox 10), “Göndər”. Sorğu qəbul ediləndə bütün fayllar icraçının tapşırığına keçir; addımdan göndərilən sorğuya fayl seçilməsə, addımın bütün faylları gedir.",
+          "“Yeni sorğu”: firmanı, şöbəni, sorğunun növünü, mövzunu, təsviri, istədiyiniz tarixi yazın, lazım olsa fayllar əlavə edin (ən çox 10), “Göndər”. Sorğu qəbul ediləndə bütün fayllar icraçının tapşırığına keçir; addımdan göndərilən sorğuya fayl seçilməsə, addımın bütün faylları gedir.",
           "Hələ “Yeni” ikən sorğunu silə (geri çağıra) bilərsiniz.",
           "Cavab gələndə (Cavablandı) ya “Cavabı təsdiqlə ✓”, ya da nəyin çatışmadığını yazıb “Yenidən aç” — iş icraçıya geri qayıdır.",
           "Sorğu bağlanana qədər hər iki tərəf şərh yaza bilər.",
@@ -271,6 +279,11 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "admin", title: "Admin üçün", blocks: [
         { p: "Admin bütün sorğuları görür və istənilən mərhələdə rəhbərin əvəzinə hərəkət edə bilər. Rəhbəri təyin olunmamış şöbəyə gələn sorğular yalnız adminə düşür. Sorğular firmanın strukturundakı şöbələrə gedir — struktur boşdursa, sorğu göndərmək olmur." },
+        { list: [
+          "“Sorğu növləri” düyməsi (yalnız adminə görünür): yeni növ əlavə edin, adını dəyişin və ya silin. Növlər bütün firmalar üçün eynidir.",
+          "Adı dəyişəndə həmin növlü köhnə sorğularda da ad dəyişir. Silinən növ yalnız yeni sorğuda seçilmir — göndərilmiş sorğular onu saxlayır; eyni adla yenidən əlavə etsəniz, geri qayıdır.",
+          "“Digər” növü silinmir və adı dəyişmir.",
+        ] },
       ] },
     ],
   },
@@ -431,7 +444,7 @@ const GUIDES: Guide[] = [
       { audience: "head", title: "Şöbədə icra", blocks: [
         { list: [
           "Rəhbərin tapşırığı sizin Tapşırıqlar siyahınıza düşür; işi şöbə daxilində əməkdaşa həvalə edə bilərsiniz — o da sənədi görür.",
-          "Başqa şöbədən nəsə lazımdırsa, sənədin sətrindən “Sorğu yarat”: şöbəni, nə lazım olduğunu və arzu olunan müddəti yazın. Sorğu sənədə bağlanır, qarşı şöbə skanı sorğudan aça bilir.",
+          "Başqa şöbədən nəsə lazımdırsa, sənədin sətrindən “Sorğu yarat”: şöbəni, sorğunun növünü, nə lazım olduğunu və arzu olunan müddəti yazın. Sorğu sənədə bağlanır, qarşı şöbə skanı sorğudan aça bilir.",
         ] },
       ] },
       { audience: "head", title: "Təsdiq (iki səviyyə)", blocks: [

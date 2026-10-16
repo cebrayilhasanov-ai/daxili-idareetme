@@ -17,6 +17,9 @@ function db() {
 export const AWAITING_EVALUATION = "Qiymətləndirmə gözləyir";
 export const REQUEST_STATUSES = ["Yeni", "Qəbul edildi", "İcra olunur", "Cavablandı", AWAITING_EVALUATION, "Bağlandı", "İmtina edildi"] as const;
 const CLOSED = new Set(["Bağlandı", "İmtina edildi"]);
+// Versiya 3.36: request types. "Digər" always stays — it is the fallback and the type of requests sent before types existed.
+export const OTHER_TYPE = "Digər";
+const DEFAULT_TYPES = ["Ödəmə", "Məlumat", "Sənəd", OTHER_TYPE];
 
 let schemaReady = false;
 export async function ensureRequestSchema() {
@@ -62,6 +65,19 @@ export async function ensureRequestSchema() {
   if (!columns.results.some((column: { name: string }) => column.name === "priority")) await db().prepare("ALTER TABLE work_requests ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
   const taskColumns = await db().prepare("PRAGMA table_info(tasks)").all<{ name: string }>();
   if (!taskColumns.results.some((column) => column.name === "priority")) await db().prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
+  // Versiya 3.36: Sorğunun növü (Ödəmə, Məlumat, ...) — chosen by the sender from the list the admin keeps; old ones are "Digər".
+  if (!columns.results.some((column: { name: string }) => column.name === "request_type")) await db().prepare(`ALTER TABLE work_requests ADD COLUMN request_type TEXT NOT NULL DEFAULT '${OTHER_TYPE}'`).run();
+  await db().prepare(`CREATE TABLE IF NOT EXISTS request_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  )`).run();
+  const typeCount = await db().prepare("SELECT COUNT(*) AS n FROM request_types").first<{ n: number }>();
+  if (!Number(typeCount?.n)) {
+    const now = new Date().toISOString();
+    for (const name of DEFAULT_TYPES) await db().prepare("INSERT INTO request_types (name, active, created_at) VALUES (?, 1, ?)").bind(name, now).run();
+  }
   // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
   await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
   schemaReady = true;
@@ -368,9 +384,10 @@ const dateOnly = (value: unknown) => {
   return text;
 };
 
-export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; files?: FileRef[]; personalWorkItemId?: number; incomingId?: number; priority?: unknown }) {
+export async function createRequest(user: SessionUser, input: { companyId: number; toDepartment: string; title: string; description?: string; desiredDueAt?: string; files?: FileRef[]; personalWorkItemId?: number; incomingId?: number; priority?: unknown; requestType?: unknown }) {
   await ensureRequestSchema();
   const title = input.title?.trim();
+  const requestType = await checkRequestType(input.requestType);
   const toDepartment = input.toDepartment?.trim();
   if (!input.companyId) throw new Error("Firma seçilməyib.");
   if (!toDepartment) throw new Error("Sorğunun göndəriləcəyi şöbəni seçin.");
@@ -382,13 +399,13 @@ export async function createRequest(user: SessionUser, input: { companyId: numbe
   if (input.personalWorkItemId && fromDepartment === toDepartment) throw new Error("Öz şöbənizə sorğu göndərmək olmaz — addımı “İşçiyə həvalə et” ilə verin.");
   const now = new Date().toISOString();
   const result = await db().prepare(`INSERT INTO work_requests
-    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, created_at, updated_at, personal_work_item_id, incoming_id, priority)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?)`)
+    (company_id, from_user_id, from_employee_id, from_department, to_department, title, description, desired_due_at, status, created_at, updated_at, personal_work_item_id, incoming_id, priority, request_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Yeni', ?, ?, ?, ?, ?, ?)`)
     .bind(input.companyId, user.id, user.employeeId, fromDepartment, toDepartment, title, input.description?.trim() || null, dateOnly(input.desiredDueAt),
-      now, now, input.personalWorkItemId || null, input.incomingId || null, toPriority(input.priority)).run();
+      now, now, input.personalWorkItemId || null, input.incomingId || null, toPriority(input.priority), requestType).run();
   const id = Number((result as unknown as { meta: { last_row_id: number } }).meta.last_row_id);
   if (input.files?.length) await setFiles("request", id, input.files);
-  await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə • Vaciblik: ${toPriority(input.priority)}`);
+  await logEvent(id, user.name, "Sorğu göndərildi", `${toDepartment} şöbəsinə • Növ: ${requestType} • Vaciblik: ${toPriority(input.priority)}`);
   return id;
 }
 
@@ -492,4 +509,68 @@ export async function deleteRequest(user: SessionUser, id: number) {
   await db().prepare("DELETE FROM work_request_events WHERE request_id = ?").bind(row.id).run();
   await db().prepare("DELETE FROM work_requests WHERE id = ?").bind(row.id).run();
   await removeFiles("request", row.id);
+}
+
+// Versiya 3.36: "Sorğu növləri". Everyone picks from the active ones; only the admin adds, renames or removes them. A removed type
+// is only hidden from new requests — the requests already sent keep it.
+export async function listRequestTypes() {
+  await ensureRequestSchema();
+  const rows = (await db().prepare("SELECT id, name FROM request_types WHERE active = 1").all<{ id: number; name: string }>()).results;
+  return rows.sort((a, b) => (a.name === OTHER_TYPE ? 1 : b.name === OTHER_TYPE ? -1 : a.name.localeCompare(b.name, "az")));
+}
+
+async function checkRequestType(value: unknown) {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name) throw new Error("Sorğunun növünü seçin.");
+  if (!(await listRequestTypes()).some((type) => type.name === name)) throw new Error(`“${name}” adlı sorğu növü yoxdur — siyahıdan seçin.`);
+  return name;
+}
+
+function typeName(value: unknown) {
+  const name = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  if (!name) throw new Error("Növün adını yazın.");
+  if (name.length > 60) throw new Error("Növün adı ən çox 60 simvol ola bilər.");
+  return name;
+}
+
+const sameName = (a: string, b: string) => a.toLocaleLowerCase("az") === b.toLocaleLowerCase("az");
+
+async function allTypes() {
+  return (await db().prepare("SELECT id, name, active FROM request_types").all<{ id: number; name: string; active: number }>()).results;
+}
+
+export async function addRequestType(value: unknown) {
+  await ensureRequestSchema();
+  const name = typeName(value);
+  const existing = (await allTypes()).find((type) => sameName(type.name, name));
+  if (existing?.active) throw new Error(`“${existing.name}” növü artıq var.`);
+  // A removed type with the same name comes back instead of a duplicate.
+  if (existing) await db().prepare("UPDATE request_types SET active = 1 WHERE id = ?").bind(existing.id).run();
+  else await db().prepare("INSERT INTO request_types (name, active, created_at) VALUES (?, 1, ?)").bind(name, new Date().toISOString()).run();
+  return listRequestTypes();
+}
+
+// Renaming also renames it on the requests that carry it, so the filters keep finding them.
+export async function renameRequestType(id: number, value: unknown) {
+  await ensureRequestSchema();
+  const types = await allTypes();
+  const row = types.find((type) => type.id === id && type.active);
+  if (!row) throw new Error("Növ tapılmadı.");
+  if (row.name === OTHER_TYPE) throw new Error(`“${OTHER_TYPE}” növü dəyişdirilmir.`);
+  const name = typeName(value);
+  if (name === row.name) return listRequestTypes();
+  const clash = types.find((type) => type.id !== id && sameName(type.name, name));
+  if (clash) throw new Error(clash.active ? `“${clash.name}” növü artıq var.` : `“${clash.name}” növü əvvəl silinib — onu yenidən əlavə edin.`);
+  await db().prepare("UPDATE request_types SET name = ? WHERE id = ?").bind(name, id).run();
+  await db().prepare("UPDATE work_requests SET request_type = ? WHERE request_type = ?").bind(name, row.name).run();
+  return listRequestTypes();
+}
+
+export async function removeRequestType(id: number) {
+  await ensureRequestSchema();
+  const row = (await allTypes()).find((type) => type.id === id);
+  if (!row) throw new Error("Növ tapılmadı.");
+  if (row.name === OTHER_TYPE) throw new Error(`“${OTHER_TYPE}” növü silinmir.`);
+  await db().prepare("UPDATE request_types SET active = 0 WHERE id = ?").bind(id).run();
+  return listRequestTypes();
 }

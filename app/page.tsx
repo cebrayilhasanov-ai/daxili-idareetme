@@ -78,7 +78,7 @@ type Customer = { id:number; entity_type:string|null; country:string|null; voen:
 type ChecklistItem = { files?:FileRef[]; delegated_submission_files?:FileRef[]; id:number; task_id:number; title:string; done:number; created_at:string; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null };
 type StepRequest = { request_id?:number|null; request_status?:string|null; request_department?:string|null; request_reject_reason?:string|null; request_due_at?:string|null; request_agreed_due_at?:string|null; request_assignee_name?:string|null; request_answer?:string|null; request_answer_key?:string|null; request_answer_name?:string|null; request_answer_size?:number|null };
 // Versiya 3.05: `kept` — the step's own files left in the send dialog; `files` — new ones chosen there.
-type StepRequestInput = { department:string; title:string; description:string; dueDate:string; files:File[]; kept:FileRef[] };
+type StepRequestInput = { department:string; requestType:string; title:string; description:string; dueDate:string; files:File[]; kept:FileRef[] };
 type StepSendFiles = { kept:FileRef[]; added:File[] };
 type ChecklistLikeItem = StepRequest & { description?:string|null; auto_created?:number|null; files?:FileRef[]; delegated_submission_files?:FileRef[]; request_answer_files?:FileRef[]; id:number; title:string; done:number; delegated_task_id?:number|null; delegated_employee_name?:string|null; delegated_task_status?:string|null; attachment_key?:string|null; attachment_name?:string|null; attachment_size?:number|null; delegated_submission_attachment_key?:string|null; delegated_submission_attachment_name?:string|null; delegated_submission_attachment_size?:number|null };
 type PersonalWork = { priority?:string; files?:FileRef[]; id:number; user_id:number; owner_name:string; title:string; description:string|null; company_id:number|null; company_name:string|null; due_at:string|null; status:string; created_at:string; completed_at:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; shared?:{employee_id:number;name:string;total:number;done:number}[]; departments?:{department:string;total:number;done:number}[]; own?:{total:number;done:number}|null; note_count?:number };
@@ -88,7 +88,7 @@ type PersonalWorkChecklistItem = StepRequest & { id:number; personal_work_id:num
 type RegisterTarget = { companyId:number; types:string[]|null };
 type DocumentTemplate = { id:number; name:string; departments?:string|null; company_id?:number|null; company_name?:string|null; template_group?:string|null; signed_copy_returns?:number|null; signed_copy_days?:number|null; template1_key:string|null; template1_name:string|null; template1_size:number|null; template1_type:string|null; template2_key:string|null; template2_name:string|null; template2_size:number|null; template2_type:string|null; template3_key:string|null; template3_name:string|null; template3_size:number|null; template3_type:string|null; draft_folder_path:string|null; final_folder_path:string|null; file_name_pattern:string|null; incoming_folder_path:string|null; incoming_name_pattern:string|null; draft_folder_missing?:boolean; final_folder_missing?:boolean; incoming_folder_missing?:boolean; created_at:string };
 type OutgoingDocument = { informed_departments?:string[]; return_due_date?:string|null; responsible_employee_id?:number|null; responsible_name?:string|null; approval?:DocumentApproval; id:number; related_departments?:string[]; can?:{edit:boolean;upload:boolean;uploadFinal?:boolean;remove:boolean}; outgoing_no:string; signed_copy_returns?:number|null; returns_signed_copy?:number; outgoing_date:string|null; incoming_no:string|null; incoming_date:string|null; sending_department:string|null; document_type:string|null; sending_method:string|null; delivered_by:string|null; copies:string|null; document_number:string|null; document_date:string|null; voen:string|null; organization_name:string|null; phone:string|null; note:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; attachment_type:string|null; created_at:string; company_id:number|null; company_name:string|null; draft_path:string|null; draft_key:string|null; draft_name:string|null; draft_size:number|null; final_path:string|null; final_key:string|null; final_name:string|null; final_size:number|null; draft_missing:boolean; final_missing:boolean };
-type WorkRequest = { priority?:string; files?:FileRef[]; submission_files?:FileRef[]; id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
+type WorkRequest = { priority?:string; request_type?:string; files?:FileRef[]; submission_files?:FileRef[]; id:number; origin_work_title?:string|null; origin_incoming_no?:string|null; incoming_id?:number|null; company_id:number; company_name:string; from_user_id:number; from_name:string|null; from_department:string|null; to_department:string; assignee_employee_id:number|null; assignee_name:string|null; title:string; description:string|null; desired_due_at:string|null; agreed_due_at:string|null; status:string; reject_reason:string|null; attachment_key:string|null; attachment_name:string|null; attachment_size:number|null; created_at:string; task_id:number|null; task_status:string|null; task_evaluation:number|null; task_evaluation_note:string|null; submission_attachment_key:string|null; submission_attachment_name:string|null; submission_attachment_size:number|null; box:"incoming"|"outgoing"|"oversight"; actionable:boolean; can:Record<"accept"|"reject"|"reassign"|"start"|"answer"|"close"|"reopen"|"remove"|"comment"|"evaluate",boolean> };
 type RequestsData = { canAdd?:boolean; items:WorkRequest[]; departments:Record<string,string[]>; members:Record<string,Array<{id:number;name:string;position_title:string}>>; myDepartments:Record<string,string|null> };
 type ChatData = { threads:ChatThread[]; users:ChatUser[]; messages:ChatMessage[]; selectedThreadId:number; totalUnread:number; readUpTo:number; othersReadUpTo?:number };
 
@@ -345,7 +345,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.35</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.36</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -919,7 +919,7 @@ function PersonalWorksPage({isAdmin,currentUserId,viewAsEmployeeId,companies,emp
     setChecklistError("");
     try{
       const files=[...input.kept,...await uploadFiles(input.files)];
-      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,requestDepartment:input.department,title:input.title,description:input.description,desiredDueAt:input.dueDate,files})});
+      const response=await fetch("/api/personal-work-checklist",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id:item.id,requestDepartment:input.department,requestType:input.requestType,title:input.title,description:input.description,desiredDueAt:input.dueDate,files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       setChecklist(body.items||[]);
@@ -2103,7 +2103,8 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   const [editForm,setEditForm]=useState<Record<string,string>>({});
   const [acting,setActing]=useState<{id:number;mode:"direct"|"request"}|null>(null);
   const [directForm,setDirectForm]=useState<{departments:string[];employees:number[];dueDate:string;resolution:string}>({departments:[],employees:[],dueDate:"",resolution:""});
-  const [requestForm,setRequestForm]=useState<{toDepartment:string;title:string;description:string;dueDate:string}>({toDepartment:"",title:"",description:"",dueDate:""});
+  const [requestForm,setRequestForm]=useState<{toDepartment:string;requestType:string;title:string;description:string;dueDate:string}>({toDepartment:"",requestType:"",title:"",description:"",dueDate:""});
+  const [requestTypes]=useRequestTypes();
   const [uploading,setUploading]=useState<number|null>(null);
   // Sender lookup by VÖEN: "found" fills the name from the customer list, "missing" opens the new-customer card.
   const [voenState,setVoenState]=useState<Record<string,"found"|"missing"|"">>({});
@@ -2204,7 +2205,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     try{await send("PATCH",{action:"review",id:item.id,note});setNotice(`Sənəd №${item.incoming_no}: rəhbər tanış oldu.`)}catch(e){setError(e instanceof Error?e.message:"Qeyd olunmadı.")}finally{setBusy(false)}
   };
   const startDirect=(item:IncomingDocument)=>{setEditingId(null);setActing({id:item.id,mode:"direct"});setDirectForm({departments:item.assignments.length?[...new Set(item.assignments.map(a=>a.department))]:[],employees:[],dueDate:item.due_date||"",resolution:item.resolution||""})};
-  const startRequest=(item:IncomingDocument)=>{setEditingId(null);setActing({id:item.id,mode:"request"});setRequestForm({toDepartment:"",title:`Daxil olan sənəd №${item.incoming_no}: ${item.sender_name||""}`.slice(0,150),description:"",dueDate:""})};
+  const startRequest=(item:IncomingDocument)=>{setEditingId(null);setActing({id:item.id,mode:"request"});setRequestForm({toDepartment:"",requestType:"",title:`Daxil olan sənəd №${item.incoming_no}: ${item.sender_name||""}`.slice(0,150),description:"",dueDate:""})};
   const saveDirect=async(item:IncomingDocument)=>{
     if((!directForm.departments.length&&!directForm.employees.length)||!directForm.dueDate){setError("Ən azı bir şöbə və ya işçi, həmçinin icra müddətini seçin.");return}
     setBusy(true);setError("");setNotice("");
@@ -2212,7 +2213,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
     catch(e){setError(e instanceof Error?e.message:"Tapşırıq verilmədi.")}finally{setBusy(false)}
   };
   const saveRequest=async(item:IncomingDocument)=>{
-    if(!requestForm.toDepartment||!requestForm.title.trim()){setError("Şöbəni və sorğunun mövzusunu yazın.");return}
+    if(!requestForm.toDepartment||!requestForm.requestType||!requestForm.title.trim()){setError("Şöbəni, sorğunun növünü və mövzusunu yazın.");return}
     setBusy(true);setError("");setNotice("");
     try{await send("POST",{action:"request",id:item.id,...requestForm});setActing(null);setNotice(`“${requestForm.toDepartment}” şöbəsinə sorğu göndərildi — Tapşırıqlar → Sorğular bölməsində izləyə bilərsiniz.`)}
     catch(e){setError(e instanceof Error?e.message:"Sorğu göndərilmədi.")}finally{setBusy(false)}
@@ -2281,6 +2282,7 @@ function IncomingDocumentsPage({isAdmin,companies,activeCompanyId,onPending}:{is
   };
   const requestRow=(item:IncomingDocument)=><div className="inlinetaskrow documentrow incomingassignrow">
     <label className="field">Hansı şöbəyə<select value={requestForm.toDepartment} onChange={e=>setRequestForm({...requestForm,toDepartment:e.target.value})}><option value="">Seçin</option>{firmDepartments(item.company_id).map(d=><option key={d.name} value={d.name}>{d.name}</option>)}</select></label>
+    <RequestTypeSelect types={requestTypes} value={requestForm.requestType} set={v=>setRequestForm({...requestForm,requestType:v})}/>
     <Field label="Mövzu" value={requestForm.title} set={v=>setRequestForm({...requestForm,title:v})}/>
     <Field label="Arzu olunan müddət" type="date" value={requestForm.dueDate} set={v=>setRequestForm({...requestForm,dueDate:v})}/>
     <label className="field incomingresolution">Nə lazımdır<Textarea value={requestForm.description} onChange={e=>setRequestForm({...requestForm,description:e.target.value})}/></label>
@@ -2344,6 +2346,7 @@ const requestDue=(i:WorkRequest)=>i.agreed_due_at||i.desired_due_at;
 const requestColumns:Array<{key:string;label:string;width:number;search:(item:WorkRequest)=>string;sort?:(item:WorkRequest)=>string|number|null;render:(item:WorkRequest)=>React.ReactNode}>=[
   {key:"id",label:"№",width:60,search:i=>String(i.id),sort:i=>i.id,render:i=><>{i.actionable?<b className="requestdot" title="Sizdən əməliyyat gözlənilir"/>:null}{i.id}</>},
   {key:"priority",label:"Vaciblik",width:110,search:i=>toPriority(i.priority),sort:i=>priorityRank(i.priority),render:i=><PriorityBadge value={i.priority}/>},
+  {key:"type",label:"Növ",width:120,search:i=>i.request_type||"Digər",sort:i=>i.request_type||"Digər",render:i=><RequestTypeBadge value={i.request_type}/>},
   {key:"title",label:"Mövzu",width:240,search:i=>`${i.title} ${i.origin_work_title||""} ${i.origin_incoming_no||""}`,render:i=><><b>{i.title}</b>{i.origin_work_title&&<small className="requestorigin">Şəxsi işlərim: {i.origin_work_title}</small>}{i.incoming_id&&i.origin_incoming_no&&<a className="requestorigin" href={`/api/documents/incoming/file?id=${i.incoming_id}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Daxil olan sənəd №{i.origin_incoming_no}</a>}</>},
   {key:"from",label:"Kimdən",width:190,search:i=>`${i.from_name||""} ${i.from_department||""}`,render:i=><>{i.from_name||"—"}{i.from_department&&<small className="requestsub">{i.from_department}</small>}</>},
   {key:"to",label:"Kimə",width:190,search:i=>`${i.to_department} ${i.assignee_name||""}`,render:i=><>{i.to_department}{i.assignee_name&&<small className="requestsub">İcraçı: {i.assignee_name}</small>}</>},
@@ -2370,6 +2373,8 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const [events,setEvents]=useState<WorkHistoryEvent[]|null>(null);
   const [act,setAct]=useState<Record<string,string>>({});
   const [actError,setActError]=useState("");
+  const [types,setTypes]=useRequestTypes();
+  const [typesOpen,setTypesOpen]=useState(false);
   const apply=(body:RequestsData)=>{setData({canAdd:body.canAdd!==false,items:body.items||[],departments:body.departments||{},members:body.members||{},myDepartments:body.myDepartments||{}});onActionable((body.items||[]).filter(i=>i.actionable).length)};
   const load=async()=>{setLoading(true);setError("");try{const response=await fetch("/api/requests");const body=await response.json();if(!response.ok)throw new Error(body.error);apply(body)}catch(e){setError(e instanceof Error?e.message:"Sorğular yüklənmədi.")}finally{setLoading(false)}};
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2386,12 +2391,12 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const myDepartment=data.myDepartments[String(formCompanyId)]||null;
   const departmentOptions=(data.departments[String(formCompanyId)]||[]).filter(d=>d!==myDepartment);
   const create=async()=>{
-    if(!formCompanyId||!form.toDepartment||!(form.title||"").trim())return;
+    if(!formCompanyId||!form.toDepartment||!form.requestType||!(form.title||"").trim())return;
     setBusy(true);setError("");
     try{
       // Versiya 3.04: up to 10 files go with the request (and on to its task when accepted).
       const files=await uploadFiles(requestFiles);
-      const response=await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({companyId:formCompanyId,toDepartment:form.toDepartment,title:form.title,description:form.description,desiredDueAt:form.desiredDueAt,priority:toPriority(form.priority),files})});
+      const response=await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({companyId:formCompanyId,toDepartment:form.toDepartment,requestType:form.requestType,title:form.title,description:form.description,desiredDueAt:form.desiredDueAt,priority:toPriority(form.priority),files})});
       const body=await response.json();
       if(!response.ok)throw new Error(body.error);
       apply(body);setForm({});setRequestFiles([]);setCreating(false);setBox("outgoing");
@@ -2420,17 +2425,19 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
   const textMode=act.mode||"";
   const textModes:Record<string,{label:string;button:string;required:boolean}>={reject:{label:"İmtinanın səbəbi",button:"İmtina et",required:true},answer:{label:"Cavab (istəyə bağlı)",button:"Cavablandı",required:false},reopen:{label:"Nə çatışmır?",button:"Yenidən aç",required:true},close:{label:"Qeyd (istəyə bağlı)",button:"Təsdiqlə",required:false}};
   return <section className="panel pagepanel directorypanel">
-    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">ŞÖBƏLƏRARASI</span><h2>Sorğular</h2><p>Başqa şöbəyə iş tələbi və ya məlumat sorğusu göndərin</p></div>{data.canAdd!==false&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sorğu</Button>}</div>
+    <div className="pageactions directoryhead"><div><span className="sectioneyebrow">ŞÖBƏLƏRARASI</span><h2>Sorğular</h2><p>Başqa şöbəyə iş tələbi və ya məlumat sorğusu göndərin</p></div><div className="requestheadactions">{isAdmin&&<button type="button" className="editcompanybtn" onClick={()=>setTypesOpen(true)}>Sorğu növləri</button>}{data.canAdd!==false&&<Button onClick={()=>setCreating(v=>!v)}><Plus/>Yeni sorğu</Button>}</div></div>
+    {typesOpen&&<RequestTypesDialog types={types} setTypes={setTypes} onClose={()=>setTypesOpen(false)}/>}
     {creating&&<div className="inlinetaskrow requestrow">
       {(isAdmin||companies.length>1)&&<label className="field">Firma<select value={String(formCompanyId||"")} onChange={e=>setForm({...form,companyId:e.target.value,toDepartment:""})}>{!formCompanyId&&<option value="">Seçin</option>}{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       <label className="field">Hansı şöbəyə<select value={form.toDepartment||""} onChange={e=>setForm({...form,toDepartment:e.target.value})}><option value="">Şöbə seçin</option>{departmentOptions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
+      <RequestTypeSelect types={types} value={form.requestType||""} set={v=>setForm({...form,requestType:v})}/>
       <Field label="Mövzu" value={form.title||""} set={v=>setForm({...form,title:v})}/>
       <PrioritySelect value={form.priority||"Orta"} set={v=>setForm({...form,priority:v})}/>
       <label className="field">İstədiyiniz tarix (istəyə bağlı)<Input type="date" value={form.desiredDueAt||""} onChange={e=>setForm({...form,desiredDueAt:e.target.value})}/></label>
       <label className="field requestdesc">Təsvir<Textarea value={form.description||""} onChange={e=>setForm({...form,description:e.target.value})}/></label>
       <FilePicker label="Fayllar (istəyə bağlı)" files={requestFiles} onChange={setRequestFiles}/>
       {!loading&&!departmentOptions.length&&<small className="requestsub">Bu firmanın strukturunda şöbə tapılmadı — admin əvvəlcə firmanın strukturunu doldurmalıdır.</small>}
-      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setRequestFiles([])}}>Ləğv et</button><Button disabled={busy||!form.toDepartment||!(form.title||"").trim()} onClick={()=>void create()}>{busy?"Göndərilir...":"Göndər"}</Button></div>
+      <div className="inlineactions"><button className="inlinecancel" disabled={busy} onClick={()=>{setCreating(false);setForm({});setRequestFiles([])}}>Ləğv et</button><Button disabled={busy||!form.toDepartment||!form.requestType||!(form.title||"").trim()} title={form.requestType?undefined:"Sorğunun növünü seçin"} onClick={()=>void create()}>{busy?"Göndərilir...":"Göndər"}</Button></div>
     </div>}
     {error&&<div className="errorbox">{error}</div>}
     <div className="fixedsubtabs"><button className={box==="incoming"?"on":""} onClick={()=>setBox("incoming")}>Gələnlər ({counts.incoming}){pending.incoming>0&&<em className="requestbadge">{pending.incoming}</em>}</button><button className={box==="outgoing"?"on":""} onClick={()=>setBox("outgoing")}>Göndərdiklərim ({counts.outgoing}){pending.outgoing>0&&<em className="requestbadge">{pending.outgoing}</em>}</button>{counts.oversight>0&&<button className={box==="oversight"?"on":""} onClick={()=>setBox("oversight")}>Şöbəmin sorğuları ({counts.oversight})</button>}</div>
@@ -2461,6 +2468,7 @@ function RequestsPage({isAdmin,companies,activeCompanyId,onActionable}:{isAdmin:
       </div>
       <div className="taskdetailright"><div className="taskdetailinfo">
         <p><b>Kimdən</b><span>{current.from_name||"—"}{current.from_department?` — ${current.from_department}`:""}</span></p>
+        <p><b>Növ</b><span><RequestTypeBadge value={current.request_type}/></span></p>
         <p><b>Vaciblik</b><span><PriorityBadge value={current.priority}/></span></p>
         <p><b>Kimə</b><span>{current.to_department}{current.assignee_name?` — icraçı: ${current.assignee_name}`:""}</span></p>
         {current.description&&<p><b>Təsvir</b><span className="requesttext">{current.description}</span></p>}
@@ -3065,6 +3073,33 @@ function SelectCompany({companies,value,set}:{companies:Company[];value:string;s
 // Versiya 3.32: Vaciblik — a badge everywhere it is shown, a select where it is chosen.
 function PriorityBadge({value}:{value?:string|null}){const v=toPriority(value);return <span className={`prioritybadge ${v==="Yüksək"?"high":v==="Aşağı"?"low":"mid"}`}>{v}</span>}
 function PrioritySelect({value,set}:{value:string;set:(v:string)=>void}){return <label className="field">Vaciblik<select value={toPriority(value)} onChange={e=>set(e.target.value)}>{PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}</select></label>}
+// Versiya 3.36: Sorğunun növü — picked from the list the admin keeps (Sorğular → “Sorğu növləri”); old requests are “Digər”.
+type RequestTypeItem={id:number;name:string};
+function useRequestTypes(enabled=true){
+  const [types,setTypes]=useState<RequestTypeItem[]>([]);
+  useEffect(()=>{if(!enabled)return;let live=true;void fetch("/api/requests/types").then(r=>r.ok?r.json():null).then(b=>{if(live&&b)setTypes(b.types||[])}).catch(()=>{});return()=>{live=false}},[enabled]);
+  return [types,setTypes] as const;
+}
+function RequestTypeSelect({types,value,set}:{types:RequestTypeItem[];value:string;set:(v:string)=>void}){return <label className="field">Sorğunun növü<select value={value} onChange={e=>set(e.target.value)}><option value="">Növ seçin</option>{types.map(t=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>}
+function RequestTypeBadge({value}:{value?:string|null}){return <span className="requesttypebadge">{value||"Digər"}</span>}
+function RequestTypesDialog({types,setTypes,onClose}:{types:RequestTypeItem[];setTypes:(types:RequestTypeItem[])=>void;onClose:()=>void}){
+  const [name,setName]=useState("");
+  const [editId,setEditId]=useState<number|null>(null);
+  const [editName,setEditName]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const call=async(method:string,payload:Record<string,unknown>|null,query="")=>{
+    setBusy(true);setError("");
+    try{const response=await fetch(`/api/requests/types${query}`,{method,headers:{"content-type":"application/json"},body:payload?JSON.stringify(payload):undefined});const body=await response.json();if(!response.ok)throw new Error(body.error);setTypes(body.types||[]);return true}
+    catch(e){setError(e instanceof Error?e.message:"Əməliyyat alınmadı.");return false}
+    finally{setBusy(false)}
+  };
+  return <Dialog open onOpenChange={v=>{if(!v&&!busy)onClose()}}><DialogContent className="businessdialog"><FormShell title="Sorğu növləri" desc="Yeni sorğuda seçilən növlər. Silinən növ yalnız yeni sorğularda çıxmır — göndərilmiş sorğular onu saxlayır."><div className="requesttypes">
+    <ul>{types.map(t=><li key={t.id}>{editId===t.id?<><Input autoFocus value={editName} maxLength={60} onChange={e=>setEditName(e.target.value)}/><button type="button" className="inlinecancel" disabled={busy} onClick={()=>setEditId(null)}>Ləğv et</button><Button disabled={busy||!editName.trim()} onClick={()=>void call("PATCH",{id:t.id,name:editName}).then(ok=>{if(ok)setEditId(null)})}>Yadda saxla</Button></>:<><RequestTypeBadge value={t.name}/>{t.name==="Digər"?<small>Həmişə qalır</small>:<span className="requesttypeactions"><button type="button" className="editcompanybtn" disabled={busy} onClick={()=>{setEditId(t.id);setEditName(t.name)}}>Adını dəyiş</button><button type="button" className="deletetaskbtn" disabled={busy} onClick={()=>{if(window.confirm(`“${t.name}” növü silinsin? Göndərilmiş sorğular bu növü saxlayacaq.`))void call("DELETE",null,`?id=${t.id}`)}}>Sil</button></span>}</>}</li>)}</ul>
+    <div className="requesttypeadd"><Field label="Yeni növ" value={name} set={setName}/><Button disabled={busy||!name.trim()} onClick={()=>void call("POST",{name}).then(ok=>{if(ok)setName("")})}>Əlavə et</Button></div>
+    {error&&<div className="errorbox">{error}</div>}
+  </div></FormShell></DialogContent></Dialog>;
+}
 function Empty({text}:{text:string}){return <div className="empty"><ClipboardList/><p>{text}</p></div>}
 function useSimpleColumnWidths(storageKey:string){
   const [widths,setWidths]=useState<Record<string,number>>(()=>{
@@ -3124,7 +3159,8 @@ function ChecklistSection({heading="Mənim iş axınım",onAppeal,onReview,emplo
   const stepFiles=(item:ChecklistLikeItem)=>rowFiles(item.files,item.attachment_key,item.attachment_name,item.attachment_size);
   // "Şöbəyə sorğu": the inline form for sending a step to another department, and the "answer is not enough" note.
   const [requestFor,setRequestFor]=useState<number|null>(null);
-  const [requestForm,setRequestForm]=useState<StepRequestInput>({department:"",title:"",description:"",dueDate:"",files:[],kept:[]});
+  const [requestForm,setRequestForm]=useState<StepRequestInput>({department:"",requestType:"",title:"",description:"",dueDate:"",files:[],kept:[]});
+  const [requestTypes]=useRequestTypes(Boolean(request));
   const [requestBusy,setRequestBusy]=useState(false);
   const [reopenFor,setReopenFor]=useState<number|null>(null);
   const [reopenText,setReopenText]=useState("");
@@ -3134,7 +3170,7 @@ function ChecklistSection({heading="Mənim iş axınım",onAppeal,onReview,emplo
   const reviewOf=(id:number)=>review[id]||{score:"10",note:""};
   const sendReview=async(item:ChecklistLikeItem,approve:boolean)=>{if(!onReview)return;const r=reviewOf(item.id);setReviewBusy(true);const ok=await onReview(item,approve,Number(r.score),r.note.trim());setReviewBusy(false);if(ok)setReview(v=>{const next={...v};delete next[item.id];return next})};
   const workDueDate=request?.workDueAt?new Date(request.workDueAt).toLocaleDateString("sv-SE",{timeZone:"Asia/Baku"}):"";
-  const openRequestForm=(item:ChecklistLikeItem)=>{setPending(null);setReopenFor(null);setEditFor(null);setRequestFor(item.id);setRequestForm({department:request?.departments.length===1?request.departments[0]:"",title:`${request?.workTitle||""} — ${item.title}`,description:item.description||"",dueDate:workDueDate,files:[],kept:stepFiles(item)})};
+  const openRequestForm=(item:ChecklistLikeItem)=>{setPending(null);setReopenFor(null);setEditFor(null);setRequestFor(item.id);setRequestForm({department:request?.departments.length===1?request.departments[0]:"",requestType:"",title:`${request?.workTitle||""} — ${item.title}`,description:item.description||"",dueDate:workDueDate,files:[],kept:stepFiles(item)})};
   const sendRequest=async(item:ChecklistLikeItem)=>{if(!request)return;setRequestBusy(true);const ok=await request.onSend(item,requestForm);setRequestBusy(false);if(ok)setRequestFor(null)};
   const act=async(item:ChecklistLikeItem,action:"close"|"reopen"|"withdraw",text?:string)=>{if(!request)return;setRequestBusy(true);const ok=await request.onAct(item,action,text);setRequestBusy(false);if(ok&&action==="reopen"){setReopenFor(null);setReopenText("")}};
   const done=checklist.filter(i=>Boolean(i.done)).length;
@@ -3176,13 +3212,14 @@ function ChecklistSection({heading="Mənim iş axınım",onAppeal,onReview,emplo
         </div>}
         {requestFor===item.id&&request&&<div className="checklistcomment steprequestform"><b>Şöbəyə sorğu — “{item.title}”</b>
           <label>Şöbə<select value={requestForm.department} onChange={e=>setRequestForm({...requestForm,department:e.target.value})}><option value="">Şöbəni seçin</option>{request.departments.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
+          <label>Sorğunun növü<select value={requestForm.requestType} onChange={e=>setRequestForm({...requestForm,requestType:e.target.value})}><option value="">Növ seçin</option>{requestTypes.map(t=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>
           <label>Mövzu<Input value={requestForm.title} onChange={e=>setRequestForm({...requestForm,title:e.target.value})}/></label>
           <label>İstənilən müddət<Input type="date" value={requestForm.dueDate} onChange={e=>setRequestForm({...requestForm,dueDate:e.target.value})}/></label>
           {workDueDate&&requestForm.dueDate>workDueDate&&<small className="steprequestwarn">⚠ Bu tarix işin son tarixindən ({formatDateOnly(workDueDate)}) gecdir — cavab gec gələrsə, iş gecikə bilər.</small>}
           <label>İzah<Textarea placeholder="Nə lazımdır, hansı formada və nə üçün (istəyə bağlı)" value={requestForm.description} onChange={e=>setRequestForm({...requestForm,description:e.target.value})}/></label>
           {requestForm.kept.length>0&&<div className="field"><span>Addımın faylları (✕ — bu sorğuya getməsin; addımda qalır)</span><FileLinks files={requestForm.kept} onRemove={f=>setRequestForm({...requestForm,kept:requestForm.kept.filter(k=>k.key!==f.key)})}/></div>}
           <FilePicker label={requestForm.kept.length?"Əlavə fayllar (istəyə bağlı)":"Fayllar (istəyə bağlı)"} files={requestForm.files} kept={requestForm.kept.length} onChange={files=>setRequestForm({...requestForm,files})}/>
-          <div className="checklistcommentactions"><button type="button" className="inlinecancel" disabled={requestBusy} onClick={()=>setRequestFor(null)}>Ləğv et</button><Button type="button" disabled={requestBusy||!requestForm.department||!requestForm.title.trim()} onClick={()=>void sendRequest(item)}>{requestBusy?"Göndərilir...":"Sorğunu göndər"}</Button></div>
+          <div className="checklistcommentactions"><button type="button" className="inlinecancel" disabled={requestBusy} onClick={()=>setRequestFor(null)}>Ləğv et</button><Button type="button" disabled={requestBusy||!requestForm.department||!requestForm.requestType||!requestForm.title.trim()} onClick={()=>void sendRequest(item)}>{requestBusy?"Göndərilir...":"Sorğunu göndər"}</Button></div>
         </div>}
         {pending?.itemId===item.id&&<div className="checklistcomment"><b>Şərh — {delegateEmployees.find(emp=>String(emp.id)===pending.employeeId)?.name||"işçi"} üçün əlavə məlumat</b><Textarea autoFocus placeholder="İşçiyə çatdırmaq istədiyiniz əlavə məlumatı yazın (istəyə bağlı). Bu mətn tapşırığın açıqlaması olacaq." value={comment} onChange={e=>setComment(e.target.value)}/>{chooseFiles&&<>{send.kept.length>0&&<div className="field"><span>Addımın faylları (✕ — işçiyə getməsin; addımda qalır)</span><FileLinks files={send.kept} onRemove={f=>setSend({...send,kept:send.kept.filter(k=>k.key!==f.key)})}/></div>}<FilePicker label={send.kept.length?"Əlavə fayllar (istəyə bağlı)":"Fayllar (istəyə bağlı)"} files={send.added} kept={send.kept.length} onChange={added=>setSend({...send,added})}/></>}<div className="checklistcommentactions"><button type="button" className="inlinecancel" onClick={()=>setPending(null)}>Ləğv et</button>{!chooseFiles&&<small className="delegatefilenote">{item.attachment_key?<>İşçiyə yalnız bu addımın faylları göndəriləcək: <b>{rowFiles(item.files,item.attachment_key,item.attachment_name).map(f=>f.name).join(", ")}</b></>:"Bu addımda fayl yoxdur — işçiyə fayl getməyəcək."}</small>}<Button type="button" onClick={()=>{onDelegate?.(item,pending.employeeId,comment,chooseFiles?send:undefined);setChoice({...choice,[item.id]:""});setPending(null);setComment("")}}>Tapşırıq kimi göndər</Button></div></div>}
         {editFor===item.id&&onEdit&&<div className="checklistcomment"><b>Addımı redaktə et</b><label>Addımın adı<Input autoFocus value={editForm.title} onChange={e=>setEditForm({...editForm,title:e.target.value})}/></label><label>Açıqlama (istəyə bağlı)<Textarea value={editForm.description} onChange={e=>setEditForm({...editForm,description:e.target.value})}/></label><div className="checklistcommentactions"><button type="button" className="inlinecancel" disabled={editBusy} onClick={()=>setEditFor(null)}>Ləğv et</button><Button type="button" disabled={editBusy||!editForm.title.trim()} onClick={()=>void saveEdit(item)}>{editBusy?"Yazılır...":"Yadda saxla"}</Button></div></div>}

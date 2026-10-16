@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     // A related department raises a request on the document (checked per document).
     if (body.action === "request") {
-      const requestId = await createIncomingRequest(user, { id: Number(body.id), toDepartment: String(body.toDepartment || ""), title: String(body.title || ""), description: body.description, dueDate: body.dueDate || undefined });
+      const requestId = await createIncomingRequest(user, { id: Number(body.id), toDepartment: String(body.toDepartment || ""), title: String(body.title || ""), description: body.description, dueDate: body.dueDate || undefined, requestType: body.requestType });
       await logAudit(user, "Daxil olan sənəd üzrə sorğu yaradıldı", "incoming-document", `#${body.id} → ${body.toDepartment}`);
       return Response.json({ ...(await (await listResponse(user)).json()), requestId });
     }
