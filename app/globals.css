@@ -1181,3 +1181,15 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .boardempty.wide{border:0;color:#94a3b8}
 .boardadd{border-color:color-mix(in srgb,var(--col) 45%,transparent);color:var(--col);background:#ffffff99}
 .boardadd:hover{background:#fff;border-style:solid}
+
+/* Versiya 3.38: tables scroll inside themselves down to the bottom of the window (height set in app/page.tsx), the header stays on top. */
+.tasktablewrap.fitheight{overflow:auto;overscroll-behavior:contain;width:auto;margin:18px;padding:0}
+.tasktablewrap.fitheight .tasktable thead th{position:sticky;top:0;z-index:2}
+.workmatrix.fitheight{overflow:auto;overscroll-behavior:contain}
+.workmatrix.fitheight .workmatrixhead{position:sticky;top:0;z-index:3}
+/* Sabit işlər: the year / month pickers in the heading row, no "İl" / "Ay" words. */
+.recurringheadtools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.recurringheadtools .periodfilters{padding:0;align-items:center;gap:8px}
+.recurringheadtools .periodfilters label{display:flex;align-items:center;gap:8px;min-width:0}
+.recurringheadtools .periodfilters select{height:34px;min-width:120px}
+.recurringpage .periodmatrix{margin-top:12px}
