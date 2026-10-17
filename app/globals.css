@@ -1204,7 +1204,7 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .tasktable th.coldragover{box-shadow:inset 4px 0 0 #fff}
 .workmatrixhead{background:#028183}
 .perfgrid th,.perflist th,.importtable th,.formerlist th{background:#028183;color:#fff;border-bottom-color:#026b6d}
-/* The filter button stays white on the dark header; an applied filter turns amber so it can be told apart. */
-.tasktable thead .excelbtn,.workmatrixhead .excelbtn{border-color:#ffffff;background:#fff;color:#028183}
-.tasktable thead .excelbtn:hover,.workmatrixhead .excelbtn:hover{border-color:#ffd166;color:#014f50}
+/* Versiya 3.40: the filter buttons on the dark header are #D9E8F5 (white on hover); an applied filter turns amber so it can be told apart. */
+.tasktable thead .excelbtn,.workmatrixhead .excelbtn{border-color:#D9E8F5;background:#D9E8F5;color:#028183}
+.tasktable thead .excelbtn:hover,.workmatrixhead .excelbtn:hover{border-color:#fff;background:#fff;color:#014f50}
 .tasktable thead .excelbtn.on,.workmatrixhead .excelbtn.on{border-color:#ffd166;background:#ffd166;color:#014f50}
