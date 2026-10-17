@@ -1193,3 +1193,18 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .recurringheadtools .periodfilters label{display:flex;align-items:center;gap:8px;min-width:0}
 .recurringheadtools .periodfilters select{height:34px;min-width:120px}
 .recurringpage .periodmatrix{margin-top:12px}
+
+/* Versiya 3.39: one header colour for every table — #028183 with white text (tasks, personal works, documents, HR, fixed works, performance, imports). */
+.tasktable thead th{background:#028183;color:#fff;border-top-color:#028183;border-right-color:rgba(255,255,255,.22);border-bottom-color:#026b6d}
+.tasktable thead th:first-child{border-left-color:#028183}
+.structuretable thead tr{background:#028183}
+.tasktable th span,.tasktable thead th .templatelabel,.tasktable thead th small,.tasktable thead th label{color:#fff}
+.tasktable thead .excelhead .excellabel{color:#fff}
+.tasktable th.edgeresizing{box-shadow:inset -4px 0 0 #ffffff80}
+.tasktable th.coldragover{box-shadow:inset 4px 0 0 #fff}
+.workmatrixhead{background:#028183}
+.perfgrid th,.perflist th,.importtable th,.formerlist th{background:#028183;color:#fff;border-bottom-color:#026b6d}
+/* The filter button stays white on the dark header; an applied filter turns amber so it can be told apart. */
+.tasktable thead .excelbtn,.workmatrixhead .excelbtn{border-color:#ffffff;background:#fff;color:#028183}
+.tasktable thead .excelbtn:hover,.workmatrixhead .excelbtn:hover{border-color:#ffd166;color:#014f50}
+.tasktable thead .excelbtn.on,.workmatrixhead .excelbtn.on{border-color:#ffd166;background:#ffd166;color:#014f50}
