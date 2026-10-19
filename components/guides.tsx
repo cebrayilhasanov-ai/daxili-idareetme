@@ -672,6 +672,7 @@ const GUIDES: Guide[] = [
           "Fon şəkli — proqramın fonunda yalnız sizin görəcəyiniz şəkil (ən çox 8 MB).",
           "Profil şəkli — adınızın yanında görünən şəkil: Ana səhifədə, siyahılarda və çatda (ən çox 5 MB).",
         ] },
+        { note: "Giriş 7 gün etibarlıdır və proqramdan istifadə etdikcə özü uzanır — hər gün işləyən istifadəçidən şifrə yenidən soruşulmur. Proqram 7 gün açılmayıbsa, sessiyanın vaxtı bitir: istənilən əməliyyatda giriş ekranı “Sessiyanın vaxtı bitib — yenidən daxil olun” yazısı ilə açılır. Daxil olandan sonra olduğunuz bölməyə qayıdırsınız; yarımçıq yazdığınız forma isə yenidən doldurulmalıdır. Admin şifrəni yeniləyəndə və ya istifadəçini deaktiv edəndə də sessiya dərhal bitir." },
         { note: "Şifrəni unutmusunuzsa, admin İstifadəçilər bölməsində “Şifrəni yenilə” ilə yeni şifrə təyin edir." },
       ] },
       { audience: "all", title: "Aktiv firma və “Bütün firmalar”", blocks: [

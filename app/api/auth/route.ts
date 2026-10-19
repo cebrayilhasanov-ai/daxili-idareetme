@@ -1,4 +1,7 @@
-import { changePassword, currentUser, login, logout, setUserBackground } from "@/lib/auth";
+import { SESSION_DAYS, changePassword, currentUser, login, logout, setUserBackground } from "@/lib/auth";
+
+const SESSION_SECONDS = SESSION_DAYS * 86400;
+const sessionToken = (request: Request) => request.headers.get("cookie")?.match(/(?:^|;\s*)di_session=([^;]+)/)?.[1] || "";
 
 const cookie = (request: Request, token: string, maxAge: number) => {
   const isHttps = new URL(request.url).protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
@@ -7,7 +10,8 @@ const cookie = (request: Request, token: string, maxAge: number) => {
 
 export async function GET(request: Request) {
   const user = await currentUser(request);
-  return user ? Response.json({ user }) : Response.json({ error: "Giriş tələb olunur." }, { status: 401 });
+  // Versiya 3.44: the page asks this while it is open (every few minutes), so the cookie is renewed along with the session.
+  return user ? Response.json({ user }, { headers: { "set-cookie": cookie(request, sessionToken(request), SESSION_SECONDS) } }) : Response.json({ error: "Giriş tələb olunur." }, { status: 401 });
 }
 
 export async function POST(request: Request) {
@@ -15,7 +19,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (body.action === "login") {
       const result = await login(body.email || "", body.password || "");
-      return Response.json({ user: { ...result.user, mustChangePassword: result.mustChangePassword } }, { headers: { "set-cookie": cookie(request, result.token, 604800) } });
+      return Response.json({ user: { ...result.user, mustChangePassword: result.mustChangePassword } }, { headers: { "set-cookie": cookie(request, result.token, SESSION_SECONDS) } });
     }
     const user = await currentUser(request);
     if (!user) return Response.json({ error: "Giriş tələb olunur." }, { status: 401 });

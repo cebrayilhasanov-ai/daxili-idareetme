@@ -21,6 +21,8 @@ async function passwordHash(password: string, salt: string) {
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOGIN_LOCK_MINUTES = 15;
+// How long a session lives without use (it is renewed while the user works).
+export const SESSION_DAYS = 7;
 
 export async function ensureAuthSchema() {
   await database().prepare(`CREATE TABLE IF NOT EXISTS login_attempts (
@@ -126,7 +128,7 @@ export async function login(emailInput: string, password: string) {
   }
   await clearLoginFailures(email);
   const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
-  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expires = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
   await database().prepare("INSERT INTO app_sessions (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)")
     .bind(await digest(token), row.id, expires, new Date().toISOString()).run();
   return { token, user: toUser(row), mustChangePassword: Boolean(row.must_change_password) };
@@ -152,11 +154,18 @@ export async function currentUser(request: Request) {
   await ensureAuthSchema();
   const token = cookieToken(request);
   if (!token) return null;
-  const row = await database().prepare(`SELECT app_users.* FROM app_sessions
+  const tokenHash = await digest(token);
+  const row = await database().prepare(`SELECT app_users.*, app_sessions.expires_at AS session_expires_at FROM app_sessions
     JOIN app_users ON app_users.id = app_sessions.user_id
     WHERE app_sessions.token_hash = ? AND app_sessions.expires_at > ? AND app_users.active = 1`)
-    .bind(await digest(token), new Date().toISOString()).first<Record<string, unknown>>();
-  return row ? { ...toUser(row), mustChangePassword: Boolean(row.must_change_password) } : null;
+    .bind(tokenHash, new Date().toISOString()).first<Record<string, unknown>>();
+  if (!row) return null;
+  // Versiya 3.44: the session slides — while the user works it is renewed to SESSION_DAYS (at most once a day), so only
+  // someone who has not opened the program for a week has to sign in again. The cookie is renewed by GET /api/auth.
+  if (new Date(String(row.session_expires_at)).getTime() - Date.now() < (SESSION_DAYS - 1) * 86400000) {
+    await database().prepare("UPDATE app_sessions SET expires_at = ? WHERE token_hash = ?").bind(new Date(Date.now() + SESSION_DAYS * 86400000).toISOString(), tokenHash).run();
+  }
+  return { ...toUser(row), mustChangePassword: Boolean(row.must_change_password) };
 }
 
 export async function requireUser(request: Request, role?: "admin") {
