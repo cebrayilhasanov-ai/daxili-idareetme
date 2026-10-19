@@ -657,6 +657,7 @@ const GUIDES: Guide[] = [
           "Qısa səs çalınır — onu “Söhbətlər” başlığındakı səs düyməsi ilə söndürüb-yandırmaq olar (yadda qalır).",
           "Sayt önündə deyilsə, brauzerin (Windows-un) bildirişi çıxır; icazəni brauzer 💬-ə ilk basanda soruşur.",
           "Ekranda açıq olan söhbət və öz mesajınız üçün bildiriş çıxmır.",
+          "Yeni mesaj bildirişi 30 saniyəyə qədər, proqram başqa tabın arxasında qalıbsa 1 dəqiqəyə qədər gecikə bilər; açıq söhbətin mesajları 5 saniyədən bir yenilənir. Proqramın tabı görünməyəndə sorğular, müraciətlər və sənədlər üzrə sayğaclar yenilənmir — taba qayıdanda dərhal yenilənir.",
         ] },
         { note: "Çat Giriş icazələrində bağlana bilər — istifadəçinin heç bir firmasında açıq deyilsə, 💬 düyməsi görünmür." },
       ] },

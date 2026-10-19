@@ -89,7 +89,18 @@ type Position = { id: number; company_id: number; department: string; title: str
 // Who belongs to which department of which company (via the employee's position in that company's structure), and who
 // heads it: the holders of the department's top position(s) — a position whose superior is outside the department. When
 // that position is vacant, the holders of the positions right under it act as heads (same rule as task delegation).
-async function loadStructure() {
+// Versiya 3.45: the structure is read on almost every request (menus, summaries every 30 s), so one server instance keeps it
+// 30 seconds; whoever changes the structure or a person's position clears it (others see the change within 30 s).
+let structureCache: { at: number; value: ReturnType<typeof readStructure> } | null = null;
+export function clearStructureCache() { structureCache = null; }
+function loadStructure() {
+  if (structureCache && Date.now() - structureCache.at < 30000) return structureCache.value;
+  const value = readStructure();
+  structureCache = { at: Date.now(), value };
+  value.catch(() => { structureCache = null; });
+  return value;
+}
+async function readStructure() {
   const positions = (await db().prepare("SELECT id, company_id, department, title, reports_to FROM company_structure_positions").all<Position>()).results;
   const holders = (await db().prepare(`SELECT ec.employee_id, ec.position_id, e.name
     FROM employee_companies ec JOIN employees e ON e.id = ec.employee_id

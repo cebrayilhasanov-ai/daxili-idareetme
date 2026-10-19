@@ -211,12 +211,12 @@ export default function Home(){
   useEffect(()=>{if(!user)return;const original=window.fetch;window.fetch=async(...args)=>{const response=await original(...args);if(response.status===401){setUser(null);setViewAs(null);setData(emptyData);setError("Sessiyanın vaxtı bitib — yenidən daxil olun.")}return response};return()=>{window.fetch=original}},[user]);
   // The open page also renews the session (and its cookie) — see GET /api/auth.
   useEffect(()=>{if(!user)return;let last=Date.now();const refresh=()=>{if(document.visibilityState!=="visible")return;last=Date.now();void fetch("/api/auth").catch(()=>{});window.dispatchEvent(new Event("app:data-changed"))};const timer=setInterval(refresh,5*60*1000);const back=()=>{if(document.visibilityState==="visible"&&Date.now()-last>15000)refresh()};document.addEventListener("visibilitychange",back);window.addEventListener("focus",back);return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",back);window.removeEventListener("focus",back)}},[user]);
-  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/chat?summary=1").then(r=>r.ok?r.json():null).then(v=>{if(!v)return;setChatUnread(Number(v.totalUnread||0));chatSummaryRef.current(v.latest??null)});check();const timer=setInterval(check,10000);return()=>clearInterval(timer)},[user]);
+  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/chat?summary=1").then(r=>r.ok?r.json():null).then(v=>{if(!v)return;setChatUnread(Number(v.totalUnread||0));chatSummaryRef.current(v.latest??null)});return pollWhileVisible(check,30000,true,60000)},[user]);
   // Director's badge on Daxil olan sənədlər: documents waiting for their dərkənar.
-  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/incoming?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setIncomingPending(Number(v.pending||0)));check();const timer=setInterval(check,30000);return()=>clearInterval(timer)},[user]);
-  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/outgoing?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setOverdueDocs(v.overdue||[]));check();const timer=setInterval(check,60000);return()=>clearInterval(timer)},[user]);
-  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/requests?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setRequestsPending(Number(v.actionable||0)));check();const timer=setInterval(check,30000);return()=>clearInterval(timer)},[user]);
-  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/appeals?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setAppealSummary({pending:Number(v.pending||0),items:v.items||[],answered:Number(v.answered||0),answers:v.answers||[]}));check();const timer=setInterval(check,30000);window.addEventListener(APPEALS_CHANGED,check);return()=>{clearInterval(timer);window.removeEventListener(APPEALS_CHANGED,check)}},[user]);
+  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/incoming?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setIncomingPending(Number(v.pending||0)));return pollWhileVisible(check,30000)},[user]);
+  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/documents/outgoing?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setOverdueDocs(v.overdue||[]));return pollWhileVisible(check,60000)},[user]);
+  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/requests?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setRequestsPending(Number(v.actionable||0)));return pollWhileVisible(check,30000)},[user]);
+  useEffect(()=>{if(!user)return;const check=()=>void fetch("/api/appeals?summary=1").then(r=>r.ok?r.json():null).then(v=>v&&setAppealSummary({pending:Number(v.pending||0),items:v.items||[],answered:Number(v.answered||0),answers:v.answers||[]}));const stop=pollWhileVisible(check,30000);window.addEventListener(APPEALS_CHANGED,check);return()=>{stop();window.removeEventListener(APPEALS_CHANGED,check)}},[user]);
   // Versiya 3.38: every table scrolls inside itself, down to the bottom of the window, and its header stays on top (globals.css .fitheight).
   useEffect(()=>{
     let frame=0;
@@ -382,7 +382,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.44</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.45</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -471,6 +471,18 @@ export default function Home(){
   </div>;
 }
 
+// Versiya 3.45: background checks run only while the program's tab is visible — the database (D1) counts every row read and a
+// tab left open all day used up the daily free limit; coming back to the tab checks at once. hiddenMs — keep checking in a
+// hidden tab too, that seldom (the chat, so its browser notification still comes).
+function pollWhileVisible(check:()=>void,ms:number,immediate=true,hiddenMs=0){
+  let last=0;
+  const run=()=>{if(document.visibilityState!=="visible"&&(!hiddenMs||Date.now()-last<hiddenMs))return;last=Date.now();check()};
+  const back=()=>{if(document.visibilityState==="visible"&&Date.now()-last>Math.min(ms,15000))run()};
+  if(immediate)run();
+  const timer=setInterval(run,ms);
+  document.addEventListener("visibilitychange",back);
+  return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",back)};
+}
 function LoginScreen({form,setForm,error,loading,onLogin}:{form:{email:string;password:string};setForm:React.Dispatch<React.SetStateAction<{email:string;password:string}>>;error:string;loading:boolean;onLogin:()=>void}){
   const [showPassword,setShowPassword]=useState(false);
   return <main className="authpage"><form className="authcard" onSubmit={e=>{e.preventDefault();onLogin()}}><div className="authlogo">Dİ</div><h1>Daxili İdarəetmə</h1><p>İş və tapşırıq sisteminə daxil olun</p>{error&&<div className="autherror">{error}</div>}<label>E-poçt<Input type="email" autoComplete="username" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Şifrə<div className="passwordfield"><Input type={showPassword?"text":"password"} autoComplete="current-password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/><button type="button" aria-label={showPassword?"Şifrəni gizlət":"Şifrəni göstər"} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff/>:<Eye/>}</button></div></label><Button type="submit" disabled={loading||!form.email||!form.password}><KeyRound/>{loading?"Yoxlanılır...":"Daxil ol"}</Button></form></main>
@@ -565,7 +577,7 @@ function ChatPage({currentUser,onUnread,initialThread=0,onViewing,sound,onToggle
   const loadChat=async(threadId=selected,quiet=false)=>{try{if(!quiet)setChatError("");const response=await fetch(`/api/chat${threadId?`?threadId=${threadId}`:""}`);const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setSelected(body.selectedThreadId);onUnread(Number(body.totalUnread||0));await fetch("/api/chat",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({threadId:body.selectedThreadId})});}catch(e){if(!quiet)setChatError(e instanceof Error?e.message:"Çat açıla bilmədi.")}};
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{void loadChat(initialThread)},[]);
-  useEffect(()=>{const timer=setInterval(()=>void loadChat(selected,true),5000);return()=>clearInterval(timer)},[selected]);
+  useEffect(()=>pollWhileVisible(()=>void loadChat(selected,true),5000,false),[selected]);// eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"})},[chat?.messages.length,selected]);
   const choose=async(id:number)=>{setSelected(id);await loadChat(id)};
   const startDirect=async(userId:number)=>{setBusy(true);setChatError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"direct",userId})});const body=await response.json();if(!response.ok)throw new Error(body.error);setChat(body);setSelected(body.selectedThreadId);onUnread(Number(body.totalUnread||0))}catch(e){setChatError(e instanceof Error?e.message:"Söhbət yaradıla bilmədi.")}finally{setBusy(false)}};

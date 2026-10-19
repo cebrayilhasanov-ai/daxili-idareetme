@@ -1,7 +1,7 @@
 import { env, folderStore } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { DEFAULT_FIXED_START, FIXED_FREQUENCIES, hasFixedDue, isLongPeriod, periodCounts, periodWindow, setFixedCalendar } from "@/lib/fixed-periods";
-import { AWAITING_EVALUATION, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
+import { AWAITING_EVALUATION, clearStructureCache, companyDepartments, createRequest, departmentHeadIds, ensureRequestSchema, requestForTask, syncRequestFromTask } from "@/db/requests";
 import { firmAccess, parseHiddenSections, rightsForType, typeKey, type FirmAccess } from "@/lib/permissions";
 import { companyPermissionsFromStored, parseCompanyPermissions } from "@/lib/permission-model";
 import { formatPhone } from "@/lib/phone";
@@ -841,6 +841,7 @@ export async function getCompanyStructure(companyId: number) {
 }
 
 export async function createStructurePosition(input: { companyId: number; department: string; title: string; reportsTo?: string | null }) {
+  clearStructureCache();
   await ensureSchema();
   const department = input.department?.trim();
   const title = input.title?.trim();
@@ -855,6 +856,7 @@ export async function createStructurePosition(input: { companyId: number; depart
 }
 
 export async function updateStructurePosition(input: { id: number; department?: string; title?: string; reportsTo?: string | null }) {
+  clearStructureCache();
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM company_structure_positions WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Vəzifə tapılmadı.");
@@ -867,6 +869,7 @@ export async function updateStructurePosition(input: { id: number; department?: 
 }
 
 export async function deleteStructurePosition(id: number) {
+  clearStructureCache();
   const current = await db().prepare("SELECT company_id FROM company_structure_positions WHERE id = ?").bind(id).first<{ company_id: number }>();
   if (!current) throw new Error("Vəzifə tapılmadı.");
   await db().prepare("UPDATE employee_companies SET position_id = NULL WHERE position_id = ?").bind(id).run();
@@ -885,6 +888,7 @@ async function setEmployeeCompanies(employeeId: number, companyIds: number[], co
 }
 
 export async function createEmployee(input: { name: string; position?: string; email?: string; mainCompanyId?: number | null; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string; hiddenSections?: unknown; companyPermissions?: unknown }) {
+  clearStructureCache();
   await ensureSchema();
   const hidden = parseHiddenSections(input.hiddenSections);
   const result = await db().prepare("INSERT INTO employees (name, position, email, main_company_id, active, avatar_key, hidden_sections, company_permissions, created_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)")
@@ -895,6 +899,7 @@ export async function createEmployee(input: { name: string; position?: string; e
 }
 
 export async function updateEmployee(input: { id: number; name?: string; position?: string; email?: string; mainCompanyId?: number | null; active?: boolean; companyIds?: number[]; companyPositions?: Record<string, number | null>; avatarKey?: string | null; hiddenSections?: unknown; companyPermissions?: unknown }) {
+  clearStructureCache();
   await ensureSchema();
   const current = await db().prepare("SELECT * FROM employees WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("İstifadəçi tapılmadı.");
@@ -918,6 +923,7 @@ function firmPermissionsFor(raw: unknown, companyIds: number[]) {
 }
 
 export async function deleteEmployee(id: number) {
+  clearStructureCache();
   const employee = await db().prepare("SELECT active FROM employees WHERE id = ?").bind(id).first<{ active: number }>();
   if (!employee) throw new Error("İstifadəçi tapılmadı.");
   if (employee.active) throw new Error("İstifadəçini silməzdən əvvəl deaktiv edin.");

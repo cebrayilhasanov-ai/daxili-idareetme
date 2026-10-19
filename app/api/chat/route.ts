@@ -18,6 +18,10 @@ async function ensureChatSchema() {
   if (chatSchemaReady) return;
   const columns = await env.DB.prepare("PRAGMA table_info(chat_messages)").all<{ name: string }>();
   if (!columns.results.some((column: { name: string }) => column.name === "deleted_at")) await env.DB.prepare("ALTER TABLE chat_messages ADD COLUMN deleted_at TEXT").run();
+  // Versiya 3.45: the thread list asks each thread's last message and unread count many times a day — without this index
+  // every ask read all messages (most of D1's daily free row reads).
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS chat_messages_thread ON chat_messages (thread_id, id)").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS chat_members_user ON chat_members (user_id)").run();
   chatSchemaReady = true;
 }
 
