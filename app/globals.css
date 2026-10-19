@@ -1208,3 +1208,8 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .tasktable thead .excelbtn,.workmatrixhead .excelbtn{border-color:#D9E8F5;background:#D9E8F5;color:#028183}
 .tasktable thead .excelbtn:hover,.workmatrixhead .excelbtn:hover{border-color:#fff;background:#fff;color:#014f50}
 .tasktable thead .excelbtn.on,.workmatrixhead .excelbtn.on{border-color:#ffd166;background:#ffd166;color:#014f50}
+/* Versiya 3.42: İcra qeydi — a short preview in the "Təsdiqimi gözləyir" table (the whole text on hover and in "Aç"). */
+.submissionnotecell{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;line-height:1.4}
+.taskdetailinfo .submissionnote span{white-space:pre-wrap}
+.awaitingmark{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:11px;font-weight:600;white-space:nowrap}
+.awaitingtext{color:#b45309;font-weight:600}

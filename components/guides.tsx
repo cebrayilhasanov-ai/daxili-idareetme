@@ -79,7 +79,7 @@ const GUIDES: Guide[] = [
       { audience: "all", title: "Statuslar və icra ardıcıllığı", blocks: [
         { steps: [
           "Yeni — tapşırıq sizə düşüb. İşə başlayanda “İcraya al” basın → İcradadır.",
-          "İş bitəndə “Təqdim et” basın → Təqdim edilib. Tapşırıqla doldurulmalı fayl göndərilibsə, işlənmiş faylı yükləmədən təqdim etmək olmur. Təqdim edərkən bir neçə fayl seçmək olar (ən çox 10, hər biri 25 MB-a qədər); hər seçim siyahıya əlavə olunur, ✕ ilə siyahıdan çıxarılır.",
+          "İş bitəndə “Təqdim et” basın → Təqdim edilib. “İcra qeydi” sahəsinə nə etdiyinizi, nəticəni və ya izahı yaza bilərsiniz (istəyə bağlı, 4000 simvola qədər) — tapşırığı verən onu “Aç” pəncərəsində, “Təsdiqimi gözləyir” siyahısında və şəxsi işin addımında görür; geri qaytarılıb yenidən təqdim edəndə yeni qeyd yazılır, köhnəsi işin tarixçəsində qalır. Sorğudan yaranan tapşırıqda bu sahə “Cavab mətni”dir. Tapşırıqla doldurulmalı fayl göndərilibsə, işlənmiş faylı yükləmədən təqdim etmək olmur. Təqdim edərkən bir neçə fayl seçmək olar (ən çox 10, hər biri 25 MB-a qədər); hər seçim siyahıya əlavə olunur, ✕ ilə siyahıdan çıxarılır.",
           "Tapşırığı verən şəxs işi qəbul edirsə, 1–10 bal verir → Təsdiqlənib. Qəbul etmirsə, səbəbini yazıb geri qaytarır → Geri qaytarılıb; düzəldib yenidən “Təqdim et” basırsınız.",
         ] },
         { note: "Status yalnız bu ardıcıllıqla dəyişir; təqdim edilmiş tapşırığı geri çəkmək olmur. Son tarixi keçmiş aktiv tapşırıq gecikən sayılır və zəngdə (🔔) göstərilir." },
@@ -96,9 +96,10 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Verdiyiniz tapşırıqları təsdiqləmək", blocks: [
         { steps: [
-          "Verdiyiniz tapşırıq təqdim ediləndə Verilən tapşırıqlarda “Təsdiqimi gözləyir” tabı (sayğacla) çıxır.",
-          "Tapşırığın işlənmiş faylına və qeydinə baxın, “Qiymətləndir” basın: 1–10 bal və rəy yazıb “Təsdiqlə və qiymətləndir”, və ya səbəbini yazıb “Geri qaytar”.",
-          "Eyni şeyi tapşırığınızın (və ya şəxsi işinizin) addımlarında da edə bilərsiniz: həvalə edilmiş addımın altında “… işi təqdim edib — təsdiqinizi gözləyir” bölməsi çıxır — bal seçin, rəy yazın, “Təsdiqlə” və ya “Geri qaytar”.",
+          "Verdiyiniz tapşırıq təqdim ediləndə Verilən tapşırıqlarda “Təsdiqimi gözləyir” tabı (sayğacla) çıxır. Bundan əlavə, zəngdə (🔔) “Təsdiqinizi gözləyən tapşırıqlar” bölməsi görünür (tapşırıq, icraçı və təqdim tarixi) — basanda həmin tapşırıq dərhal açılır; sayı menyuda Tapşırıqlar və Verilən tapşırıqlar yanında da yazılır. Şəxsi işlərimdə həvalə etdiyiniz addımı təqdim edilmiş işin adının yanında “Təsdiq gözləyir” nişanı, İcraçılar sütununda isə “təqdim edib” yazılır.",
+          "“Təsdiqimi gözləyir” siyahısında açmadan görmək üçün “Təqdim tarixi”, “İcra qeydi” (qısa; tam mətn üzərinə gələndə) və “Təqdim olunan fayllar” sütunları var.",
+          "Tapşırığın işlənmiş faylına və icra qeydinə baxın, “Qiymətləndir” basın: 1–10 bal və rəy yazıb “Təsdiqlə və qiymətləndir”, və ya səbəbini yazıb “Geri qaytar”.",
+          "Eyni şeyi tapşırığınızın (və ya şəxsi işinizin) addımlarında da edə bilərsiniz: həvalə edilmiş addımın altında “… işi təqdim edib — təsdiqinizi gözləyir” bölməsi çıxır (təqdim tarixi və icra qeydi ilə; qeyd işin tarixçəsinə də yazılır) — bal seçin, rəy yazın, “Təsdiqlə” və ya “Geri qaytar”.",
         ] },
         { note: "Təsdiqdən sonra həvalə etdiyiniz addımın ✓-u avtomatik qoyulur. Geri qaytaranda səbəb yazmaq məcburidir." },
       ] },

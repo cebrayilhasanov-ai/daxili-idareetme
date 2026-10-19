@@ -40,6 +40,8 @@ async function ensureSchema() {
   if (!columns.results.some((column) => column.name === "overdue_notified_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN overdue_notified_at TEXT").run();
   // Versiya 3.12: when the worker last submitted the task — "Vaxtında icra" on Ana səhifə goes by it, not by the approval.
   if (!columns.results.some((column) => column.name === "submitted_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN submitted_at TEXT").run();
+  // Versiya 3.42: İcra qeydi — what the worker wrote when submitting (optional); submitting again replaces it.
+  if (!columns.results.some((column) => column.name === "submission_note")) await db().prepare("ALTER TABLE tasks ADD COLUMN submission_note TEXT").run();
   // Versiya 3.32: Vaciblik — taken from the work, task or request the task came from.
   if (!columns.results.some((column) => column.name === "priority")) await db().prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
   if (!columns.results.some((column) => column.name === "original_due_at")) {
@@ -1010,6 +1012,8 @@ export async function updateTask(input: { id: number; actorName?: string; status
     ).run();
   // Versiya 3.04: the work is submitted with up to 10 files; submitting again replaces them.
   if (submissionFiles.length) await setFiles("task_submission", input.id, submissionFiles);
+  const submissionNote = input.submissionNote?.trim().slice(0, 4000) || null;
+  if (status === "Təqdim edilib" && current.status !== "Təqdim edilib") await db().prepare("UPDATE tasks SET submission_note = ? WHERE id = ?").bind(submissionNote, input.id).run();
   if (status === "Təsdiqlənib") {
     await db().prepare("UPDATE personal_work_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
     await db().prepare("UPDATE task_checklist_items SET done = 1 WHERE delegated_task_id = ?").bind(input.id).run();
@@ -1032,7 +1036,7 @@ export async function updateTask(input: { id: number; actorName?: string; status
     if (linked) {
       const subject = `${linked.title} — ${linked.employee_name}`;
       if (status === "İcradadır") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı icraya aldı", subject);
-      else if (status === "Təqdim edilib") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı təqdim etdi", subject);
+      else if (status === "Təqdim edilib") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı təqdim etdi", submissionNote ? `${subject}\nİcra qeydi: ${submissionNote}` : subject);
       else if (status === "Təsdiqlənib") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq təsdiqləndi ✓", `${subject} — qiymət ${input.evaluation}/10`);
       else if (status === "Geri qaytarılıb") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq geri qaytarıldı", `${subject}\nSəbəb: ${input.evaluationNote?.trim() || "—"}`);
     }
@@ -1082,6 +1086,7 @@ export async function deleteTask(id: number, actorName?: string) {
 export async function getChecklistItems(taskId: number) {
   await ensureSchema();
   const rows = (await db().prepare(`SELECT task_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
+    delegated_task.submission_note AS delegated_submission_note, delegated_task.submitted_at AS delegated_submitted_at,
     delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size
     FROM task_checklist_items
     LEFT JOIN employees AS delegated_employee ON delegated_employee.id = task_checklist_items.delegated_employee_id
@@ -1285,16 +1290,19 @@ export async function addPersonalWorkNote(input: { personalWorkId: number; actor
 
 async function withPersonalWorkProgress(works: Array<Record<string, unknown> & { id: number }>) {
   // Who each work's steps were handed to, and how many of that person's steps are done (a step is checked once its task is approved).
-  const delegations = (await db().prepare(`SELECT items.personal_work_id AS work_id, employees.id AS employee_id, employees.name AS name, items.done AS done
+  // Versiya 3.42: "submitted" — steps whose task the person has submitted and that wait for the owner's approval.
+  const delegations = (await db().prepare(`SELECT items.personal_work_id AS work_id, employees.id AS employee_id, employees.name AS name, items.done AS done, tasks.status AS task_status
     FROM personal_work_checklist_items AS items
     JOIN employees ON employees.id = items.delegated_employee_id
-    WHERE items.delegated_task_id IS NOT NULL ORDER BY items.id`).all<{ work_id: number; employee_id: number; name: string; done: number }>()).results;
-  const sharedByWork = new Map<number, Map<number, { employee_id: number; name: string; total: number; done: number }>>();
+    LEFT JOIN tasks ON tasks.id = items.delegated_task_id
+    WHERE items.delegated_task_id IS NOT NULL ORDER BY items.id`).all<{ work_id: number; employee_id: number; name: string; done: number; task_status: string | null }>()).results;
+  const sharedByWork = new Map<number, Map<number, { employee_id: number; name: string; total: number; done: number; submitted: number }>>();
   for (const row of delegations) {
     const people = sharedByWork.get(row.work_id) ?? new Map();
-    const person = people.get(row.employee_id) ?? { employee_id: row.employee_id, name: row.name, total: 0, done: 0 };
+    const person = people.get(row.employee_id) ?? { employee_id: row.employee_id, name: row.name, total: 0, done: 0, submitted: 0 };
     person.total += 1;
     person.done += row.done ? 1 : 0;
+    person.submitted += !row.done && row.task_status === "Təqdim edilib" ? 1 : 0;
     people.set(row.employee_id, person);
     sharedByWork.set(row.work_id, people);
   }
@@ -1564,6 +1572,7 @@ export async function getPersonalWorkChecklist(personalWorkId: number) {
   await ensureRequestSchema();
   // Each step also carries its latest request to another department (Sorğular): status, handler, answer text and file.
   const rows = (await db().prepare(`SELECT personal_work_checklist_items.*, delegated_employee.name AS delegated_employee_name, delegated_task.status AS delegated_task_status,
+    delegated_task.submission_note AS delegated_submission_note, delegated_task.submitted_at AS delegated_submitted_at,
     delegated_task.submission_attachment_key AS delegated_submission_attachment_key, delegated_task.submission_attachment_name AS delegated_submission_attachment_name, delegated_task.submission_attachment_size AS delegated_submission_attachment_size,
     req.id AS request_id, req.status AS request_status, req.to_department AS request_department, req.reject_reason AS request_reject_reason, req.desired_due_at AS request_due_at, req.agreed_due_at AS request_agreed_due_at,
     req_assignee.name AS request_assignee_name, req.task_id AS request_task_id, req_task.submission_attachment_key AS request_answer_key, req_task.submission_attachment_name AS request_answer_name, req_task.submission_attachment_size AS request_answer_size,
