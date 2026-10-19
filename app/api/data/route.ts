@@ -1,4 +1,4 @@
-import { canApproveTask, completeWorkAssignment, setWorkCompletionFiles, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
+import { canApproveTask, tasksForDateDecision, completeWorkAssignment, setWorkCompletionFiles, deleteWorkItem, setFixedWorksStart, uncompleteWorkAssignment, createCompany, createDateChangeRequest, createEmployee, createRecurring, createWorkAssignment, createWorkItem, deleteEmployee, deleteTask, getAllData, getTeamFixedWorks, resolveDateChangeRequest, tasksGivenBy, toggleWorkAssignment, toggleWorkDefinitionCompany, updateCompany, updateEmployee, updateRecurring, updateTask, updateWorkItem } from "@/db/catalog";
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { firmAccess, requireSection } from "@/lib/permissions";
@@ -14,9 +14,13 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   // Non-admins also see their own direct reports (not the full registry) so they can pick a subordinate when delegating a task step.
   // Versiya 2.82: the tasks this user gave (handed-on steps, the director's dərkənar) that wait for their approval.
   const given = await tasksGivenBy(user);
-  const approvals = data.tasks.filter((item: any) => given.has(Number(item.id)) && item.status === "Təqdim edilib");
+  // Versiya 3.43: date change requests go to whoever approves the task; their tasks join "Təsdiqimi gözləyir" while one waits.
+  const deciding = await tasksForDateDecision(user);
+  const decisionRequests = data.dateRequests.filter((item: any) => deciding.has(Number(item.task_id)));
+  const waitingDate = new Set(decisionRequests.filter((item: any) => item.status === "Gözləyir").map((item: any) => Number(item.task_id)));
+  const approvals = data.tasks.filter((item: any) => (given.has(Number(item.id)) && item.status === "Təqdim edilib") || waitingDate.has(Number(item.id)));
   const ownCompanyIds = new Set(((data.employees.find((item: any) => item.id === user.employeeId) as { company_ids?: string } | undefined)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { fixedWorksStart: data.fixedWorksStart, fixedCalendar: data.fixedCalendar, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId), approvals };
+  return { fixedWorksStart: data.fixedWorksStart, fixedCalendar: data.fixedCalendar, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId || deciding.has(Number(item.task_id))), approvals };
 }
 
 function authError(error: unknown) {
@@ -87,6 +91,14 @@ export async function PATCH(request: Request) {
           const title = await setWorkCompletionFiles({assignmentId:Number(body.assignmentId), periodKey:body.periodKey, files:parseFiles(body.files)}, user.employeeId);
           await logAudit(user, "Sabit işin icra qeydinin faylları dəyişdirildi", "work-assignment", `${title} — ${body.periodKey}`);
         } else await completeWorkAssignment({assignmentId:Number(body.assignmentId), periodKey:body.periodKey, files:parseFiles(body.files)}, user.employeeId);
+        return Response.json(await scopedData(user));
+      }
+      // Versiya 3.43: whoever approves the task also decides its date change request.
+      if (body.action === "resolve-date-request") {
+        const dateRequest = await env.DB.prepare("SELECT task_id FROM task_date_requests WHERE id = ?").bind(Number(body.id)).first<{ task_id: number }>();
+        if (!dateRequest || !(await tasksForDateDecision(user)).has(Number(dateRequest.task_id))) return Response.json({ error: "Tarix dəyişikliyini yalnız tapşırığı verən şəxs həll edə bilər." }, { status: 403 });
+        await resolveDateChangeRequest({ id: Number(body.id), approve: Boolean(body.approve), adminNote: body.adminNote, finalDueAt: body.finalDueAt });
+        await logAudit(user, body.approve ? "Tarix dəyişikliyi qəbul edildi" : "Tarix dəyişikliyi rədd edildi", "task", `#${dateRequest.task_id}`);
         return Response.json(await scopedData(user));
       }
       // Whoever gave the task approves it or sends it back (Versiya 2.82); otherwise one moves only one's own task.

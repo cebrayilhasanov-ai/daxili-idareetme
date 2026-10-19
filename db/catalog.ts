@@ -954,6 +954,8 @@ export async function createDateChangeRequest(input: { taskId: number; employeeI
   const existing = await db().prepare("SELECT id FROM task_date_requests WHERE task_id = ?").bind(input.taskId).first();
   if (existing) throw new Error("Bu tapşırıq üçün tarix dəyişikliyi artıq bir dəfə tələb edilib. Yenidən tələb edilə bilməz.");
   if (!input.proposedDueAt) throw new Error("Təklif olunan tarixi seçin.");
+  // Versiya 3.43: the reason is required.
+  if (!input.reason?.trim()) throw new Error("Tarixin niyə dəyişməli olduğunu (səbəbi) yazın.");
   await db().prepare(`INSERT INTO task_date_requests (task_id, proposed_due_at, reason, status, created_at) VALUES (?, ?, ?, 'Gözləyir', ?)`)
     .bind(input.taskId, input.proposedDueAt, input.reason?.trim() || null, new Date().toISOString()).run();
 }
@@ -1067,6 +1069,19 @@ export async function tasksGivenBy(user: SessionUser) {
 
 export async function canApproveTask(user: SessionUser, taskId: number) {
   return user.role === "admin" || (await tasksGivenBy(user)).has(taskId);
+}
+
+// Versiya 3.43: a date change request is decided by whoever approves the task — the one who handed the step on, the director
+// for a dərkənar, and for a task made from a request the head of the department the request went to. The admin decides any.
+export async function tasksForDateDecision(user: SessionUser) {
+  const ids = await tasksGivenBy(user);
+  if (user.employeeId) {
+    await ensureRequestSchema();
+    const structure = await companyDepartments();
+    const linked = (await db().prepare("SELECT task_id, company_id, to_department FROM work_requests WHERE task_id IS NOT NULL").all<{ task_id: number; company_id: number; to_department: string }>()).results;
+    for (const row of linked) if (structure.headedBy(Number(row.company_id), user.employeeId).includes(row.to_department)) ids.add(Number(row.task_id));
+  }
+  return ids;
 }
 
 export async function deleteTask(id: number, actorName?: string) {

@@ -105,9 +105,11 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Son tarixin dəyişdirilməsi", blocks: [
         { list: [
-          "Tapşırığı vaxtında bitirə bilməyəcəksinizsə, tapşırıqdan yeni tarix və səbəb yazaraq tarix dəyişikliyi istəyin.",
+          "Tapşırığı vaxtında bitirə bilməyəcəksinizsə, tapşırıqdan yeni tarix və səbəb yazaraq tarix dəyişikliyi istəyin. Səbəb məcburidir.",
           "Hər tapşırıq üçün bunu yalnız bir dəfə və təqdim etməzdən əvvəl etmək olar.",
-          "Admin tələbi qəbul edir (öz tarixini də yaza bilər) və ya rədd edir. İlkin tarix tapşırıqda “ilkin tarix” kimi qalır.",
+          "Tələbi tapşırığı təsdiqləyən şəxs həll edir: addımı sizə həvalə edən, dərkənarda firmanın rəhbəri, sorğudan yaranan tapşırıqda sorğunun getdiyi şöbənin rəhbəri. Admin də istənilən tələbi həll edə bilər.",
+          "Tələb onun zəngində (🔔) “Tarix dəyişikliyi tələbləri” bölməsində görünür (tapşırıq, icraçı, istənilən tarix) və sayına düşür; basanda Verilən tapşırıqlar → “Təsdiqimi gözləyir” tabında həmin tapşırıq açılır. Tələb həll olunanadək tapşırıq bu tabda “Dəyişiklik tələb olunur” statusu ilə qalır.",
+          "Tapşırığın pəncərəsində təklif olunan tarix və səbəb görünür: “Təsdiqlə” (istəsə öz tarixini yazaraq) və ya “Rədd et”; qeyd yazmaq istəyə bağlıdır və tapşırıqda “Qərar qeydi” kimi qalır. İlkin tarix tapşırıqda “ilkin tarix” kimi qalır.",
         ] },
       ] },
       { audience: "all", title: "İş addımları və həvalə", blocks: [
