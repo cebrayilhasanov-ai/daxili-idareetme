@@ -43,10 +43,10 @@ const topGroups = (rows: string[], open: (label: string) => void) => {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "az")).slice(0, 6).map(([label, value]) => ({ label, value, onOpen: () => open(label) }));
 };
 
-export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, showCustomers, onOpenCustomers, openOverdue, activeCompanyId, open }: {
-  showTemplates: boolean; showOutgoing: boolean; showIncoming: boolean; showCustomers: boolean; onOpenCustomers: () => void; activeCompanyId: number | null;
+export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, showCustomers, showReports, onOpenCustomers, openOverdue, activeCompanyId, open }: {
+  showTemplates: boolean; showOutgoing: boolean; showIncoming: boolean; showCustomers: boolean; showReports: boolean; onOpenCustomers: () => void; activeCompanyId: number | null;
   openOverdue: (filter: { department?: string; responsible?: string }) => void;
-  open: (tab: "templates" | "outgoing" | "incoming") => void;
+  open: (tab: "templates" | "outgoing" | "incoming" | "reports") => void;
 }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [overdue, setOverdue] = useState<OutgoingRow[]>([]);
@@ -92,12 +92,14 @@ export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, s
   // Versiya 2.74: Müştərilər — the other side of the documents — sits here, before Şablonlar.
   if (showCustomers) cards.push({ key: "customers", title: "Müştərilər", text: "Müştəri və təşkilat kartları (VÖEN, ünvan, telefon).", onOpen: onOpenCustomers, stats: [{ label: "müştəri", value: n("customers") }] });
   if (showTemplates) cards.push({ key: "templates", title: "Şablonlar", text: "Sənəd növləri, şablon faylları, papka və ad qaydaları.", onOpen: () => open("templates"), stats: [{ label: "şablon", value: n("templates") }] });
+  // Versiya 3.41: the reports come last, as in the menu.
+  if (showReports) cards.push({ key: "reports", title: "Hesabatlar", text: "Daxil olan və çıxan sənədlər üzrə hesabatlar.", onOpen: () => open("reports") });
   return <SectionOverview cards={cards} loading={!counts}/>;
 }
 
-type HrTab = "violations" | "orders" | "personnel" | "customers" | "calendar" | "settings";
-export function HrOverview({ showViolations, showPersonnel, showOrders, activeCompanyId, open }: {
-  showViolations: boolean; showPersonnel: boolean; showOrders: boolean; activeCompanyId: number | null; open: (tab: HrTab) => void;
+type HrTab = "violations" | "orders" | "personnel" | "customers" | "calendar" | "settings" | "reports";
+export function HrOverview({ showViolations, showPersonnel, showOrders, showReports, activeCompanyId, open }: {
+  showViolations: boolean; showPersonnel: boolean; showOrders: boolean; showReports: boolean; activeCompanyId: number | null; open: (tab: HrTab) => void;
 }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   useEffect(() => {
@@ -133,8 +135,9 @@ export function HrOverview({ showViolations, showPersonnel, showOrders, activeCo
   if (showOrders) cards.push({ key: "orders", title: "Əmrlər", text: "Məzuniyyət, işdən çıxma və digər əmrlər.", onOpen: () => open("orders"), stats: [
     { label: "imzalı nüsxə gözləyir", value: n("ordersPending"), alert: true }, { label: "cəmi", value: n("orders") },
   ] });
+  if (showReports) cards.push({ key: "reports", title: "Hesabatlar", text: "İşçilər, əmrlər, məzuniyyətlər və nöqsanlar üzrə hesabatlar.", onOpen: () => open("reports") });
   // Same order as the menu (Versiya 2.71): daily work first, settings-like sections last.
-  const order = ["personnel", "orders", "violations", "customers", "calendar", "settings"];
+  const order = ["personnel", "orders", "violations", "customers", "calendar", "settings", "reports"];
   cards.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   return <SectionOverview cards={cards} loading={!counts}/>;
 }

@@ -19,6 +19,9 @@ export const SECTION_KEYS = [
   "hr.violations",
   "hr.personnel",
   "hr.orders",
+  "tasks.reports",
+  "documents.reports",
+  "hr.reports",
   "chat",
 ] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
@@ -30,8 +33,8 @@ export const ACTION_LABELS: Record<SectionAction, string> = { view: "Baxış", a
 export const LEVELED_SECTIONS: readonly SectionKey[] = [
   "dashboard.customers", "tasks.requests", "documents.outgoing", "documents.incoming", "hr.violations", "hr.personnel", "hr.orders",
 ];
-// Sections that start CLOSED (personal ID data, salaries).
-export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel", "hr.orders"];
+// Sections that start CLOSED (personal ID data, salaries; from Versiya 3.41 the Hesabatlar of Tapşırıqlar, Sənədlər and Kadrlar).
+export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel", "hr.orders", "tasks.reports", "documents.reports", "hr.reports"];
 // Rights a leveled section does NOT give by default (before 2.62 customers were edited/deleted and violations recorded only by the admin).
 const DEFAULT_DENIED: Partial<Record<SectionKey, readonly SectionAction[]>> = {
   "dashboard.customers": ["edit", "delete"],
@@ -87,7 +90,8 @@ export function deniedFromStored(stored: string[]): Set<string> {
 // (templates of the firm); without it every type is covered.
 // Since Versiya 3.00 every section is given per firm (the dialog lists the firms one under another, no "Ümumi" part): Şəxsi işlərim,
 // Sabit işlər and Çat are plain on/off (stored as ["view"]); Müştərilər and Çat do not belong to a firm and are open when any firm opens them.
-export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "documents.incoming", "documents.outgoing", "dashboard.customers", "hr.personnel", "hr.orders", "hr.violations", "chat"] as const;
+// Versiya 3.41: Hesabatlar under Tapşırıqlar, Sənədlər and Kadrlar — plain on/off per firm, closed until the admin opens them.
+export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "tasks.reports", "documents.incoming", "documents.outgoing", "dashboard.customers", "documents.reports", "hr.personnel", "hr.orders", "hr.violations", "hr.reports", "chat"] as const;
 export type FirmSection = (typeof FIRM_SECTIONS)[number];
 export const TYPED_SECTIONS: readonly FirmSection[] = ["documents.outgoing", "documents.incoming"];
 export const isFirmSection = (section: string): section is FirmSection => (FIRM_SECTIONS as readonly string[]).includes(section);
