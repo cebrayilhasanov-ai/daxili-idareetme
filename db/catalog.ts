@@ -42,6 +42,12 @@ async function ensureSchema() {
   if (!columns.results.some((column) => column.name === "submitted_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN submitted_at TEXT").run();
   // Versiya 3.42: İcra qeydi — what the worker wrote when submitting (optional); submitting again replaces it.
   if (!columns.results.some((column) => column.name === "submission_note")) await db().prepare("ALTER TABLE tasks ADD COLUMN submission_note TEXT").run();
+  // Versiya 3.48: the reason a task was sent back, kept apart from the approval's rəy (evaluation_note) so it is not overwritten
+  // when the task is approved later; with when and by whom. The last return is kept, earlier ones stay in the work's history.
+  if (!columns.results.some((column) => column.name === "return_note")) await db().prepare("ALTER TABLE tasks ADD COLUMN return_note TEXT").run();
+  if (!columns.results.some((column) => column.name === "returned_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN returned_at TEXT").run();
+  if (!columns.results.some((column) => column.name === "returned_by")) await db().prepare("ALTER TABLE tasks ADD COLUMN returned_by TEXT").run();
+  if (!columns.results.some((column) => column.name === "return_due_at")) await db().prepare("ALTER TABLE tasks ADD COLUMN return_due_at TEXT").run();
   // Versiya 3.32: Vaciblik — taken from the work, task or request the task came from.
   if (!columns.results.some((column) => column.name === "priority")) await db().prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Orta'").run();
   if (!columns.results.some((column) => column.name === "original_due_at")) {
@@ -980,7 +986,7 @@ export async function resolveDateChangeRequest(input: { id: number; approve: boo
   }
 }
 
-export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionFiles?: unknown; submissionNote?: string }) {
+export async function updateTask(input: { id: number; actorName?: string; status?: string; evaluation?: number; evaluationNote?: string; userMode?: boolean; submissionFiles?: unknown; submissionNote?: string; newDueAt?: string }) {
   const submissionFiles = parseFiles(input.submissionFiles);
   const current = await db().prepare("SELECT * FROM tasks WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
   if (!current) throw new Error("Tapşırıq tapılmadı.");
@@ -1001,7 +1007,10 @@ export async function updateTask(input: { id: number; actorName?: string; status
   } else if (input.status === "Geri qaytarılıb") {
     if (current.status !== "Təqdim edilib") throw new Error("Yalnız təqdim edilmiş tapşırıq geri qaytarıla bilər.");
     if (!input.evaluationNote?.trim()) throw new Error("Geri qaytarma səbəbini yazın.");
+    if (input.newDueAt && !(new Date(input.newDueAt).getTime() > Date.now())) throw new Error("Yeni son tarix gələcəkdə olmalıdır.");
   }
+  // Versiya 3.48: sending a task back writes the reason to its own field (return_note), not over the approval's rəy.
+  const returning = !input.userMode && input.status === "Geri qaytarılıb";
   const status = input.status ?? current.status;
   const completedAt = status === "Təsdiqlənib" ? (current.completed_at || new Date().toISOString()) : current.completed_at;
   const employeeStatusChanged = input.userMode
@@ -1012,12 +1021,17 @@ export async function updateTask(input: { id: number; actorName?: string; status
     .bind(
       status,
       input.evaluation ?? current.evaluation,
-      input.evaluationNote ?? current.evaluation_note,
+      returning ? current.evaluation_note : input.evaluationNote ?? current.evaluation_note,
       completedAt,
       employeeStatusChanged,
       submittedAt,
       input.id,
     ).run();
+  // Versiya 3.48: optionally with a new due date — the old one may have passed while the work was being checked.
+  const newDueAt = returning && input.newDueAt ? new Date(input.newDueAt).toISOString() : null;
+  if (returning) await db().prepare("UPDATE tasks SET return_note = ?, returned_at = ?, returned_by = ?, return_due_at = ? WHERE id = ?")
+    .bind(input.evaluationNote!.trim().slice(0, 4000), new Date().toISOString(), input.actorName || null, newDueAt, input.id).run();
+  if (newDueAt) await db().prepare("UPDATE tasks SET due_at = ?, overdue_notified_at = NULL WHERE id = ?").bind(newDueAt, input.id).run();
   // Versiya 3.04: the work is submitted with up to 10 files; submitting again replaces them.
   if (submissionFiles.length) await setFiles("task_submission", input.id, submissionFiles);
   const submissionNote = input.submissionNote?.trim().slice(0, 4000) || null;
@@ -1046,7 +1060,7 @@ export async function updateTask(input: { id: number; actorName?: string; status
       if (status === "İcradadır") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı icraya aldı", subject);
       else if (status === "Təqdim edilib") await recordPersonalWorkEvent(linked.personal_work_id, linked.employee_name, "İşçi tapşırığı təqdim etdi", submissionNote ? `${subject}\nİcra qeydi: ${submissionNote}` : subject);
       else if (status === "Təsdiqlənib") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq təsdiqləndi ✓", `${subject} — qiymət ${input.evaluation}/10`);
-      else if (status === "Geri qaytarılıb") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq geri qaytarıldı", `${subject}\nSəbəb: ${input.evaluationNote?.trim() || "—"}`);
+      else if (status === "Geri qaytarılıb") await recordPersonalWorkEvent(linked.personal_work_id, input.actorName, "Tapşırıq geri qaytarıldı", `${subject}\nSəbəb: ${input.evaluationNote?.trim() || "—"}${newDueAt ? `\nYeni son tarix: ${new Date(newDueAt).toLocaleString("az-AZ", { timeZone: "Asia/Baku", dateStyle: "short", timeStyle: "short" })}` : ""}`);
     }
   }
 }

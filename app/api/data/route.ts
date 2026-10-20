@@ -110,7 +110,7 @@ export async function PATCH(request: Request) {
       const reviewing = body.action === "task" && !body.userMode && (body.status === "Təsdiqlənib" || body.status === "Geri qaytarılıb");
       if (reviewing) {
         if (!(await canApproveTask(user, Number(body.id)))) return Response.json({ error: "Bu tapşırığı yalnız onu verən şəxs təsdiqləyə bilər." }, { status: 403 });
-        await updateTask({ id: Number(body.id), status: body.status, evaluation: body.evaluation, evaluationNote: body.evaluationNote, actorName: user.name });
+        await updateTask({ id: Number(body.id), status: body.status, evaluation: body.evaluation, evaluationNote: body.evaluationNote, newDueAt: body.newDueAt || undefined, actorName: user.name });
         await logAudit(user, body.status === "Təsdiqlənib" ? "Tapşırıq təsdiqləndi" : "Tapşırıq geri qaytarıldı", "task", `#${body.id}`);
         return Response.json(await scopedData(user));
       }
