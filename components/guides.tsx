@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36; sabit işlərdə dövr sütunlarının süzgəci — 3.37; cədvəllər öz içində sürüşür, başlıq sabit — 3.38): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36; sabit işlərdə dövr sütunlarının süzgəci — 3.37; cədvəllər öz içində sürüşür, başlıq sabit — 3.38; menyu adları İşlər və Tapşırıqlarım — 3.46): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -58,8 +58,8 @@ const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "tasks", group: "Tapşırıqlar", title: "Verilən tapşırıqlar", path: "Tapşırıqlar → Verilən tapşırıqlar", section: "tasks.manager",
-    intro: "Sizə verilmiş tapşırıqlar: rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
+    id: "tasks", group: "İşlər", title: "Tapşırıqlarım", path: "İşlər → Tapşırıqlarım", section: "tasks.manager",
+    intro: "Sizə verilmiş tapşırıqlar (Versiya 3.46-dan əvvəl bu bölmə “Verilən tapşırıqlar”, menyu isə “Tapşırıqlar” adlanırdı): rəhbərin daxil olan sənəd üzrə dərkənarı, rəhbərinizin sizə həvalə etdiyi iş addımları və qəbul edilmiş sorğular. Hər tapşırığın son tarixi, icra ardıcıllığı və qiyməti var.",
     parts: [
       { audience: "all", title: "Vaciblik", blocks: [
         { list: [
@@ -96,7 +96,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Verdiyiniz tapşırıqları təsdiqləmək", blocks: [
         { steps: [
-          "Verdiyiniz tapşırıq təqdim ediləndə Verilən tapşırıqlarda “Təsdiqimi gözləyir” tabı (sayğacla) çıxır. Bundan əlavə, zəngdə (🔔) “Təsdiqinizi gözləyən tapşırıqlar” bölməsi görünür (tapşırıq, icraçı və təqdim tarixi) — basanda həmin tapşırıq dərhal açılır; sayı menyuda Tapşırıqlar və Verilən tapşırıqlar yanında da yazılır. Şəxsi işlərimdə həvalə etdiyiniz addımı təqdim edilmiş işin adının yanında “Təsdiq gözləyir” nişanı, İcraçılar sütununda isə “təqdim edib” yazılır.",
+          "Verdiyiniz tapşırıq təqdim ediləndə Tapşırıqlarımda “Təsdiqimi gözləyir” tabı (sayğacla) çıxır. Bundan əlavə, zəngdə (🔔) “Təsdiqinizi gözləyən tapşırıqlar” bölməsi görünür (tapşırıq, icraçı və təqdim tarixi) — basanda həmin tapşırıq dərhal açılır; sayı menyuda İşlər və Tapşırıqlarım yanında da yazılır. Şəxsi işlərimdə həvalə etdiyiniz addımı təqdim edilmiş işin adının yanında “Təsdiq gözləyir” nişanı, İcraçılar sütununda isə “təqdim edib” yazılır.",
           "“Təsdiqimi gözləyir” siyahısında açmadan görmək üçün “Təqdim tarixi”, “İcra qeydi” (qısa; tam mətn üzərinə gələndə) və “Təqdim olunan fayllar” sütunları var.",
           "Tapşırığın işlənmiş faylına və icra qeydinə baxın, “Qiymətləndir” basın: 1–10 bal və rəy yazıb “Təsdiqlə və qiymətləndir”, və ya səbəbini yazıb “Geri qaytar”.",
           "Eyni şeyi tapşırığınızın (və ya şəxsi işinizin) addımlarında da edə bilərsiniz: həvalə edilmiş addımın altında “… işi təqdim edib — təsdiqinizi gözləyir” bölməsi çıxır (təqdim tarixi və icra qeydi ilə; qeyd işin tarixçəsinə də yazılır) — bal seçin, rəy yazın, “Təsdiqlə” və ya “Geri qaytar”.",
@@ -108,7 +108,7 @@ const GUIDES: Guide[] = [
           "Tapşırığı vaxtında bitirə bilməyəcəksinizsə, tapşırıqdan yeni tarix və səbəb yazaraq tarix dəyişikliyi istəyin. Səbəb məcburidir.",
           "Hər tapşırıq üçün bunu yalnız bir dəfə və təqdim etməzdən əvvəl etmək olar.",
           "Tələbi tapşırığı təsdiqləyən şəxs həll edir: addımı sizə həvalə edən, dərkənarda firmanın rəhbəri, sorğudan yaranan tapşırıqda sorğunun getdiyi şöbənin rəhbəri. Admin də istənilən tələbi həll edə bilər.",
-          "Tələb onun zəngində (🔔) “Tarix dəyişikliyi tələbləri” bölməsində görünür (tapşırıq, icraçı, istənilən tarix) və sayına düşür; basanda Verilən tapşırıqlar → “Təsdiqimi gözləyir” tabında həmin tapşırıq açılır. Tələb həll olunanadək tapşırıq bu tabda “Dəyişiklik tələb olunur” statusu ilə qalır.",
+          "Tələb onun zəngində (🔔) “Tarix dəyişikliyi tələbləri” bölməsində görünür (tapşırıq, icraçı, istənilən tarix) və sayına düşür; basanda Tapşırıqlarım → “Təsdiqimi gözləyir” tabında həmin tapşırıq açılır. Tələb həll olunanadək tapşırıq bu tabda “Dəyişiklik tələb olunur” statusu ilə qalır.",
           "Tapşırığın pəncərəsində təklif olunan tarix və səbəb görünür: “Təsdiqlə” (istəsə öz tarixini yazaraq) və ya “Rədd et”; qeyd yazmaq istəyə bağlıdır və tapşırıqda “Qərar qeydi” kimi qalır. İlkin tarix tapşırıqda “ilkin tarix” kimi qalır.",
         ] },
       ] },
@@ -134,7 +134,7 @@ const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "personal", group: "Tapşırıqlar", title: "Şəxsi işlərim", path: "Tapşırıqlar → Şəxsi işlərim", section: "tasks.mine",
+    id: "personal", group: "İşlər", title: "Şəxsi işlərim", path: "İşlər → Şəxsi işlərim", section: "tasks.mine",
     intro: "Özünüz üçün yazdığınız işlər və onların iş axını (addımlar). Addımı tabeliyinizdəki əməkdaşa həvalə edə və ya başqa şöbəyə sorğu kimi göndərə bilərsiniz. İşlərinizi siz, firmanın strukturuna görə rəhbərləriniz (şöbə rəisi, direktor) və admin görür — rəhbər yalnız baxır və qeyd yaza bilər.",
     parts: [
       { audience: "all", title: "Vaciblik", blocks: [
@@ -208,7 +208,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "Addımı başqasına vermək", blocks: [
         { list: [
-          "Həvalə: addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basın — addım ona tapşırıq kimi düşür (Verilən tapşırıqlar). Əməkdaş təqdim edəndə onu siz təsdiqləyirsiniz (addımın altında və ya “Təsdiqimi gözləyir” tabında) — bundan sonra addımın ✓-u avtomatik qoyulur.",
+          "Həvalə: addımın yanında tabeliyinizdəki əməkdaşı seçib “Ver” basın — addım ona tapşırıq kimi düşür (Tapşırıqlarım). Əməkdaş təqdim edəndə onu siz təsdiqləyirsiniz (addımın altında və ya “Təsdiqimi gözləyir” tabında) — bundan sonra addımın ✓-u avtomatik qoyulur.",
           "“Şöbəyə sorğu” — addım işin firmasının başqa şöbəsinə sorğu kimi gedir (Sorğular). Şöbəni və sorğunun növünü (Ödəmə, Məlumat və s.) seçin. İş icrada olmalı və firması seçilməlidir.",
           "“Ver” və “Şöbəyə sorğu” pəncərəsində şərh / izah addımın açıqlaması ilə dolu gəlir (dəyişə bilərsiniz). Addımın faylları siyahıda görünür: göndərmək istəmədiyinizi ✕ ilə çıxarın, yenilərini əlavə edin (ən çox 10). Bu seçim yalnız göndərilənə aiddir — addımın öz faylları yerində qalır; nə göndərildiyi işin tarixçəsinə yazılır.",
           "Sorğu açıq olduğu müddətdə addımı silmək, həvalə etmək və ya yenidən göndərmək olmur. Cavabı təsdiqləyəndə addımın ✓-u avtomatik qoyulur.",
@@ -229,7 +229,7 @@ const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "requests", group: "Tapşırıqlar", title: "Sorğular", path: "Tapşırıqlar → Sorğular", section: "tasks.requests",
+    id: "requests", group: "İşlər", title: "Sorğular", path: "İşlər → Sorğular", section: "tasks.requests",
     intro: "Şöbələrarası iş tələbləri və məlumat sorğuları (məsələn, Təchizat → Mühasibatlıq). Tapşırıq yuxarıdan aşağı verilir, sorğu isə eyni firmanın başqa şöbəsinə gedir: o şöbənin rəhbəri qəbul edib icraçı seçir, icraçı cavablandırır, göndərən cavabı təsdiqləyir.",
     parts: [
       { audience: "all", title: "Sorğunun növü", blocks: [
@@ -268,7 +268,7 @@ const GUIDES: Guide[] = [
         { note: "İcraçıya verilən bal şöbənin daxili məsələsidir — sorğunu göndərən tərəf onu görmür." },
       ] },
       { audience: "all", title: "İcraçı üçün", blocks: [
-        { p: "Qəbul edilmiş sorğu sizə tapşırıq kimi düşür (Verilən tapşırıqlar, “Sorğu əsasında”). “İcraya al”, sonra “Təqdim et” — cavab mətni və faylı sorğunu göndərənə gedir. Sorğu yenidən açılarsa, tapşırıq “Geri qaytarılıb” olur." },
+        { p: "Qəbul edilmiş sorğu sizə tapşırıq kimi düşür (Tapşırıqlarım, “Sorğu əsasında”). “İcraya al”, sonra “Təqdim et” — cavab mətni və faylı sorğunu göndərənə gedir. Sorğu yenidən açılarsa, tapşırıq “Geri qaytarılıb” olur." },
       ] },
       { audience: "head", title: "Şöbə rəhbəri üçün", blocks: [
         { list: [
@@ -291,7 +291,7 @@ const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "fixed", group: "Tapşırıqlar", title: "Sabit işlər", path: "Tapşırıqlar → Sabit işlər", section: "tasks.fixed",
+    id: "fixed", group: "İşlər", title: "Sabit işlər", path: "İşlər → Sabit işlər", section: "tasks.fixed",
     intro: "Sabit işlər hər iş günü, həftə, ay, rüb, yarımil və ya il təkrarlanan, konkret işçiyə həvalə edilmiş işlərdir (məsələn, aylıq hesabat, həftəlik yoxlama). Hər dövr üçün işçi işin icrasını cədvəldə qeyd edir — icra edilmiş xana rənglə (yaşıl və ya narıncı) göstərilir.",
     parts: [
       { audience: "all", title: "Dövrlər və son tarixlər", blocks: [
@@ -336,7 +336,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "all", title: "İşin icrasını necə qeyd etməli", blocks: [
         { steps: [
-          "Tapşırıqlar → Sabit işlər bölməsini açın və yuxarıda lazımi tabı seçin (Günlük, Həftəlik, Aylıq, Rüblük, Yarımillik, İllik).",
+          "İşlər → Sabit işlər bölməsini açın və yuxarıda lazımi tabı seçin (Günlük, Həftəlik, Aylıq, Rüblük, Yarımillik, İllik).",
           "“Mənim sabit işlərim” başlığının sağında ili seçin (günlük və həftəlik işlərdə — həm də ayı). Hər sətir bir işdir, sütunlar dövrlərdir.",
           "İcra etdiyiniz dövrün xanasına basın — pəncərə açılır: vəziyyət, son tarix və “Əlaqəli fayllar”.",
           "İstəsəniz, “Fayl əlavə et” ilə faylları seçin (məsələn, bank çıxarışı; 10 fayla qədər, hər biri 25 MB-a qədər) — bu, məcburi deyil.",
@@ -442,12 +442,12 @@ const GUIDES: Guide[] = [
           "Tapşırıq lazım deyilsə, “Tanış oldum” basın (qeyd istəyə bağlıdır).",
           "Tapşırıq lazımdırsa, “Tapşırıq ver”: şöbə(lər)i və/və ya birbaşa işçi(lər)i seçin, icra müddətini və dərkənarı (göstərişi) yazın. Şöbəyə verilən tapşırıq şöbənin rəisinə gedir — rəisi təyin edilməyən şöbə seçilə bilməz.",
           "Heç kim icraya başlamayıbsa, “Tapşırıqları dəyiş” ilə alıcıları dəyişmək olar.",
-          "Alıcılar tapşırığı təqdim edəndə onu siz təsdiqləyirsiniz: Verilən tapşırıqlar → “Təsdiqimi gözləyir” (bal və rəy, və ya səbəbini yazıb geri qaytarmaq).",
+          "Alıcılar tapşırığı təqdim edəndə onu siz təsdiqləyirsiniz: Tapşırıqlarım → “Təsdiqimi gözləyir” (bal və rəy, və ya səbəbini yazıb geri qaytarmaq).",
         ] },
       ] },
       { audience: "head", title: "Şöbədə icra", blocks: [
         { list: [
-          "Rəhbərin tapşırığı sizin Tapşırıqlar siyahınıza düşür; işi şöbə daxilində əməkdaşa həvalə edə bilərsiniz — o da sənədi görür.",
+          "Rəhbərin tapşırığı sizin Tapşırıqlarım siyahınıza düşür; işi şöbə daxilində əməkdaşa həvalə edə bilərsiniz — o da sənədi görür.",
           "Başqa şöbədən nəsə lazımdırsa, sənədin sətrindən “Sorğu yarat”: şöbəni, sorğunun növünü, nə lazım olduğunu və arzu olunan müddəti yazın. Sorğu sənədə bağlanır, qarşı şöbə skanı sorğudan aça bilir.",
         ] },
       ] },
@@ -732,15 +732,15 @@ const GUIDES: Guide[] = [
         { list: [
           "İşarəsi götürülən bölmə istifadəçinin menyusunda görünmür və serverdə də bağlanır.",
           "Bəzi bölmələrdə dörd ayrıca hüquq var: Baxış, Əlavə et, Dəyişiklik et, Sil (Sorğular, Daxil olan və Çıxan sənədlər, Müştərilər, Nöqsanlar, Personallar, Əmrlər). Əlavə et / Dəyişiklik et / Sil Baxışı da açır; Baxışı götürmək hamısını götürür.",
-          "İstifadəçinin firmaları alt-alta sıralanır və bütün icazələr hər firma üçün ayrıca verilir: firmanın adına basın — içində Tapşırıqlar (Sorğular, Şəxsi işlərim, Sabit işlər, Hesabatlar), Sənədlər (Daxil olan, Çıxan, Müştərilər, Hesabatlar), Kadrlar (Personallar, Əmrlər, Nöqsanlar, Hesabatlar) və Çat var. Məsələn, bir firmada yalnız Kadrları açıb qalanını bağlı saxlaya bilərsiniz. Firmanın yanındakı rəqəm orada neçə bölmənin açıq olduğunu göstərir; firmanın işarəsi həmin firmanı bütövlükdə açır / bağlayır.",
+          "İstifadəçinin firmaları alt-alta sıralanır və bütün icazələr hər firma üçün ayrıca verilir: firmanın adına basın — içində İşlər (Tapşırıqlarım, Sorğular, Şəxsi işlərim, Sabit işlər, Hesabatlar), Sənədlər (Daxil olan, Çıxan, Müştərilər, Hesabatlar), Kadrlar (Personallar, Əmrlər, Nöqsanlar, Hesabatlar) və Çat var. Məsələn, bir firmada yalnız Kadrları açıb qalanını bağlı saxlaya bilərsiniz. Firmanın yanındakı rəqəm orada neçə bölmənin açıq olduğunu göstərir; firmanın işarəsi həmin firmanı bütövlükdə açır / bağlayır.",
           "Şəxsi işlərim və Sabit işlər firma üzrədir: istifadəçi yalnız açıq olan firmaların işlərini görür və işarələyir (firması seçilməmiş şəxsi iş həmişə görünür). Müştərilər və Çat firmaya bağlı deyil — ən azı bir firmada açıq olanda görünür.",
           "İstifadəçiyə yeni firma əlavə edəndə o firmada hər şey bağlı olur — lazım olanları həmin firmanın içində açın. Firma istifadəçidən götürüləndə onun icazələri də silinir.",
           "“Başqa firmadan köçür...” (firmanın içində) — istifadəçinin seçilmiş digər firmasındakı icazələrini bu firmaya köçürür; bu firmadakı indiki icazələr əvəz olunur (seçilmiş sənəd növləri köçmür: “Bütün növlər” olur). Siyahıda hər firmanın yanında orada neçə bölmənin açıq olduğu yazılır.",
           "“Bu firmanın icazələrini bütün firmalara köçür” (firmanın içində) — həmin firmanın icazələrini istifadəçinin digər firmalarına köçürür (seçilmiş sənəd növləri köçmür: digər firmalarda “Bütün növlər” olur).",
           "Daxil olan və Çıxan sənədlərdə Baxış açıq olanda “Sənəd növləri” seçimi çıxır: “Bütün növlər” və ya “Seçilmiş növlər” — həmin firmanın şablonlarından işarələnir. Məsələn, mühasibə yalnız “Forma 2” növünü versəniz, o, Forma 2-ni özü qeydə alıb faylını yükləyir, yalnız Forma 2 sənədlərini görür və yalnız özünün qeydə aldıqlarını dəyişə / silə bilir.",
-          "🔒 olan bəndlər (Verilən tapşırıqlar) həmişə açıqdır.",
+          "🔒 olan bəndlər (Tapşırıqlarım) həmişə açıqdır.",
           "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); hər üç Hesabatlar; Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
-          "Hesabatlar (Versiya 3.41) — Tapşırıqlar, Sənədlər və Kadrlar menyusunun sonuncu bəndi; hər firmada ayrıca açılır / bağlanır (bir işarə, ayrıca hüquqlar yoxdur). Bağlı olanda menyuda və bölmənin ümumi səhifəsində görünmür. Admin hamısını görür. Hesabatların özləri hələ hazırlanır — səhifədə hansı hesabatların olacağı yazılıb. Hesabatlar hazır olanda şöbə rəhbəri onlarda yalnız öz şöbəsinin işçilərini görəcək, Kadrlar hesabatlarında maaş isə yalnız Personallarda Əmək haqqına baxışı olanlara göstəriləcək.",
+          "Hesabatlar (Versiya 3.41) — İşlər, Sənədlər və Kadrlar menyusunun sonuncu bəndi; hər firmada ayrıca açılır / bağlanır (bir işarə, ayrıca hüquqlar yoxdur). Bağlı olanda menyuda və bölmənin ümumi səhifəsində görünmür. Admin hamısını görür. Hesabatların özləri hələ hazırlanır — səhifədə hansı hesabatların olacağı yazılıb. Hesabatlar hazır olanda şöbə rəhbəri onlarda yalnız öz şöbəsinin işçilərini görəcək, Kadrlar hesabatlarında maaş isə yalnız Personallarda Əmək haqqına baxışı olanlara göstəriləcək.",
           "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini köçürür (firma icazələri — yalnız hər ikisinin ortaq firmaları üçün); “Hamısını aç” — bütün firmalarda hamısını açır.",
           "Personallarda Baxış açıq olanda “Kartın hissələri” çıxır — kartın hər başlığının öz hüquqları var: Şəxsi kart (Şəxsi məlumatlar, Təcili əlaqə şəxsi, Şəxsiyyət vəsiqəsi, İş yeri, Əvvəlki iş yerləri, Əmək müqaviləsi, İşdən çıxma), Ailə və təhsil (Ailə üzvləri, Təhsil), Məzuniyyətlər (Məzuniyyət hüququ, Qeydə alınmış məzuniyyətlər, Xəstəlik vərəqəsi), Əmək haqqı, Son hesablaşma. Başlığın işarəsi onun bütün hissələrini açır / bağlayır. Siyahı olan hissələrdə (Əvvəlki iş yerləri, Ailə üzvləri, Təhsil, Xəstəlik vərəqəsi, Əmək haqqı) dörd hüquq var, sahələrdən ibarət hissələrdə Baxış və Dəyişiklik et; İşdən çıxma, Qeydə alınmış məzuniyyətlər və Son hesablaşma yalnız baxış üçündür (onlar Əmrlərdən gəlir).",
           "Personalların öz hüquqları: Əlavə et — yeni kart açmaq (görünən bütün hissələri doldurmaq olar), Dəyişiklik et — İstehsalat təqvimi və Hesablama parametrləri, Sil — kartı bütövlükdə silmək. Kartın içindəki dəyişikliklər hissələrin hüquqları ilədir.",
