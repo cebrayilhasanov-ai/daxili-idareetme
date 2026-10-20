@@ -187,7 +187,9 @@ export async function companyDepartments() {
     }
     return [...names];
   };
-  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf, memberOf, membersOf, overseenBy };
+  // Versiya 3.47: heads any department in any firm (a director heads the top one) — they always see "Verdiyim tapşırıqlar".
+  const headsAny = (employeeId: number | null) => Boolean(employeeId) && [...structure.departments.values()].some((dept) => dept.heads.has(employeeId!));
+  return { departmentOf: structure.departmentOf, headedBy, departmentsOf, directorsOf, memberOf, membersOf, overseenBy, headsAny };
 }
 
 // Employees heading at least one department of any company (used to warn the admin before hiding Sorğular from them).

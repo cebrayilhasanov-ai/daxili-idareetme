@@ -2,12 +2,13 @@ import { canApproveTask, tasksForDateDecision, completeWorkAssignment, setWorkCo
 import { requireUser, setUserAvatar } from "@/lib/auth";
 import { env } from "@/lib/runtime";
 import { firmAccess, requireSection } from "@/lib/permissions";
+import { companyDepartments } from "@/db/requests";
 import { logAudit } from "@/lib/audit";
 import { parseFiles } from "@/db/attachments";
 
 async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const data = await getAllData();
-  if (user.role === "admin") return { ...data, approvals: [] };
+  if (user.role === "admin") return { ...data, approvals: [], givenTasks: [], isHead: false };
   // Versiya 2.93: one "Sabit işlər" permission for every frequency; since 3.00 it is given per firm.
   const fixedFirms = (await firmAccess(user, "tasks.fixed")).firms("view");
   const fixedVisible = (companyId: unknown) => !fixedFirms || fixedFirms.includes(Number(companyId));
@@ -19,8 +20,12 @@ async function scopedData(user: Awaited<ReturnType<typeof requireUser>>) {
   const decisionRequests = data.dateRequests.filter((item: any) => deciding.has(Number(item.task_id)));
   const waitingDate = new Set(decisionRequests.filter((item: any) => item.status === "Gözləyir").map((item: any) => Number(item.task_id)));
   const approvals = data.tasks.filter((item: any) => (given.has(Number(item.id)) && item.status === "Təqdim edilib") || waitingDate.has(Number(item.id)));
+  // Versiya 3.47: every task this user gave, in any status, so a head can follow them in "Verdiyim tapşırıqlar" — what they may do
+  // with each one is unchanged (approve what is submitted, decide a date request; an approved task is only looked at).
+  const givenTasks = data.tasks.filter((item: any) => given.has(Number(item.id)) || waitingDate.has(Number(item.id)));
+  const isHead = (await companyDepartments()).headsAny(user.employeeId ?? null);
   const ownCompanyIds = new Set(((data.employees.find((item: any) => item.id === user.employeeId) as { company_ids?: string } | undefined)?.company_ids || "").split(",").filter(Boolean).map(Number));
-  return { fixedWorksStart: data.fixedWorksStart, fixedCalendar: data.fixedCalendar, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId || deciding.has(Number(item.task_id))), approvals };
+  return { fixedWorksStart: data.fixedWorksStart, fixedCalendar: data.fixedCalendar, employees: data.employees.filter((item: any) => item.id === user.employeeId || item.manager_employee_id === user.employeeId), companies: data.companies.filter((item: any) => ownCompanyIds.has(item.id)), recurring: [], workItems: [], workAssignments: data.workAssignments.filter((item: any) => item.employee_id === user.employeeId && fixedVisible(item.company_id)), workCompletions: data.workCompletions.filter((item: any) => data.workAssignments.some((a: any) => a.id === item.work_assignment_id && a.employee_id === user.employeeId && fixedVisible(a.company_id))), tasks: data.tasks.filter((item: any) => item.employee_id === user.employeeId), dateRequests: data.dateRequests.filter((item: any) => item.employee_id === user.employeeId || deciding.has(Number(item.task_id))), approvals, givenTasks, isHead };
 }
 
 function authError(error: unknown) {
