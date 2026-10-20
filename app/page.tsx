@@ -384,7 +384,7 @@ export default function Home(){
     <aside className={menu?"side show":"side"}>
       <button className="close" onClick={()=>setMenu(false)}><X/></button>
       <div className="sidescroll">
-      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.48</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
+      <div className="brand"><i>Dİ</i><div><b>Daxili İdarəetmə</b><small>İş və tapşırıq sistemi</small><small className="brandversion">Versiya 3.49</small></div><button className="navcollapse" title="Menyunu gizlət" aria-label="Menyunu gizlət" onClick={toggleNavCollapsed}><ChevronLeft/></button></div>
       {companyScopeActive&&myCompanies.length>1&&<div className="companyswitcher"><label>Aktiv firma<select value={activeCompanyId??"all"} onChange={e=>pickCompany(e.target.value==="all"?null:Number(e.target.value))}><option value="all">Bütün firmalar</option>{myCompanies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>}
       <nav>{nav.filter(([id])=>!viewAs||id==="dashboard"||id==="tasks"||id==="guides"||id==="settings").filter(([id])=>id==="documents"?Boolean(firstDocumentTab)||can("dashboard.customers"):id==="hr"?Boolean(firstHrTab):true).map(([id,label,Icon])=>{
         if(id==="dashboard")return <Fragment key={id}><button className={page===id?"on":""} onClick={()=>{setPage(id);setMenu(false)}}><Icon/>{label}</button></Fragment>;
@@ -3343,8 +3343,8 @@ async function reviewHandedOnTask(item:ChecklistLikeItem,approve:boolean,score:n
 function formatFileSize(size:number){return size<1024*1024?`${Math.max(1,Math.round(size/1024))} KB`:`${(size/1024/1024).toFixed(1)} MB`}
 function formatDateOnly(value:string|null){if(!value)return "—";const m=value.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}.${m[2]}.${m[1]}`:value}
 function properCase(value:string){return value.toLocaleLowerCase("az-AZ").replace(/(^|[^\p{L}])(\p{L})/gu,(_,sep,ch)=>sep+ch.toLocaleUpperCase("az-AZ"))}
-// Versiya 3.48: the reason a task was sent back — its own field; tasks returned before 3.48 kept it in the rəy (evaluation_note).
-function returnNoteOf(t:Task){return t.return_note||(t.status==="Geri qaytarılıb"?t.evaluation_note||"":"")}
+// Versiya 3.48: the reason a task was sent back — its own field, not the rəy under Qiymətləndirmə (older ones were moved there in 3.49).
+function returnNoteOf(t:Task){return t.return_note||""}
 function ReturnNote({task,compact=false}:{task:Task;compact?:boolean}){const note=returnNoteOf(task);if(!note)return null;const meta=[task.returned_at?formatDate(task.returned_at):"",task.returned_by||""].filter(Boolean).join(" • ");return <span className={compact?"returnnote compact":"returnnote"} title={compact?note:undefined}>{compact?<span className="returnnotetext">{note}</span>:<span>{note}</span>}{!compact&&meta&&<small>{meta}</small>}{task.return_due_at&&<small className="returndue">Yeni son tarix: {formatDate(task.return_due_at)}</small>}</span>}
 function awaitingEvaluation(t:Task){return t.status==="Təqdim edilib"&&t.request_status==="Qiymətləndirmə gözləyir"}
 function statusClass(t:Task){if(awaitingEvaluation(t))return "awaiting";if(t.status!=="Təsdiqlənib"&&t.status!=="Geri qaytarılıb"&&new Date(t.due_at)<new Date())return "late";if(t.status==="Təsdiqlənib")return "done";if(t.status==="Geri qaytarılıb")return "returned";if(t.status==="Təqdim edilib")return "review";return "progress"}

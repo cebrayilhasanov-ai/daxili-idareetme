@@ -355,6 +355,14 @@ async function ensureSchema() {
     }
     await db().prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('permissions_general_per_firm', ?)").bind(new Date().toISOString()).run();
   }
+  // Versiya 3.49: once — a task sent back before 3.48 kept the reason in the rəy (evaluation_note), so it showed in Qiymətləndirmə.
+  // A rəy without a score can only be a return reason (approving always gives one), so it moves to return_note.
+  if (!(await db().prepare("SELECT 1 AS ok FROM app_settings WHERE key = 'task_return_note_split'").first())) {
+    await db().prepare(`UPDATE tasks SET return_note = evaluation_note, evaluation_note = NULL
+      WHERE evaluation IS NULL AND return_note IS NULL AND TRIM(COALESCE(evaluation_note, '')) <> ''`).run();
+    await db().prepare("UPDATE tasks SET evaluation_note = NULL WHERE evaluation IS NULL AND evaluation_note = return_note").run();
+    await db().prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('task_return_note_split', ?)").bind(new Date().toISOString()).run();
+  }
   if (!employeeColumns.results.some((column) => column.name === "authority_type")) {
     await db().prepare("ALTER TABLE employees ADD COLUMN authority_type TEXT DEFAULT 'İşçi' NOT NULL").run();
   }
