@@ -2,6 +2,7 @@ import { env } from "@/lib/runtime";
 import type { SessionUser } from "@/lib/auth";
 import { copyFiles, filesOf, removeFiles, setFiles, withFiles, type FileRef } from "@/db/attachments";
 import { toPriority } from "@/lib/priority";
+import { markSchemaCurrent, schemaIsCurrent } from "@/lib/schema-version";
 
 // "Sorğular": horizontal requests between departments (e.g. Təchizat → Mühasibatlıq). Unlike tasks, which go down the
 // hierarchy, a request goes to a department of a company; that department's head accepts it (and picks who handles it)
@@ -22,8 +23,11 @@ export const OTHER_TYPE = "Digər";
 const DEFAULT_TYPES = ["Ödəmə", "Məlumat", "Sənəd", OTHER_TYPE];
 
 let schemaReady = false;
+// Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
+const SCHEMA_VERSION = "3.50";
 export async function ensureRequestSchema() {
   if (schemaReady) return;
+  if (await schemaIsCurrent("requests", SCHEMA_VERSION)) { schemaReady = true; return; }
   await db().prepare(`CREATE TABLE IF NOT EXISTS work_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     company_id INTEGER NOT NULL REFERENCES companies(id),
@@ -80,6 +84,7 @@ export async function ensureRequestSchema() {
   }
   // Requests closed before the evaluation step existed, whose task is still unscored, now wait for the head's score.
   await db().prepare("UPDATE work_requests SET status = ? WHERE status = 'Bağlandı' AND task_id IN (SELECT id FROM tasks WHERE status = 'Təqdim edilib')").bind(AWAITING_EVALUATION).run();
+  await markSchemaCurrent("requests", SCHEMA_VERSION);
   schemaReady = true;
 }
 

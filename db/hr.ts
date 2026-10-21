@@ -1,4 +1,5 @@
 import { env } from "@/lib/runtime";
+import { markSchemaCurrent, schemaIsCurrent } from "@/lib/schema-version";
 import { formatPhone } from "@/lib/phone";
 import { createCustomer, findCustomerByVoen, getCustomers } from "@/db/catalog";
 import { CALENDAR_KINDS, LEAVE_KINDS, TERMINATION_REASONS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
@@ -20,8 +21,11 @@ const EXTRA_COLUMNS: [string, string][] = [
 ];
 
 let schemaReady = false;
+// Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
+const SCHEMA_VERSION = "3.50";
 export async function ensureHrSchema() {
   if (schemaReady) return;
+  if (await schemaIsCurrent("hr", SCHEMA_VERSION)) { schemaReady = true; return; }
   await db().prepare(`CREATE TABLE IF NOT EXISTS hr_employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     company_id INTEGER,
@@ -130,6 +134,7 @@ export async function ensureHrSchema() {
   const existing = new Set((await db().prepare("PRAGMA table_info(hr_employees)").all<{ name: string }>()).results.map((c: { name: string }) => c.name));
   const added = EXTRA_COLUMNS.filter(([name]) => !existing.has(name));
   if (added.length) await db().batch(added.map(([name, type]) => db().prepare(`ALTER TABLE hr_employees ADD COLUMN ${name} ${type}`)));
+  await markSchemaCurrent("hr", SCHEMA_VERSION);
   schemaReady = true;
 }
 

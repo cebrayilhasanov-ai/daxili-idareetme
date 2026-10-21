@@ -24,7 +24,10 @@ const LOGIN_LOCK_MINUTES = 15;
 // How long a session lives without use (it is renewed while the user works).
 export const SESSION_DAYS = 7;
 
+// Versiya 3.50: the tables are checked once per Worker instance, not on every request (currentUser runs on each one).
+let authSchemaReady = false;
 export async function ensureAuthSchema() {
+  if (authSchemaReady) return;
   await database().prepare(`CREATE TABLE IF NOT EXISTS login_attempts (
     email TEXT PRIMARY KEY NOT NULL,
     fail_count INTEGER NOT NULL DEFAULT 0,
@@ -56,7 +59,15 @@ export async function ensureAuthSchema() {
   if (!userColumns.results.some((column) => column.name === "avatar_key")) {
     await database().prepare("ALTER TABLE app_users ADD COLUMN avatar_key TEXT").run();
   }
-  const admin = await database().prepare("SELECT id FROM app_users WHERE role = 'admin' LIMIT 1").first();
+  authSchemaReady = true;
+}
+
+// The accounts made from the initial-password secrets. Versiya 3.50: only on signing in (once per Worker instance) — before,
+// every request looked them up and, while such an account still had its first password, hashed that password again.
+let initialAccountsReady = false;
+async function ensureInitialAccounts() {
+  if (initialAccountsReady) return;
+  const admin =await database().prepare("SELECT id FROM app_users WHERE role = 'admin' LIMIT 1").first();
   const initialPassword = (env as unknown as Record<string, string>).ADMIN_INITIAL_PASSWORD;
   if (!admin && initialPassword) await createUser({ name: "Cəbrayıl Həsənov", email: "hesenovcabrayil@gmail.com", password: initialPassword, role: "admin" });
   else if (admin && initialPassword) await refreshInitialPassword(Number((admin as { id: number }).id), initialPassword);
@@ -73,6 +84,7 @@ export async function ensureAuthSchema() {
     await createUser({ name: "Aysun İsmayılova", email: aysunEmail, password: aysunPassword, role: "employee", employeeId: employee?.id });
   }
   else if (aysunAccount && aysunPassword) await refreshInitialPassword(Number((aysunAccount as { id: number }).id), aysunPassword);
+  initialAccountsReady = true;
 }
 
 async function refreshInitialPassword(id: number, password: string) {
@@ -119,6 +131,7 @@ async function clearLoginFailures(email: string) {
 
 export async function login(emailInput: string, password: string) {
   await ensureAuthSchema();
+  await ensureInitialAccounts();
   const email = emailInput.trim().toLowerCase();
   await checkLoginLock(email);
   const row = await database().prepare("SELECT * FROM app_users WHERE email = ? AND active = 1").bind(email).first<Record<string, unknown>>();

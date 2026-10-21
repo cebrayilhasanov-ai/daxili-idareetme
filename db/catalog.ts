@@ -7,6 +7,7 @@ import { companyPermissionsFromStored, parseCompanyPermissions } from "@/lib/per
 import { formatPhone } from "@/lib/phone";
 import { toPriority } from "@/lib/priority";
 import { copyFiles, fileNames, filesOf, filesOfMany, parseFiles, removeFiles, setFiles, withFiles, type FileRef } from "@/db/attachments";
+import { markSchemaCurrent, schemaIsCurrent } from "@/lib/schema-version";
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -14,8 +15,15 @@ function db() {
 }
 
 let schemaReady = false;
+// Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
+const SCHEMA_VERSION = "3.50";
 async function ensureSchema() {
   if (schemaReady) return;
+  if (await schemaIsCurrent("catalog", SCHEMA_VERSION)) {
+    await ensureRequestSchema();
+    schemaReady = true;
+    return;
+  }
   await db().prepare(`CREATE TABLE IF NOT EXISTS companies (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name TEXT NOT NULL UNIQUE,
@@ -533,6 +541,7 @@ async function ensureSchema() {
   }
   // The task list links each task back to the request it was created from, so that table must exist first.
   await ensureRequestSchema();
+  await markSchemaCurrent("catalog", SCHEMA_VERSION);
   schemaReady = true;
 }
 
