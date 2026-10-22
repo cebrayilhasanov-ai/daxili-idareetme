@@ -16,7 +16,7 @@ function db() {
 
 let schemaReady = false;
 // Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
-const SCHEMA_VERSION = "3.50";
+const SCHEMA_VERSION = "3.51";
 async function ensureSchema() {
   if (schemaReady) return;
   if (await schemaIsCurrent("catalog", SCHEMA_VERSION)) {
@@ -211,6 +211,30 @@ async function ensureSchema() {
   for (const column of ["director_pending INTEGER NOT NULL DEFAULT 0", "sent_to_director_by TEXT", "sent_to_director_at TEXT", "related_departments TEXT", "flow INTEGER", "director_seen_at TEXT", "director_seen_by TEXT", "informed_departments TEXT"]) {
     if (!incomingColumns.results.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE incoming_documents ADD COLUMN ${column}`).run();
   }
+  // Versiya 3.51: Şirkətdaxili sənədlər — documents used only inside the firm (anbar qaiməsi, daxili akt...), registered only:
+  // the number is typed by hand, there is no approval, task or notification. The customer is optional (e.g. a supplier).
+  await db().prepare(`CREATE TABLE IF NOT EXISTS internal_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    company_id INTEGER NOT NULL REFERENCES companies(id),
+    document_no TEXT NOT NULL,
+    document_date TEXT,
+    document_type TEXT,
+    summary TEXT,
+    related_departments TEXT,
+    responsible_employee_id INTEGER REFERENCES employees(id),
+    customer_voen TEXT,
+    customer_name TEXT,
+    note TEXT,
+    file_base_name TEXT,
+    file_path TEXT,
+    file_key TEXT,
+    file_name TEXT,
+    file_size INTEGER,
+    file_type TEXT,
+    created_by INTEGER,
+    created_by_name TEXT,
+    created_at TEXT NOT NULL
+  )`).run();
   // Approvals of incoming and outgoing documents (Versiya 2.61): one row per step, kept as history.
   await db().prepare(`CREATE TABLE IF NOT EXISTS document_approvals (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -1834,9 +1858,11 @@ function yesNo(value: unknown): 1 | 0 | null {
   return null;
 }
 
-export type TemplateGroup = "outgoing" | "incoming" | "other_order";
-const TEMPLATE_GROUPS: TemplateGroup[] = ["outgoing", "incoming", "other_order"];
-const TEMPLATE_GROUP_LABELS: Record<TemplateGroup, string> = { outgoing: "Çıxan sənəd", incoming: "Daxil olan sənəd", other_order: "Kadrlar" };
+// Versiya 3.51: 'internal' — Şirkətdaxili sənəd; like an incoming one it keeps its file's folder and naming rule in
+// incoming_folder_path / incoming_name_pattern (the columns of "the document's own file"; a template serves one group only).
+export type TemplateGroup = "outgoing" | "incoming" | "internal" | "other_order";
+const TEMPLATE_GROUPS: TemplateGroup[] = ["outgoing", "incoming", "internal", "other_order"];
+const TEMPLATE_GROUP_LABELS: Record<TemplateGroup, string> = { outgoing: "Çıxan sənəd", incoming: "Daxil olan sənəd", internal: "Şirkətdaxili sənəd", other_order: "Kadrlar" };
 const templateGroup = (value: unknown): TemplateGroup => (TEMPLATE_GROUPS.includes(value as TemplateGroup) ? (value as TemplateGroup) : "outgoing");
 
 // The template of a document's type: the one of the document's firm and register with that name (Versiya 2.76).
@@ -2495,10 +2521,11 @@ function incomingValues(record: Record<string, unknown>) {
 // ones (and uploads a file where none is yet), Dəyişiklik et corrects them and replaces files, Sil deletes them.
 // Since Versiya 2.99 these rights are given per firm, and in a firm they may be narrowed to some document types (templates):
 // such a registrar sees, registers and handles only documents of those types, and corrects or deletes only the ones they registered.
-type IncomingAccess = { admin: boolean; rights: FirmAccess; group: "incoming" | "outgoing"; registrarFirms: number[] | null; structure: Awaited<ReturnType<typeof companyDepartments>> };
-async function registrarAccess(user: SessionUser, section: "documents.incoming" | "documents.outgoing"): Promise<IncomingAccess> {
+type IncomingAccess = { admin: boolean; rights: FirmAccess; group: "incoming" | "outgoing" | "internal"; registrarFirms: number[] | null; structure: Awaited<ReturnType<typeof companyDepartments>> };
+async function registrarAccess(user: SessionUser, section: "documents.incoming" | "documents.outgoing" | "documents.internal"): Promise<IncomingAccess> {
   const rights = await firmAccess(user, section);
-  return { admin: rights.admin, rights, group: section === "documents.incoming" ? "incoming" : "outgoing", registrarFirms: rights.firms("view"), structure: await companyDepartments() };
+  const group = section === "documents.incoming" ? "incoming" : section === "documents.internal" ? "internal" : "outgoing";
+  return { admin: rights.admin, rights, group, registrarFirms: rights.firms("view"), structure: await companyDepartments() };
 }
 function registrarRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>) {
   if (access.admin) return { here: true, add: true, edit: true, delete: true };
@@ -2739,7 +2766,7 @@ async function relatedDepartments(companyId: number, raw: unknown) {
 
 // Versiya 2.77: the related departments of a document whose type's template names them come from the template (the registrar
 // cannot pick wrong ones); a type without them keeps the registrar's choice.
-async function documentDepartments(companyId: number, group: "outgoing" | "incoming", documentType: unknown, requested: unknown) {
+async function documentDepartments(companyId: number, group: "outgoing" | "incoming" | "internal", documentType: unknown, requested: unknown) {
   const template = await findTemplate<{ departments: string | null }>(companyId, group, documentType);
   const fixed = parseDepartments(template?.departments);
   if (!fixed.length) return relatedDepartments(companyId, requested);
@@ -2935,6 +2962,204 @@ export async function readIncomingFile(user: SessionUser, id: number) {
   return loadDocumentFile(record.file_path, record.file_key, record.file_name, record.file_type);
 }
 
+// ---------- Şirkətdaxili sənədlər (Versiya 3.51) ----------
+// Documents used only inside the firm (anbar qaiməsi, daxili akt, xidməti yazı...): neither sent out nor received. They are only
+// registered — the number is typed by hand (as written on the paper), there is no approval, task or notification. The types are
+// the firm's "Şirkətdaxili sənəd" templates (Şablonlar); a document must be of one of them, which also gives its folder and naming rule.
+// Who sees a document: the registrars (section rights per firm, narrowed to some types if so given), the firm's director, the heads
+// of its related departments and its responsible person — as in Çıxan sənədlər.
+
+export const DEFAULT_INTERNAL_NAME = "{SənədNo}_{SənədTipi}_{Tarix}";
+
+async function internalAccess(user: SessionUser) {
+  return registrarAccess(user, "documents.internal");
+}
+
+function internalRights(access: IncomingAccess, user: SessionUser, row: Record<string, unknown>) {
+  const companyId = Number(row.company_id);
+  const may = registrarRights(access, user, row);
+  const director = access.admin || Boolean(user.employeeId && access.structure.directorsOf(companyId).has(user.employeeId));
+  const heads = new Set(access.structure.headedBy(companyId, user.employeeId));
+  const head = parseDepartments(row.related_departments).some((d) => heads.has(d));
+  const responsible = Boolean(user.employeeId && Number(row.responsible_employee_id) === user.employeeId);
+  return { may, visible: may.here || director || head || responsible };
+}
+
+const hasInternalFile = (row: Record<string, unknown>) => Boolean(row.file_name || row.file_path || row.file_key);
+const isoDate = (value: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? String(value) : null);
+
+function internalValues(record: Record<string, unknown>) {
+  const text = (value: unknown) => (value === null || value === undefined ? "" : String(value));
+  const date = text(record.document_date) || bakuDateIso();
+  return {
+    SənədNo: text(record.document_no),
+    SənədTipi: text(record.document_type),
+    Təşkilat: text(record.customer_name),
+    VÖEN: text(record.customer_voen),
+    Firma: text(record.company_name),
+    Şöbə: parseDepartments(record.related_departments)[0] || "",
+    ÇıxışNo: "",
+    DaxilOlmaNo: "",
+    Tarix: date.slice(0, 10),
+    İl: date.slice(0, 4),
+    Ay: date.slice(5, 7),
+  };
+}
+
+export async function getInternalDocuments(user: SessionUser) {
+  await ensureSchema();
+  const access = await internalAccess(user);
+  const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name
+    FROM internal_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.document_date DESC, d.id DESC`).all<Record<string, unknown>>()).results;
+  const items = rows.flatMap((row) => {
+    const rights = internalRights(access, user, row);
+    if (!rights.visible) return [];
+    return [{
+      ...row,
+      related_departments: parseDepartments(row.related_departments),
+      file_missing: Boolean(row.file_path && folderStore && !folderStore.exists(String(row.file_path))),
+      can: {
+        edit: rights.may.edit,
+        remove: rights.may.delete,
+        // Əlavə et uploads the file of a document that has none yet; replacing it needs Dəyişiklik et.
+        upload: rights.may.here && (rights.may.edit || (rights.may.add && !hasInternalFile(row))),
+      },
+    }];
+  });
+  // Firms whose departments and people the page needs: those of the visible documents and where this user registers.
+  const activeFirms = (await db().prepare("SELECT id FROM companies WHERE active = 1").all<{ id: number }>()).results.map((c) => c.id);
+  const firms = new Set<number>([...items.map((i: Record<string, unknown>) => Number(i.company_id)), ...(access.registrarFirms ?? activeFirms)]);
+  const departments = [...firms].flatMap((companyId) => access.structure.departmentsOf(companyId).map((d) => ({ company_id: companyId, ...d, members: access.structure.membersOf(companyId, d.name).map((m) => ({ id: m.id, name: m.name, position_title: m.position_title })) })));
+  const types = (await db().prepare("SELECT company_id, name, departments, incoming_folder_path, incoming_name_pattern FROM document_templates WHERE template_group = 'internal' ORDER BY name")
+    .all<{ company_id: number; name: string; departments: string | null; incoming_folder_path: string | null; incoming_name_pattern: string | null }>()).results.filter((t) => firms.has(Number(t.company_id)));
+  const registerIn = await registerTargets(access);
+  return { items, departments, types, canRegister: registerIn.length > 0, registerIn };
+}
+
+type InternalInput = { companyId?: unknown; documentNo?: string; documentDate?: string; documentType?: string; summary?: string; relatedDepartments?: unknown; responsibleEmployeeId?: unknown; customerVoen?: string; customerName?: string; note?: string; allowDuplicate?: boolean };
+
+// The type must be one of the firm's "Şirkətdaxili sənəd" templates; its name is stored as written there.
+async function internalType(companyId: number, value: unknown) {
+  const type = String(value || "").trim();
+  if (!type) throw new Error("Sənədin növünü seçin.");
+  const template = await findTemplate<{ name: string }>(companyId, "internal", type);
+  if (!template) throw new Error(`“${type}” bu firmanın şirkətdaxili sənəd növləri arasında yoxdur (Sənədlər → Şablonlar).`);
+  return template.name;
+}
+
+// The customer is optional; with a VÖEN it must be a card in the customer list, and its name comes from there.
+async function internalCustomer(voen: string | undefined, name: string | undefined) {
+  const value = voen?.trim();
+  if (!value) return { voen: null, name: name?.trim() || null };
+  const customer = await db().prepare("SELECT name FROM customers WHERE voen = ?").bind(value).first<{ name: string }>();
+  if (!customer) throw new Error("Bu VÖEN müştəri siyahısında yoxdur — əvvəlcə Müştərilər bölməsində kartını yaradın və ya VÖEN-i boş saxlayın.");
+  return { voen: value, name: customer.name };
+}
+
+// The responsible person must work in the firm's structure; none is allowed.
+function internalResponsible(access: IncomingAccess, companyId: number, value: unknown) {
+  const id = employeeIdOrNull(value);
+  if (id && !access.structure.memberOf(companyId, id).length) throw new Error("Məsul şəxs bu firmanın strukturunda yoxdur.");
+  return id;
+}
+
+// The number is typed by hand, so the same number of the same type in the same firm is only warned about: the page asks, and
+// sends allowDuplicate when the user confirms (the route answers 409 for "DUPLICATE:").
+async function assertNoInternalDuplicate(companyId: number, documentType: string, documentNo: string, exceptId = 0) {
+  const clash = await db().prepare(`SELECT id, document_date FROM internal_documents WHERE company_id = ? AND lower(trim(COALESCE(document_type, ''))) = lower(trim(?))
+    AND lower(trim(document_no)) = lower(trim(?)) AND id != ? LIMIT 1`).bind(companyId, documentType, documentNo, exceptId).first<{ id: number; document_date: string | null }>();
+  if (clash) throw new Error(`DUPLICATE:“${documentType}” növündə №${documentNo} nömrəli sənəd bu firmada artıq qeydə alınıb${clash.document_date ? ` (${clash.document_date.split("-").reverse().join(".")})` : ""}.`);
+}
+
+export async function createInternalDocument(user: SessionUser, input: InternalInput) {
+  await ensureSchema();
+  const companyId = Number(input.companyId);
+  if (!companyId) throw new Error("Firma seçilməyib.");
+  const scope = await outgoingCompanyScope(user);
+  if (scope && !scope.includes(companyId)) throw new Error("FORBIDDEN");
+  const access = await internalAccess(user);
+  const docType = await internalType(companyId, input.documentType);
+  requireRegisterType(access, companyId, docType);
+  const documentNo = input.documentNo?.trim();
+  if (!documentNo) throw new Error("Sənədin nömrəsini yazın.");
+  if (input.documentDate && !isoDate(input.documentDate)) throw new Error("Sənədin tarixi düzgün deyil.");
+  if (!input.allowDuplicate) await assertNoInternalDuplicate(companyId, docType, documentNo);
+  const related = await documentDepartments(companyId, "internal", docType, input.relatedDepartments);
+  const customer = await internalCustomer(input.customerVoen, input.customerName);
+  const result = await db().prepare(`INSERT INTO internal_documents
+    (company_id, document_no, document_date, document_type, summary, related_departments, responsible_employee_id, customer_voen, customer_name, note, created_by, created_by_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(companyId, documentNo, isoDate(input.documentDate) || bakuDateIso(), docType, input.summary?.trim() || null, related, internalResponsible(access, companyId, input.responsibleEmployeeId),
+      customer.voen, customer.name, input.note?.trim() || null, user.id, user.name, new Date().toISOString()).run();
+  return { id: Number(result.meta.last_row_id), documentNo };
+}
+
+// The firm stays; everything else may be corrected, the number included (it is the paper's own number).
+export async function updateInternalDocument(user: SessionUser, input: InternalInput & { id: number }) {
+  await ensureSchema();
+  const current = await db().prepare("SELECT * FROM internal_documents WHERE id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!current) throw new Error("Sənəd tapılmadı.");
+  const access = await internalAccess(user);
+  if (!internalRights(access, user, current).may.edit) throw new Error("FORBIDDEN");
+  const companyId = Number(current.company_id);
+  const pick = (value: string | undefined, fallback: unknown) => (value === undefined ? fallback : value.trim() || null);
+  const typeChanged = input.documentType !== undefined && String(input.documentType || "").trim().toLocaleLowerCase("az") !== String(current.document_type || "").trim().toLocaleLowerCase("az");
+  const docType = typeChanged ? await internalType(companyId, input.documentType) : String(current.document_type || "");
+  // A registrar narrowed to some types may not move a document to a type outside them.
+  if (typeChanged) requireRegisterType(access, companyId, docType, "edit");
+  const documentNo = input.documentNo === undefined ? String(current.document_no) : input.documentNo.trim();
+  if (!documentNo) throw new Error("Sənədin nömrəsini yazın.");
+  if (input.documentDate && !isoDate(input.documentDate)) throw new Error("Sənədin tarixi düzgün deyil.");
+  if (!input.allowDuplicate && (typeChanged || documentNo !== String(current.document_no))) await assertNoInternalDuplicate(companyId, docType, documentNo, input.id);
+  const related = input.relatedDepartments !== undefined || typeChanged
+    ? await documentDepartments(companyId, "internal", docType, input.relatedDepartments ?? parseDepartments(current.related_departments)) : current.related_departments;
+  const customer = input.customerVoen !== undefined || input.customerName !== undefined
+    ? await internalCustomer(input.customerVoen ?? String(current.customer_voen || ""), input.customerName ?? String(current.customer_name || ""))
+    : { voen: current.customer_voen, name: current.customer_name };
+  const responsible = input.responsibleEmployeeId !== undefined ? internalResponsible(access, companyId, input.responsibleEmployeeId) : current.responsible_employee_id;
+  await db().prepare(`UPDATE internal_documents SET document_no = ?, document_date = ?, document_type = ?, summary = ?, related_departments = ?, responsible_employee_id = ?,
+    customer_voen = ?, customer_name = ?, note = ? WHERE id = ?`)
+    .bind(documentNo, isoDate(input.documentDate) ?? current.document_date, docType, pick(input.summary, current.summary), related, responsible ?? null,
+      customer.voen ?? null, customer.name ?? null, pick(input.note, current.note), input.id).run();
+}
+
+export async function deleteInternalDocument(user: SessionUser, id: number) {
+  await ensureSchema();
+  const current = await db().prepare("SELECT * FROM internal_documents WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!current) throw new Error("Sənəd tapılmadı.");
+  if (!internalRights(await internalAccess(user), user, current).may.delete) throw new Error("FORBIDDEN");
+  await db().prepare("DELETE FROM internal_documents WHERE id = ?").bind(id).run();
+  // Files in the server folders are the archive and stay; only a copy kept inside the system goes with the record.
+  if (current.file_key && env.FILES) await env.FILES.delete(String(current.file_key));
+}
+
+export async function saveInternalFile(user: SessionUser, input: { id: number; fileName: string; contentType: string; data: Uint8Array }) {
+  await ensureSchema();
+  const record = await db().prepare("SELECT d.*, c.name AS company_name FROM internal_documents d LEFT JOIN companies c ON c.id = d.company_id WHERE d.id = ?").bind(input.id).first<Record<string, unknown>>();
+  if (!record) throw new Error("Sənəd tapılmadı.");
+  const { may } = internalRights(await internalAccess(user), user, record);
+  if (!may.here || !(may.edit || (may.add && !hasInternalFile(record)))) throw new Error("FORBIDDEN");
+  const template = await findTemplate<{ incoming_folder_path: string | null; incoming_name_pattern: string | null }>(record.company_id, "internal", record.document_type);
+  const values = internalValues(record);
+  const baseName = String(record.file_base_name || "") || tidyName(fillPattern(template?.incoming_name_pattern || DEFAULT_INTERNAL_NAME, values)) || `Daxili-${values.SənədNo}`;
+  const saved = await storeDocumentFile({
+    baseName, fileName: input.fileName, contentType: input.contentType, data: input.data, folderRule: template?.incoming_folder_path || "",
+    oldPath: record.file_path ? String(record.file_path) : null, oldKey: record.file_key ? String(record.file_key) : null,
+    missingRuleNote: template ? "Şablonda sənəd papkası göstərilməyib — sənəd sistemdə saxlanıldı." : "Bu sənəd növü üçün şablon yoxdur — sənəd sistemdə saxlanıldı.",
+  });
+  await db().prepare("UPDATE internal_documents SET file_base_name = ?, file_path = ?, file_key = ?, file_name = ?, file_size = ?, file_type = ? WHERE id = ?")
+    .bind(record.file_base_name || saved.savedBase, saved.path, saved.key, saved.name, input.data.byteLength, input.contentType || "application/octet-stream", input.id).run();
+  return { name: saved.name, path: saved.path, note: saved.note };
+}
+
+export async function readInternalFile(user: SessionUser, id: number) {
+  await ensureSchema();
+  const record = await db().prepare("SELECT * FROM internal_documents WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!record) throw new Error("Sənəd tapılmadı.");
+  if (!internalRights(await internalAccess(user), user, record).visible) throw new Error("FORBIDDEN");
+  return loadDocumentFile(record.file_path, record.file_key, record.file_name, record.file_type);
+}
+
 const FOREIGN_SUPPLIER = "Xarici təchizatçı";
 
 // Where a customer card is in use: outgoing and incoming documents point at it by VÖEN, HR prior jobs by id. A card in use
@@ -2944,6 +3169,7 @@ async function customerUsageSql() {
   return {
     outgoing: "(SELECT COUNT(*) FROM outgoing_documents WHERE outgoing_documents.voen = customers.voen)",
     incoming: "(SELECT COUNT(*) FROM incoming_documents WHERE incoming_documents.sender_voen = customers.voen)",
+    internal: "(SELECT COUNT(*) FROM internal_documents WHERE internal_documents.customer_voen = customers.voen)",
     hr: hasHr ? "(SELECT COUNT(DISTINCT hr_employee_id) FROM hr_prior_jobs WHERE hr_prior_jobs.customer_id = customers.id)" : "0",
   };
 }
@@ -2961,7 +3187,7 @@ function customerPhone(value: string | null | undefined) {
 export async function getCustomers() {
   await ensureSchema();
   const usage = await customerUsageSql();
-  return (await db().prepare(`SELECT customers.*, ${usage.outgoing} + ${usage.incoming} + ${usage.hr} AS usage_count FROM customers ORDER BY name`).all()).results;
+  return (await db().prepare(`SELECT customers.*, ${usage.outgoing} + ${usage.incoming} + ${usage.internal} + ${usage.hr} AS usage_count FROM customers ORDER BY name`).all()).results;
 }
 
 // A customer's history (Versiya 2.86): the outgoing and incoming documents with its VÖEN, newest first. Each user gets only the
@@ -3041,9 +3267,9 @@ export async function updateCustomer(input: { id: number; entityType?: string; c
 export async function deleteCustomer(id: number) {
   await ensureSchema();
   const usage = await customerUsageSql();
-  const used = await db().prepare(`SELECT ${usage.outgoing} AS outgoing, ${usage.incoming} AS incoming, ${usage.hr} AS hr FROM customers WHERE id = ?`).bind(id).first<{ outgoing: number; incoming: number; hr: number }>();
-  if (used && used.outgoing + used.incoming + used.hr > 0) {
-    const parts = [used.outgoing ? `${used.outgoing} çıxan sənəd` : "", used.incoming ? `${used.incoming} daxil olan sənəd` : "", used.hr ? `${used.hr} işçinin əvvəlki iş yeri` : ""].filter(Boolean).join(", ");
+  const used = await db().prepare(`SELECT ${usage.outgoing} AS outgoing, ${usage.incoming} AS incoming, ${usage.internal} AS internal, ${usage.hr} AS hr FROM customers WHERE id = ?`).bind(id).first<{ outgoing: number; incoming: number; internal: number; hr: number }>();
+  if (used && used.outgoing + used.incoming + used.internal + used.hr > 0) {
+    const parts = [used.outgoing ? `${used.outgoing} çıxan sənəd` : "", used.incoming ? `${used.incoming} daxil olan sənəd` : "", used.internal ? `${used.internal} şirkətdaxili sənəd` : "", used.hr ? `${used.hr} işçinin əvvəlki iş yeri` : ""].filter(Boolean).join(", ");
     throw new Error(`Bu müştəri istifadə olunur (${parts}) — silinə bilməz.`);
   }
   await db().prepare("DELETE FROM customers WHERE id = ?").bind(id).run();

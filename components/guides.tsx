@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36; sabit işlərdə dövr sütunlarının süzgəci — 3.37; cədvəllər öz içində sürüşür, başlıq sabit — 3.38; menyu adları İşlər və Tapşırıqlarım, “Verdiyim tapşırıqlar” tabı — 3.47; geri qaytarma səbəbi və yeni son tarix — 3.48; səbəb Qiymətləndirmədən ayrıldı — 3.49): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36; sabit işlərdə dövr sütunlarının süzgəci — 3.37; cədvəllər öz içində sürüşür, başlıq sabit — 3.38; menyu adları İşlər və Tapşırıqlarım, “Verdiyim tapşırıqlar” tabı — 3.47; geri qaytarma səbəbi və yeni son tarix — 3.48; səbəb Qiymətləndirmədən ayrıldı — 3.49; Şirkətdaxili sənədlər — 3.51): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -528,6 +528,45 @@ const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "internal", group: "Sənədlər", title: "Şirkətdaxili sənədlər", path: "Sənədlər → Şirkətdaxili sənədlər", section: "documents.internal", registrarKey: "documents.internal",
+    intro: "Yalnız şirkət daxilində istifadə olunan sənədlərin (anbar qaiməsi, daxili akt, xidməti yazı və s.) qeydiyyatı. Bu sənədlər nə çıxan, nə də daxil olan sənəddir: onlar yalnız qeydə alınır — təsdiq, tapşırıq və bildiriş yoxdur. Sənədin nömrəsi proqram tərəfindən verilmir, kağızda necə yazılıbsa, elə yazılır.",
+    parts: [
+      { audience: "all", title: "Sənədi kim görür", blocks: [
+        { list: [
+          "Admin və firmanın rəhbəri (direktor) — firmanın bütün şirkətdaxili sənədlərini.",
+          "Qeydiyyatçı (həmin firmada “Şirkətdaxili sənədlər” icazəsi olan) — həmin firmanın sənədlərini; icazəsi yalnız bəzi növlər üçündürsə (məs. anbardar — “Anbar qaiməsi”) — yalnız o növlərin sənədlərini.",
+          "Aidiyyatı şöbələrin rəhbərləri.",
+          "Sənədin məsul şəxsi — öz sənədlərini.",
+        ] },
+        { note: "Şöbələrin sıravi əməkdaşları sənədləri görmür. Görənlər sənədin faylını da aça bilir." },
+      ] },
+      { audience: "registrar", title: "Sənədin qeydiyyatı", blocks: [
+        { steps: [
+          "“Yeni sənəd” basın (soldakı “Aktiv firma”da “Bütün firmalar” seçilibsə, formada firmanı seçin).",
+          "Sənədin növünü seçin — siyahıda yalnız həmin firmanın “Şirkətdaxili sənəd” şablonları olur (icazəniz bəzi növlər üçündürsə, yalnız onlar). Növ yoxdursa, admin onu Sənədlər → Şablonlar bölməsində əlavə etməlidir.",
+          "Sənədin nömrəsini kağızda yazıldığı kimi yazın (məs. AQ-0045) və tarixini seçin (standart olaraq bu gün).",
+          "Aidiyyatı şöbə(lər): şablonda göstərilibsə, avtomatik yazılır; yoxdursa, özünüz seçin (birinci seçilən — əsas şöbə, fayl adındakı {Şöbə}).",
+          "İstəsəniz: qısa məzmun, məsul şəxs (firmanın strukturundan), müştəri və əlavə qeyd.",
+          "İstəsəniz, sənədin faylını (skan və ya Word) elə burada seçin və “Qeydə al” basın. Faylı sonra cədvəldən də yükləmək olar.",
+        ] },
+        { list: [
+          "Eyni firmada eyni növdə eyni nömrə artıq varsa, proqram xəbərdarlıq edir: “Yenə də bu nömrə ilə qeydə alınsın?” — “OK” bassanız, sənəd qeydə alınır, “Cancel” bassanız, heç nə dəyişmir. Nömrəni dəyişəndə də eyni yoxlama var.",
+          "Müştəri istəyə bağlıdır (məs. tədarükçü). VÖEN yazsanız, ad müştəri kartından gəlir — VÖEN müştəri siyahısında olmalıdır; yoxdursa, əvvəlcə Müştərilər bölməsində kartını yaradın və ya VÖEN-i boş saxlayıb yalnız adı yazın.",
+          "Fayl şablondakı ad qaydası ilə adlandırılıb şablonda seçilmiş papkaya yazılır; papka seçilməyibsə, sistemdə saxlanılır. Standart ad qaydası: {SənədNo}_{SənədTipi}_{Tarix}.",
+          "Şablondakı papka serverdə tapılmasa, fayl yüklənmir — adminə müraciət edin. Fayl papkada əl ilə köçürülüb və ya silinibsə, cədvəldə “Fayl papkada tapılmadı” görünür.",
+          "Əlavə et hüququ yeni sənəd qeydə almağa və faylı olmayan sənədə fayl yükləməyə imkan verir; Dəyişiklik et — sənədi düzəltmək (nömrə də daxil) və faylı əvəz etmək; Sil — sənədi silmək (serverdəki papkada olan fayl silinmir). İcazəsi “Seçilmiş növlər” ilə verilən qeydiyyatçı yalnız özünün qeydə aldığı sənədləri dəyişə və silə bilir.",
+        ] },
+      ] },
+      { audience: "admin", title: "Admin üçün", blocks: [
+        { list: [
+          "Növləri Sənədlər → Şablonlar → “Şirkətdaxili sənəd” tabında hər firma üçün yaradın: ad, aidiyyatı şöbələr, faylın papkası və ad qaydası.",
+          "“Şirkətdaxili sənədlər” icazəsi yeni bölmədir və standart olaraq hamıda bağlıdır — Tənzimləmələr → İstifadəçilər → Giriş icazələri bölməsində lazım olan əməkdaşlara firma üzrə açın.",
+          "Müştəri kartı şirkətdaxili sənəddə istifadə olunursa, o kart silinmir.",
+        ] },
+      ] },
+    ],
+  },
+  {
     id: "customers", group: "Sənədlər", title: "Müştərilər", path: "Sənədlər → Müştərilər", section: "dashboard.customers",
     intro: "Sənəd göndərdiyimiz və sənəd aldığımız təşkilatların kartları. Çıxan və daxil olan sənədlər müştəriyə VÖEN üzrə bağlanır, ona görə hər müştərinin sənəd tarixçəsi bir yerdə görünür.",
     parts: [
@@ -568,7 +607,7 @@ const GUIDES: Guide[] = [
   },
   {
     id: "templates", group: "Sənədlər", title: "Şablonlar", path: "Sənədlər → Şablonlar", section: "documents.templates",
-    intro: "Sənəd tipləri və onların qaydaları. Hər şablon bir firmaya və bir qrupa aiddir: Çıxan sənəd, Daxil olan sənəd, Kadrlar (Digər əmrlər).",
+    intro: "Sənəd tipləri və onların qaydaları. Hər şablon bir firmaya və bir qrupa aiddir: Çıxan sənəd, Daxil olan sənəd, Şirkətdaxili sənəd, Kadrlar (Digər əmrlər).",
     parts: [
       { audience: "admin", title: "Şablonun yaradılması", blocks: [
         { steps: [
@@ -576,6 +615,7 @@ const GUIDES: Guide[] = [
           "Adı yazın — eyni firmanın eyni qrupunda ad təkrarlanmır (başqa firmada və ya qrupda eyni ad ola bilər).",
           "Çıxan sənəd: aidiyyatı şöbələr, “İmzalı nüsxə geri qaytarılır” və qaytarılma müddəti, şablon faylları (3 versiya), ilkin və hazır sənəd papkaları, ad qaydası.",
           "Daxil olan sənəd: aidiyyatı şöbələr, skanın papkası və ad qaydası.",
+          "Şirkətdaxili sənəd (anbar qaiməsi, daxili akt və s.): aidiyyatı şöbələr, faylın papkası və ad qaydası (standart: {SənədNo}_{SənədTipi}_{Tarix}; {SənədNo} — kağızdakı nömrə, {Təşkilat} — müştəri, varsa). Şirkətdaxili sənədlər yalnız bu tabdakı növlərlə qeydə alınır.",
           "Kadrlar: Word (.docx) faylı — əmrin mətni ondan oxunur; yer tutucular formada göstərilir.",
         ] },
         { list: [
@@ -593,7 +633,7 @@ const GUIDES: Guide[] = [
           "Lazım olan papkada “Bu papkanı seç”, sonra şablonda “Yadda saxla” basın.",
         ] },
         { list: [
-          "Hər papka ayrıca seçilir: Çıxan sənəd üçün ilkin sənəd papkası (Word), hazır sənəd papkası (imzalı nüsxə), Daxil olan sənəd üçün papka (skan).",
+          "Hər papka ayrıca seçilir: Çıxan sənəd üçün ilkin sənəd papkası (Word), hazır sənəd papkası (imzalı nüsxə), Daxil olan sənəd üçün papka (skan), Şirkətdaxili sənəd üçün papka.",
           "Şəbəkə papkasını (\\\\server\\paylaşım) pəncərənin yuxarısındakı sahəyə yazıb “Aç” basın, sonra oradan davam edin.",
           "Papka yolunda dəyişən ({İl}, {Firma} və s.) olmur — dəyişənlər yalnız ad qaydasındadır.",
           "“✕” seçilmiş papkanı götürür; papka seçilməyibsə, sənəd sistemdə saxlanılır.",
@@ -743,15 +783,15 @@ const GUIDES: Guide[] = [
       { audience: "admin", title: "Giriş icazələri", blocks: [
         { list: [
           "İşarəsi götürülən bölmə istifadəçinin menyusunda görünmür və serverdə də bağlanır.",
-          "Bəzi bölmələrdə dörd ayrıca hüquq var: Baxış, Əlavə et, Dəyişiklik et, Sil (Sorğular, Daxil olan və Çıxan sənədlər, Müştərilər, Nöqsanlar, Personallar, Əmrlər). Əlavə et / Dəyişiklik et / Sil Baxışı da açır; Baxışı götürmək hamısını götürür.",
-          "İstifadəçinin firmaları alt-alta sıralanır və bütün icazələr hər firma üçün ayrıca verilir: firmanın adına basın — içində İşlər (Tapşırıqlarım, Sorğular, Şəxsi işlərim, Sabit işlər, Hesabatlar), Sənədlər (Daxil olan, Çıxan, Müştərilər, Hesabatlar), Kadrlar (Personallar, Əmrlər, Nöqsanlar, Hesabatlar) və Çat var. Məsələn, bir firmada yalnız Kadrları açıb qalanını bağlı saxlaya bilərsiniz. Firmanın yanındakı rəqəm orada neçə bölmənin açıq olduğunu göstərir; firmanın işarəsi həmin firmanı bütövlükdə açır / bağlayır.",
+          "Bəzi bölmələrdə dörd ayrıca hüquq var: Baxış, Əlavə et, Dəyişiklik et, Sil (Sorğular, Daxil olan, Çıxan və Şirkətdaxili sənədlər, Müştərilər, Nöqsanlar, Personallar, Əmrlər). Əlavə et / Dəyişiklik et / Sil Baxışı da açır; Baxışı götürmək hamısını götürür.",
+          "İstifadəçinin firmaları alt-alta sıralanır və bütün icazələr hər firma üçün ayrıca verilir: firmanın adına basın — içində İşlər (Tapşırıqlarım, Sorğular, Şəxsi işlərim, Sabit işlər, Hesabatlar), Sənədlər (Daxil olan, Çıxan, Şirkətdaxili, Müştərilər, Hesabatlar), Kadrlar (Personallar, Əmrlər, Nöqsanlar, Hesabatlar) və Çat var. Məsələn, bir firmada yalnız Kadrları açıb qalanını bağlı saxlaya bilərsiniz. Firmanın yanındakı rəqəm orada neçə bölmənin açıq olduğunu göstərir; firmanın işarəsi həmin firmanı bütövlükdə açır / bağlayır.",
           "Şəxsi işlərim və Sabit işlər firma üzrədir: istifadəçi yalnız açıq olan firmaların işlərini görür və işarələyir (firması seçilməmiş şəxsi iş həmişə görünür). Müştərilər və Çat firmaya bağlı deyil — ən azı bir firmada açıq olanda görünür.",
           "İstifadəçiyə yeni firma əlavə edəndə o firmada hər şey bağlı olur — lazım olanları həmin firmanın içində açın. Firma istifadəçidən götürüləndə onun icazələri də silinir.",
           "“Başqa firmadan köçür...” (firmanın içində) — istifadəçinin seçilmiş digər firmasındakı icazələrini bu firmaya köçürür; bu firmadakı indiki icazələr əvəz olunur (seçilmiş sənəd növləri köçmür: “Bütün növlər” olur). Siyahıda hər firmanın yanında orada neçə bölmənin açıq olduğu yazılır.",
           "“Bu firmanın icazələrini bütün firmalara köçür” (firmanın içində) — həmin firmanın icazələrini istifadəçinin digər firmalarına köçürür (seçilmiş sənəd növləri köçmür: digər firmalarda “Bütün növlər” olur).",
-          "Daxil olan və Çıxan sənədlərdə Baxış açıq olanda “Sənəd növləri” seçimi çıxır: “Bütün növlər” və ya “Seçilmiş növlər” — həmin firmanın şablonlarından işarələnir. Məsələn, mühasibə yalnız “Forma 2” növünü versəniz, o, Forma 2-ni özü qeydə alıb faylını yükləyir, yalnız Forma 2 sənədlərini görür və yalnız özünün qeydə aldıqlarını dəyişə / silə bilir.",
+          "Daxil olan, Çıxan və Şirkətdaxili sənədlərdə Baxış açıq olanda “Sənəd növləri” seçimi çıxır: “Bütün növlər” və ya “Seçilmiş növlər” — həmin firmanın şablonlarından işarələnir. Məsələn, mühasibə yalnız “Forma 2” növünü versəniz, o, Forma 2-ni özü qeydə alıb faylını yükləyir, yalnız Forma 2 sənədlərini görür və yalnız özünün qeydə aldıqlarını dəyişə / silə bilir.",
           "🔒 olan bəndlər (Tapşırıqlarım) həmişə açıqdır.",
-          "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); hər üç Hesabatlar; Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
+          "Standart olaraq bağlıdır: Personallar və Əmrlər (şəxsi məlumatlar, maaş); hər üç Hesabatlar; Şirkətdaxili sənədlər (Versiya 3.51-də əlavə olunan yeni bölmə — lazım olanlara özünüz açın); Müştərilərdə Dəyişiklik et və Sil; Nöqsanlarda Əlavə et, Dəyişiklik et və Sil.",
           "Hesabatlar (Versiya 3.41) — İşlər, Sənədlər və Kadrlar menyusunun sonuncu bəndi; hər firmada ayrıca açılır / bağlanır (bir işarə, ayrıca hüquqlar yoxdur). Bağlı olanda menyuda və bölmənin ümumi səhifəsində görünmür. Admin hamısını görür. Hesabatların özləri hələ hazırlanır — səhifədə hansı hesabatların olacağı yazılıb. Hesabatlar hazır olanda şöbə rəhbəri onlarda yalnız öz şöbəsinin işçilərini görəcək, Kadrlar hesabatlarında maaş isə yalnız Personallarda Əmək haqqına baxışı olanlara göstəriləcək.",
           "“Başqa işçidən köçür...” — başqa istifadəçinin icazələrini köçürür (firma icazələri — yalnız hər ikisinin ortaq firmaları üçün); “Hamısını aç” — bütün firmalarda hamısını açır.",
           "Personallarda Baxış açıq olanda “Kartın hissələri” çıxır — kartın hər başlığının öz hüquqları var: Şəxsi kart (Şəxsi məlumatlar, Təcili əlaqə şəxsi, Şəxsiyyət vəsiqəsi, İş yeri, Əvvəlki iş yerləri, Əmək müqaviləsi, İşdən çıxma), Ailə və təhsil (Ailə üzvləri, Təhsil), Məzuniyyətlər (Məzuniyyət hüququ, Qeydə alınmış məzuniyyətlər, Xəstəlik vərəqəsi), Əmək haqqı, Son hesablaşma. Başlığın işarəsi onun bütün hissələrini açır / bağlayır. Siyahı olan hissələrdə (Əvvəlki iş yerləri, Ailə üzvləri, Təhsil, Xəstəlik vərəqəsi, Əmək haqqı) dörd hüquq var, sahələrdən ibarət hissələrdə Baxış və Dəyişiklik et; İşdən çıxma, Qeydə alınmış məzuniyyətlər və Son hesablaşma yalnız baxış üçündür (onlar Əmrlərdən gəlir).",

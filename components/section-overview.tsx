@@ -43,17 +43,17 @@ const topGroups = (rows: string[], open: (label: string) => void) => {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "az")).slice(0, 6).map(([label, value]) => ({ label, value, onOpen: () => open(label) }));
 };
 
-export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, showCustomers, showReports, onOpenCustomers, openOverdue, activeCompanyId, open }: {
-  showTemplates: boolean; showOutgoing: boolean; showIncoming: boolean; showCustomers: boolean; showReports: boolean; onOpenCustomers: () => void; activeCompanyId: number | null;
+export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, showInternal, showCustomers, showReports, onOpenCustomers, openOverdue, activeCompanyId, open }: {
+  showTemplates: boolean; showOutgoing: boolean; showIncoming: boolean; showInternal: boolean; showCustomers: boolean; showReports: boolean; onOpenCustomers: () => void; activeCompanyId: number | null;
   openOverdue: (filter: { department?: string; responsible?: string }) => void;
-  open: (tab: "templates" | "outgoing" | "incoming" | "reports") => void;
+  open: (tab: "templates" | "outgoing" | "incoming" | "internal" | "reports") => void;
 }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [overdue, setOverdue] = useState<OutgoingRow[]>([]);
   useEffect(() => {
     let cancelled = false;
     const get = (url: string, on: boolean): Promise<Record<string, unknown>> => on ? fetch(url).then((r) => r.ok ? r.json() : {}).catch(() => ({})) : Promise.resolve({});
-    void Promise.all([get("/api/documents", showTemplates), get("/api/documents/outgoing", showOutgoing), get("/api/documents/incoming", showIncoming), get("/api/customers", showCustomers)]).then(([tpl, out, inc, cus]) => {
+    void Promise.all([get("/api/documents", showTemplates), get("/api/documents/outgoing", showOutgoing), get("/api/documents/incoming", showIncoming), get("/api/customers", showCustomers), get("/api/documents/internal", showInternal)]).then(([tpl, out, inc, cus, own]) => {
       if (cancelled) return;
       const inScope = (companyId: number | null) => !activeCompanyId || companyId === activeCompanyId;
       const outgoing = ((out.items || []) as OutgoingRow[]).filter((i) => inScope(i.company_id));
@@ -65,10 +65,11 @@ export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, s
         outgoing: outgoing.length, outgoingNoFinal: outgoing.filter((i) => !i.final_key).length, outgoingApproval: outgoing.filter((i) => approvalActionable(i.approval)).length,
         incoming: incoming.length, incomingDirector: incoming.filter((i) => waitsForDirector(i.status) && directorOf.includes(i.company_id)).length,
         incomingApproval: incoming.filter((i) => approvalActionable(i.approval)).length, isDirector: directorOf.length,
+        internal: ((own.items || []) as Array<{ company_id: number }>).filter((i) => inScope(i.company_id)).length,
       });
     });
     return () => { cancelled = true; };
-  }, [showTemplates, showOutgoing, showIncoming, showCustomers, activeCompanyId]);
+  }, [showTemplates, showOutgoing, showIncoming, showInternal, showCustomers, activeCompanyId]);
   const n = (key: string) => counts ? counts[key] ?? 0 : null;
   const cards: OverviewCard[] = [];
   if (showIncoming) cards.push({ key: "incoming", title: "Daxil olan sənədlər", text: "Daxil olan sənədlərin qeydiyyatı, rəhbərin baxışı, tapşırıqlar və təsdiq.", onOpen: () => open("incoming"), stats: [
@@ -89,11 +90,13 @@ export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, s
     { label: "hazır sənəd yüklənməyib", value: n("outgoingNoFinal"), alert: true },
     { label: "təsdiqimi gözləyir", value: n("outgoingApproval"), alert: true },
   ] });
+  // Versiya 3.51: Şirkətdaxili sənədlər — registration only, so just the count.
+  if (showInternal) cards.push({ key: "internal", title: "Şirkətdaxili sənədlər", text: "Yalnız şirkət daxilində istifadə olunan sənədlərin qeydiyyatı (anbar qaiməsi, daxili akt və s.).", onOpen: () => open("internal"), stats: [{ label: "sənəd", value: n("internal") }] });
   // Versiya 2.74: Müştərilər — the other side of the documents — sits here, before Şablonlar.
   if (showCustomers) cards.push({ key: "customers", title: "Müştərilər", text: "Müştəri və təşkilat kartları (VÖEN, ünvan, telefon).", onOpen: onOpenCustomers, stats: [{ label: "müştəri", value: n("customers") }] });
   if (showTemplates) cards.push({ key: "templates", title: "Şablonlar", text: "Sənəd növləri, şablon faylları, papka və ad qaydaları.", onOpen: () => open("templates"), stats: [{ label: "şablon", value: n("templates") }] });
   // Versiya 3.41: the reports come last, as in the menu.
-  if (showReports) cards.push({ key: "reports", title: "Hesabatlar", text: "Daxil olan və çıxan sənədlər üzrə hesabatlar.", onOpen: () => open("reports") });
+  if (showReports) cards.push({ key: "reports", title: "Hesabatlar", text: "Daxil olan, çıxan və şirkətdaxili sənədlər üzrə hesabatlar.", onOpen: () => open("reports") });
   return <SectionOverview cards={cards} loading={!counts}/>;
 }
 
