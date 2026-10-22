@@ -16,7 +16,7 @@ function db() {
 
 let schemaReady = false;
 // Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
-const SCHEMA_VERSION = "3.51";
+const SCHEMA_VERSION = "3.52";
 async function ensureSchema() {
   if (schemaReady) return;
   if (await schemaIsCurrent("catalog", SCHEMA_VERSION)) {
@@ -262,7 +262,19 @@ async function ensureSchema() {
     SELECT i.id, '—', i.assignee_employee_id, i.task_id, COALESCE(i.assigned_at, i.created_at) FROM incoming_documents i
     WHERE i.task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM incoming_assignments a WHERE a.incoming_id = i.id)`).run();
   await db().prepare("UPDATE incoming_documents SET task_id = NULL, assignee_employee_id = NULL WHERE task_id IS NOT NULL").run();
-  const personalWorksColumns = await db().prepare("PRAGMA table_info(personal_works)").all<{ name: string }>();
+  // Versiya 3.52: Ana sənəd / Bağlı sənədlər. A template may be a parent ("can_be_parent") or name the parent templates its
+  // documents must be linked to (parent_templates: JSON list of template ids of the same firm and group); numbering 'derived'
+  // gives a linked document the parent's number with a suffix (045/2026-1). A document keeps its parent in parent_id — one
+  // level only, inside one register.
+  const templateLinkColumns = (await db().prepare("PRAGMA table_info(document_templates)").all<{ name: string }>()).results;
+  for (const column of ["can_be_parent INTEGER NOT NULL DEFAULT 0", "parent_templates TEXT", "numbering TEXT"]) {
+    if (!templateLinkColumns.some((existing) => existing.name === column.split(" ")[0])) await db().prepare(`ALTER TABLE document_templates ADD COLUMN ${column}`).run();
+  }
+  for (const table of ["outgoing_documents", "incoming_documents", "internal_documents"]) {
+    const existing = (await db().prepare(`PRAGMA table_info(${table})`).all<{ name: string }>()).results;
+    if (!existing.some((c) => c.name === "parent_id")) await db().prepare(`ALTER TABLE ${table} ADD COLUMN parent_id INTEGER`).run();
+  }
+  const personalWorksColumns =await db().prepare("PRAGMA table_info(personal_works)").all<{ name: string }>();
   if (personalWorksColumns.results.length && !personalWorksColumns.results.some((column) => column.name === "user_id")) {
     // Migrate old employee_id-owned personal_works to user_id ownership (so admins, who have no employee record, can own works too).
     await db().prepare(`CREATE TABLE personal_works_new (
@@ -1950,6 +1962,30 @@ async function templateDepartments(companyId: number, group: TemplateGroup, raw:
 
 const returnDays = (value: unknown) => { const n = Math.round(Number(value)); return Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : null; };
 
+// Versiya 3.52: a template's link settings. Its parent templates must be of the same firm and group and marked "ana sənəd ola
+// bilər"; a template that is linked to parents cannot itself be a parent (one level). Kadrlar templates have none.
+async function templateLinks(companyId: number, group: TemplateGroup, selfId: number, input: { canBeParent?: unknown; parentTemplates?: unknown; numbering?: unknown }, current?: Record<string, unknown>) {
+  if (group === "other_order") return { canBeParent: 0, parentTemplates: null, numbering: null };
+  const canBeParent = yesNo(input.canBeParent) ?? (current ? Number(current.can_be_parent) ? 1 : 0 : 0);
+  const ids = input.parentTemplates !== undefined ? parseIds(JSON.stringify(Array.isArray(input.parentTemplates) ? input.parentTemplates : [])) : parseIds(current?.parent_templates);
+  if (ids.length) {
+    if (canBeParent) throw new Error("Ana sənəd ola bilən şablon başqa sənədə bağlana bilməz — bağlanma bir pillədir.");
+    if (ids.includes(selfId)) throw new Error("Şablon özünə bağlana bilməz.");
+    const rows = (await db().prepare(`SELECT id, name, can_be_parent FROM document_templates WHERE company_id = ? AND template_group = ? AND id IN (${ids.map(() => "?").join(",")})`)
+      .bind(companyId, group, ...ids).all<{ id: number; name: string; can_be_parent: number }>()).results;
+    if (rows.length !== ids.length) throw new Error("Ana sənəd şablonu bu firmanın eyni qrupunda olmalıdır.");
+    const notParent = rows.find((r) => !Number(r.can_be_parent));
+    if (notParent) throw new Error(`“${notParent.name}” şablonunda “Ana sənəd ola bilər” seçilməyib.`);
+  }
+  if (!canBeParent && current && Number(current.can_be_parent)) {
+    const linked = (await db().prepare("SELECT name, parent_templates FROM document_templates WHERE company_id = ? AND template_group = ? AND parent_templates IS NOT NULL")
+      .bind(companyId, group).all<{ name: string; parent_templates: string }>()).results.filter((r) => parseIds(r.parent_templates).includes(selfId));
+    if (linked.length) throw new Error(`Bu şablona bağlanan şablonlar var (${linked.map((r) => r.name).join(", ")}) — əvvəlcə onlardan çıxarın.`);
+  }
+  const numbering = group === "incoming" || !ids.length ? null : (input.numbering !== undefined ? input.numbering : current?.numbering) === "derived" ? "derived" : "own";
+  return { canBeParent, parentTemplates: ids.length ? JSON.stringify(ids) : null, numbering };
+}
+
 // The admin sees every firm's templates; anyone else only those of the firms they work in.
 export async function getDocumentTemplates(user?: SessionUser) {
   await ensureSchema();
@@ -1965,7 +2001,7 @@ export async function getDocumentTemplates(user?: SessionUser) {
   return scope ? rows.filter((row) => scope.includes(Number(row.company_id))) : rows;
 }
 
-type TemplateInput = { signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; companyId?: unknown; departments?: unknown; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown };
+type TemplateInput = { canBeParent?: unknown; parentTemplates?: unknown; numbering?: unknown; signedCopyDays?: unknown; template1Remove?: boolean; template2Remove?: boolean; template3Remove?: boolean; templateGroup?: string; companyId?: unknown; departments?: unknown; name?: string; template1Key?: string; template1Name?: string; template1Size?: number; template1Type?: string; template2Key?: string; template2Name?: string; template2Size?: number; template2Type?: string; template3Key?: string; template3Name?: string; template3Size?: number; template3Type?: string; draftFolderPath?: string; finalFolderPath?: string; fileNamePattern?: string; incomingFolderPath?: string; incomingNamePattern?: string; signedCopyReturns?: unknown };
 
 export async function createDocumentTemplate(input: TemplateInput) {
   await ensureSchema();
@@ -1978,7 +2014,16 @@ export async function createDocumentTemplate(input: TemplateInput) {
     (name, template1_key, template1_name, template1_size, template1_type, template2_key, template2_name, template2_size, template2_type, template3_key, template3_name, template3_size, template3_type, draft_folder_path, final_folder_path, file_name_pattern, incoming_folder_path, incoming_name_pattern, signed_copy_returns, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(name, input.template1Key || null, input.template1Name || null, input.template1Size || null, input.template1Type || null, input.template2Key || null, input.template2Name || null, input.template2Size || null, input.template2Type || null, input.template3Key || null, input.template3Name || null, input.template3Size || null, input.template3Type || null, templateFolder(input.draftFolderPath, null), templateFolder(input.finalFolderPath, null), input.fileNamePattern?.trim() || null, templateFolder(input.incomingFolderPath, null), input.incomingNamePattern?.trim() || null, yesNo(input.signedCopyReturns) ?? 1, new Date().toISOString()).run();
-  await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ?, signed_copy_days = ?, departments = ? WHERE id = ?").bind(companyId, group, yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), await templateDepartments(companyId, group, input.departments), Number(inserted.meta.last_row_id)).run();
+  const id = Number(inserted.meta.last_row_id);
+  await db().prepare("UPDATE document_templates SET company_id = ?, template_group = ?, signed_copy_days = ?, departments = ? WHERE id = ?").bind(companyId, group, yesNo(input.signedCopyReturns) === 0 ? null : returnDays(input.signedCopyDays), await templateDepartments(companyId, group, input.departments), id).run();
+  try {
+    const links = await templateLinks(companyId, group, id, input);
+    await db().prepare("UPDATE document_templates SET can_be_parent = ?, parent_templates = ?, numbering = ? WHERE id = ?").bind(links.canBeParent, links.parentTemplates, links.numbering, id).run();
+  } catch (error) {
+    // A wrong link setting does not leave a half-made template behind.
+    await db().prepare("DELETE FROM document_templates WHERE id = ?").bind(id).run();
+    throw error;
+  }
 }
 
 // The firm and group of a template stay as they are; "Kopyala" puts it under another firm or group.
@@ -1988,6 +2033,9 @@ export async function updateDocumentTemplate(input: TemplateInput & { id: number
   if (!current) throw new Error("Sənəd tapılmadı.");
   const name = input.name?.trim() || String(current.name);
   await assertTemplateNameFree(Number(current.company_id), templateGroup(current.template_group), name, input.id);
+  // Checked before anything is saved.
+  const links = await templateLinks(Number(current.company_id), templateGroup(current.template_group), input.id, input, current);
+  await db().prepare("UPDATE document_templates SET can_be_parent = ?, parent_templates = ?, numbering = ? WHERE id = ?").bind(links.canBeParent, links.parentTemplates, links.numbering, input.id).run();
   await db().prepare(`UPDATE document_templates SET name = ?, template1_key = ?, template1_name = ?, template1_size = ?, template1_type = ?, template2_key = ?, template2_name = ?, template2_size = ?, template2_type = ?, template3_key = ?, template3_name = ?, template3_size = ?, template3_type = ?, draft_folder_path = ?, final_folder_path = ?, file_name_pattern = ?, incoming_folder_path = ?, incoming_name_pattern = ?, signed_copy_returns = ? WHERE id = ?`)
     .bind(
       name,
@@ -2044,11 +2092,21 @@ export async function copyDocumentTemplate(input: { id: number; companyId?: unkn
   const known = new Set((await companyDepartments()).departmentsOf(companyId).map((d) => d.name));
   const kept = wanted.filter((d) => known.has(d));
   await db().prepare("UPDATE document_templates SET departments = ? WHERE id = ?").bind(kept.length ? JSON.stringify(kept) : null, id).run();
-  return { id, droppedDepartments: wanted.filter((d) => !known.has(d)) };
+  // Versiya 3.52: the parent templates are templates of the source's own firm and group, so they do not go along (the copy is
+  // then not linked — the notice asks to pick them again); "ana sənəd ola bilər" goes along.
+  const droppedParents = parseIds(source.parent_templates).length > 0;
+  await db().prepare("UPDATE document_templates SET parent_templates = NULL, numbering = NULL, can_be_parent = ? WHERE id = ?").bind(group === "other_order" ? 0 : Number(source.can_be_parent) ? 1 : 0, id).run();
+  return { id, droppedDepartments: wanted.filter((d) => !known.has(d)), droppedParents };
 }
 
 export async function deleteDocumentTemplate(id: number) {
   await ensureSchema();
+  const current = await db().prepare("SELECT company_id, template_group FROM document_templates WHERE id = ?").bind(id).first<{ company_id: number; template_group: string }>();
+  if (current) {
+    const linked = (await db().prepare("SELECT name, parent_templates FROM document_templates WHERE company_id = ? AND template_group = ? AND parent_templates IS NOT NULL")
+      .bind(current.company_id, current.template_group).all<{ name: string; parent_templates: string }>()).results.filter((r) => parseIds(r.parent_templates).includes(id));
+    if (linked.length) throw new Error(`Bu şablona bağlanan şablonlar var (${linked.map((r) => r.name).join(", ")}) — əvvəlcə onlardan çıxarın.`);
+  }
   await db().prepare("DELETE FROM document_templates WHERE id = ?").bind(id).run();
 }
 
@@ -2103,8 +2161,9 @@ export async function getOutgoingDocuments(user: SessionUser) {
   const access = await outgoingAccess(user);
   const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name,
     (SELECT phone FROM customers cu WHERE cu.voen = d.voen AND trim(COALESCE(d.voen, '')) != '' LIMIT 1) AS card_phone,
-    (SELECT signed_copy_returns FROM document_templates t WHERE t.company_id = d.company_id AND t.template_group = 'outgoing' AND lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns
-    FROM outgoing_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
+    (SELECT signed_copy_returns FROM document_templates t WHERE t.company_id = d.company_id AND t.template_group = 'outgoing' AND lower(trim(t.name)) = lower(trim(d.document_type)) LIMIT 1) AS template_signed_copy_returns,
+    p.document_number AS parent_no, p.document_type AS parent_type
+    FROM outgoing_documents d LEFT JOIN outgoing_documents p ON p.id = d.parent_id LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.id DESC`).all<Record<string, unknown>>()).results;
   const flag = (value: unknown) => (value === null || value === undefined ? null : Number(value) ? 1 : 0);
   const approvals = await approvalRows("outgoing");
   const approvalsOf = new Map<number, ApprovalRow[]>();
@@ -2156,7 +2215,7 @@ export async function outgoingRegisterTargets(user: SessionUser) {
 }
 const hasOutgoingFile = (row: Record<string, unknown>, kind: "draft" | "final") => Boolean(row[`${kind}_name`] || row[`${kind}_path`] || row[`${kind}_key`]);
 
-type OutgoingInput = { informedDepartments?: string[]; responsibleEmployeeId?: unknown; returnDueDate?: string | null; relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
+type OutgoingInput = { parentId?: unknown; informedDepartments?: string[]; responsibleEmployeeId?: unknown; returnDueDate?: string | null; relatedDepartments?: string[]; companyId?: number; outgoingDate?: string; incomingNo?: string; incomingDate?: string; sendingDepartment?: string; documentType?: string; sendingMethod?: string; deliveredBy?: string; copies?: string; documentDate?: string; voen?: string; organizationName?: string; phone?: string; note?: string; signedCopyReturns?: unknown };
 
 export async function createOutgoingDocument(user: SessionUser, input: OutgoingInput) {
   await ensureSchema();
@@ -2170,6 +2229,7 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const department = related[0];
   const informed = await informedDepartments(companyId, input.informedDepartments, related);
   const phone = (await customerPhoneByVoen(input.voen)) || formatPhone(input.phone) || null;
+  const link = await checkParent("outgoing", { companyId, documentType: docType, parentId: input.parentId, voen: input.voen });
   // Çıxış No: one continuous sequence per firm, regardless of type — never resets.
   const outgoingNo = await nextOutgoingNumber("outgoing_no", companyId);
   // Sənədin Nömrəsi: its own sequence per firm and document type, starting over at 1 each calendar year, shown as "N/YYYY".
@@ -2180,7 +2240,10 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
     const parsed = parseInt(String(row.document_number || "").split("/")[0], 10);
     if (!isNaN(parsed) && parsed > maxDocNumber) maxDocNumber = parsed;
   }
-  const documentNumber = `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
+  // Versiya 3.52: a linked document whose template derives its number takes the parent's with a suffix (045/2026-1).
+  const documentNumber = link.parent && link.rule.derived
+    ? await derivedNumber("outgoing", link.parent, `#${link.parent.id}`)
+    : `${String(maxDocNumber + 1).padStart(3, "0")}/${year}`;
   // Daxil olma No / tarixi are filled when the signed document comes back (saveOutgoingFile), not typed at creation.
   const result = await db().prepare(`INSERT INTO outgoing_documents
     (company_id, outgoing_no, outgoing_date, sending_department, document_type, sending_method, delivered_by, copies, document_number, document_date, voen, organization_name, phone, note, signed_copy_returns, created_at, related_departments, approval_flow, created_by)
@@ -2189,7 +2252,7 @@ export async function createOutgoingDocument(user: SessionUser, input: OutgoingI
   const id = Number(result.meta.last_row_id);
   // Versiya 2.75: who takes the document out (answers for the signed copy) and by when that copy must be back.
   const due = await returnDueFor(companyId, docType, await signedCopyOverride(companyId, docType, input.signedCopyReturns, null), input.outgoingDate);
-  await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ?, return_due_date = ?, informed_departments = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), due, informed, id).run();
+  await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ?, return_due_date = ?, informed_departments = ?, parent_id = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), due, informed, link.parent?.id ?? null, id).run();
   return { id, outgoingNo };
 }
 
@@ -2217,6 +2280,9 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
   }
   const informed = input.informedDepartments !== undefined && companyId
     ? await informedDepartments(companyId, input.informedDepartments, parseDepartments(related)) : current.informed_departments;
+  // Versiya 3.52: the parent may be changed (checked before anything is saved); the Sənədin Nömrəsi given at creation stays.
+  const link = (input.parentId !== undefined || typeChanged) && companyId
+    ? await checkParent("outgoing", { companyId, documentType: docType, parentId: input.parentId ?? current.parent_id, voen: input.voen ?? current.voen, selfId: input.id }) : null;
   const cardPhone = await customerPhoneByVoen(input.voen ?? current.voen);
   // Çıxış No and Sənədin Nömrəsi are system-assigned at creation and stay fixed afterwards, so the sequence they guarantee is never broken by an edit.
   await db().prepare(`UPDATE outgoing_documents SET related_departments = ?, company_id = ?, outgoing_date = ?, incoming_no = ?, incoming_date = ?, sending_department = ?, document_type = ?, sending_method = ?, delivered_by = ?, copies = ?, document_date = ?, voen = ?, organization_name = ?, phone = ?, note = ?, signed_copy_returns = ? WHERE id = ?`)
@@ -2240,6 +2306,7 @@ export async function updateOutgoingDocument(user: SessionUser, input: OutgoingI
       input.id,
     ).run();
   await db().prepare("UPDATE outgoing_documents SET informed_departments = ? WHERE id = ?").bind(informed ?? null, input.id).run();
+  if (link) await db().prepare("UPDATE outgoing_documents SET parent_id = ? WHERE id = ?").bind(link.parent?.id ?? null, input.id).run();
   if (input.responsibleEmployeeId !== undefined) await db().prepare("UPDATE outgoing_documents SET responsible_employee_id = ? WHERE id = ?").bind(employeeIdOrNull(input.responsibleEmployeeId), input.id).run();
   // The registrar may set the return date by hand (a contract with its own term); an empty value clears it.
   if (input.returnDueDate !== undefined) {
@@ -2273,6 +2340,7 @@ export async function deleteOutgoingDocument(user: SessionUser, id: number) {
   if (!rights.may.delete) throw new Error("FORBIDDEN");
   if (!access.admin && (await approvalStateFor("outgoing", row, access, user)).locked) throw new Error("Sənəd artıq təsdiqlənməyə başlayıb — onu yalnız admin silə bilər.");
   if (!access.admin && !(rights.registrarHere && !row.final_name && !row.final_path && !row.final_key)) throw new Error("Hazır (imzalı) sənədi yüklənmiş sənədi yalnız admin silə bilər.");
+  await assertNoChildren("outgoing", id);
   const current = { draft_key: row.draft_key as string | null, final_key: row.final_key as string | null };
   await db().prepare("DELETE FROM outgoing_documents WHERE id = ?").bind(id).run();
   // Files in the server folders are the archive and stay; only copies kept inside the system go with the record.
@@ -2683,8 +2751,9 @@ export async function getIncomingDocuments(user: SessionUser) {
   for (const r of requests) requestsOf.set(r.incoming_id, [...(requestsOf.get(r.incoming_id) ?? []), r]);
   const delegatesOf = await incomingDelegates();
   // The sender's phone is read from their customer card (Versiya 2.77).
-  const items = (await db().prepare(`SELECT i.*, c.name AS company_name, (SELECT phone FROM customers cu WHERE cu.voen = i.sender_voen AND trim(COALESCE(i.sender_voen, '')) != '' LIMIT 1) AS sender_phone
-    FROM incoming_documents i LEFT JOIN companies c ON c.id = i.company_id ORDER BY i.id DESC`)
+  const items = (await db().prepare(`SELECT i.*, c.name AS company_name, (SELECT phone FROM customers cu WHERE cu.voen = i.sender_voen AND trim(COALESCE(i.sender_voen, '')) != '' LIMIT 1) AS sender_phone,
+    p.incoming_no AS parent_no, p.document_type AS parent_type
+    FROM incoming_documents i LEFT JOIN incoming_documents p ON p.id = i.parent_id LEFT JOIN companies c ON c.id = i.company_id ORDER BY i.id DESC`)
     .all<Record<string, unknown>>()).results.flatMap((row) => {
     const own = byDocument.get(Number(row.id)) ?? [];
     const linked = requestsOf.get(Number(row.id)) ?? [];
@@ -2733,7 +2802,7 @@ export async function countIncomingForDirector(user: SessionUser) {
   return rows.filter((row) => structure.directorsOf(row.company_id).has(user.employeeId!)).length;
 }
 
-type IncomingInput = { informedDepartments?: string[]; relatedDepartments?: string[]; companyId?: number; incomingDate?: string; incomingNo?: string; senderVoen?: string; senderName?: string; senderDocNo?: string; senderDocDate?: string; documentType?: string; receiveMethod?: string; summary?: string; pages?: string; copies?: string; note?: string };
+type IncomingInput = { parentId?: unknown; informedDepartments?: string[]; relatedDepartments?: string[]; companyId?: number; incomingDate?: string; incomingNo?: string; senderVoen?: string; senderName?: string; senderDocNo?: string; senderDocDate?: string; documentType?: string; receiveMethod?: string; summary?: string; pages?: string; copies?: string; note?: string };
 
 // With a VÖEN the sender must be a card in the customer list, and its name comes from there.
 async function senderFromVoen(voen: string | undefined, name: string | undefined) {
@@ -2811,13 +2880,16 @@ export async function createIncomingDocument(user: SessionUser, input: IncomingI
   const sender = await senderFromVoen(input.senderVoen, input.senderName);
   const related = await documentDepartments(companyId, "incoming", input.documentType, input.relatedDepartments);
   const informed = await informedDepartments(companyId, input.informedDepartments, parseDepartments(related));
+  const link = await checkParent("incoming", { companyId, documentType: input.documentType, parentId: input.parentId, voen: sender.voen });
   const incomingNo = await nextIncomingNumber(companyId);
   const result = await db().prepare(`INSERT INTO incoming_documents
     (company_id, incoming_no, incoming_date, sender_voen, sender_name, sender_doc_no, sender_doc_date, document_type, receive_method, summary, pages, copies, note, created_by, created_by_name, created_at, related_departments, informed_departments, flow)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)`)
     .bind(companyId, incomingNo, input.incomingDate || bakuDateIso(), sender.voen, sender.name, input.senderDocNo?.trim() || null, input.senderDocDate || null,
       input.documentType?.trim() || null, input.receiveMethod || null, input.summary?.trim() || null, input.pages?.trim() || null, input.copies || null, input.note?.trim() || null, user.id, user.name, new Date().toISOString(), related, informed).run();
-  return { id: Number(result.meta.last_row_id), incomingNo };
+  const id = Number(result.meta.last_row_id);
+  if (link.parent) await db().prepare("UPDATE incoming_documents SET parent_id = ? WHERE id = ?").bind(link.parent.id, id).run();
+  return { id, incomingNo };
 }
 
 // The registrar corrects the registration (the Daxil olma No stays the admin's: it is a running number).
@@ -2837,6 +2909,9 @@ export async function updateIncomingDocument(user: SessionUser, input: IncomingI
   const informed = input.informedDepartments !== undefined
     ? await informedDepartments(Number(current.company_id), input.informedDepartments, parseDepartments(related)) : current.informed_departments;
   const incomingNo = access.admin ? pick(input.incomingNo, current.incoming_no) || current.incoming_no : current.incoming_no;
+  const link = input.parentId !== undefined || typeChanged
+    ? await checkParent("incoming", { companyId: Number(current.company_id), documentType: input.documentType ?? current.document_type, parentId: input.parentId ?? current.parent_id, voen: sender.voen, selfId: input.id }) : null;
+  if (link) await db().prepare("UPDATE incoming_documents SET parent_id = ? WHERE id = ?").bind(link.parent?.id ?? null, input.id).run();
   await db().prepare(`UPDATE incoming_documents SET incoming_no = ?, incoming_date = ?, sender_voen = ?, sender_name = ?, sender_doc_no = ?, sender_doc_date = ?, document_type = ?, receive_method = ?, summary = ?, pages = ?, copies = ?, note = ?, related_departments = ?, informed_departments = ? WHERE id = ?`)
     .bind(incomingNo, pick(input.incomingDate, current.incoming_date), sender.voen, sender.name,
       pick(input.senderDocNo, current.sender_doc_no), pick(input.senderDocDate, current.sender_doc_date), pick(input.documentType, current.document_type), pick(input.receiveMethod, current.receive_method),
@@ -2853,6 +2928,7 @@ export async function deleteIncomingDocument(user: SessionUser, id: number) {
   // Tasks not started yet go with the document, approved ones stay in the heads' history; one in progress blocks the delete.
   if (assignments.some((a) => a.task_status && !["Yeni", "Təsdiqlənib"].includes(a.task_status))) throw new Error("Sənəd icradadır — əvvəlcə şöbələrin tapşırıqları bağlanmalıdır.");
   if (requests.some((r) => !["Bağlandı", "İmtina edildi"].includes(r.status))) throw new Error("Sənəd üzrə açıq sorğu var — əvvəlcə sorğular bağlanmalıdır.");
+  await assertNoChildren("incoming", id);
   for (const a of assignments) if (a.task_id && a.task_status === "Yeni") await deleteTask(a.task_id, user.name);
   await db().prepare("DELETE FROM incoming_assignments WHERE incoming_id = ?").bind(id).run();
   await db().prepare("UPDATE work_requests SET incoming_id = NULL WHERE incoming_id = ?").bind(id).run();
@@ -2962,6 +3038,89 @@ export async function readIncomingFile(user: SessionUser, id: number) {
   return loadDocumentFile(record.file_path, record.file_key, record.file_name, record.file_type);
 }
 
+// ---------- Ana sənəd / Bağlı sənədlər (Versiya 3.52) ----------
+// A document of a type whose template names parent templates must be linked to one document of those types: in the same register
+// (an incoming document to an incoming one, and so on), the same firm and — where both have one — the same customer (VÖEN). One
+// level only: a linked document cannot be a parent, a parent cannot be linked. The template's numbering decides whether the
+// linked document's number comes from the parent ("045/2026-1"): Çıxan sənədlər — its Sənədin Nömrəsi (the Çıxış No stays the
+// firm's running number), Şirkətdaxili sənədlər — the number left empty in the form; incoming documents keep their own numbers.
+export type LinkKind = "outgoing" | "incoming" | "internal";
+const LINKS: Record<LinkKind, { table: string; no: string; date: string; voen: string; name: string; label: string }> = {
+  outgoing: { table: "outgoing_documents", no: "document_number", date: "outgoing_date", voen: "voen", name: "organization_name", label: "çıxan" },
+  incoming: { table: "incoming_documents", no: "incoming_no", date: "incoming_date", voen: "sender_voen", name: "sender_name", label: "daxil olan" },
+  internal: { table: "internal_documents", no: "document_no", date: "document_date", voen: "customer_voen", name: "customer_name", label: "şirkətdaxili" },
+};
+const parseIds = (raw: unknown): number[] => { try { const list = JSON.parse(String(raw || "[]")); return Array.isArray(list) ? [...new Set(list.map(Number).filter((n) => n > 0))] : []; } catch { return []; } };
+
+// The link rule of a document type: the names of its parent types (none — the type is not linked) and whether its number is derived.
+async function linkRule(kind: LinkKind, companyId: unknown, documentType: unknown) {
+  const template = await findTemplate<{ parent_templates: string | null; numbering: string | null }>(companyId, kind, documentType);
+  const ids = parseIds(template?.parent_templates);
+  const names = ids.length
+    ? (await db().prepare(`SELECT name FROM document_templates WHERE company_id = ? AND template_group = ? AND id IN (${ids.map(() => "?").join(",")}) ORDER BY name`)
+      .bind(Number(companyId), kind, ...ids).all<{ name: string }>()).results.map((r) => r.name)
+    : [];
+  return { parentTypes: names, derived: kind !== "incoming" && template?.numbering === "derived" };
+}
+
+// The parent a document may be linked to, checked; null when its type is not linked. selfId: the document itself (on edit).
+async function checkParent(kind: LinkKind, input: { companyId: number; documentType: unknown; parentId: unknown; voen: unknown; selfId?: number }) {
+  const rule = await linkRule(kind, input.companyId, input.documentType);
+  const parentId = Number(input.parentId) || 0;
+  if (!rule.parentTypes.length) {
+    if (parentId) throw new Error("Bu növ sənəd ana sənədə bağlanmır (Sənədlər → Şablonlar).");
+    return { parent: null, rule };
+  }
+  if (!parentId) throw new Error(`Ana sənədi seçin (${rule.parentTypes.join(", ")}).`);
+  const t = LINKS[kind];
+  const parent = await db().prepare(`SELECT id, company_id, document_type, parent_id, ${t.no} AS no, ${t.voen} AS voen FROM ${t.table} WHERE id = ?`).bind(parentId)
+    .first<{ id: number; company_id: number; document_type: string | null; parent_id: number | null; no: string | null; voen: string | null }>();
+  if (!parent || Number(parent.company_id) !== input.companyId) throw new Error("Ana sənəd tapılmadı (eyni firmanın sənədi olmalıdır).");
+  if (input.selfId && parent.id === input.selfId) throw new Error("Sənəd özünə bağlana bilməz.");
+  if (parent.parent_id) throw new Error("Seçilmiş sənəd özü başqa sənədə bağlıdır — bağlanma bir pillədir.");
+  if (!rule.parentTypes.some((name) => typeKey(name) === typeKey(parent.document_type))) throw new Error(`Ana sənəd bu növlərdən olmalıdır: ${rule.parentTypes.join(", ")}.`);
+  const voen = String(input.voen || "").trim();
+  if (voen && String(parent.voen || "").trim() && String(parent.voen).trim() !== voen) throw new Error("Ana sənəd başqa müştəriyə aiddir (VÖEN fərqlidir).");
+  if (input.selfId && (await db().prepare(`SELECT 1 AS ok FROM ${t.table} WHERE parent_id = ? LIMIT 1`).bind(input.selfId).first())) {
+    throw new Error("Bu sənədə başqa sənədlər bağlıdır — onun özü ana sənədə bağlana bilməz.");
+  }
+  return { parent, rule };
+}
+
+// "045/2026-1": the parent's number and the next free suffix among its linked documents.
+async function derivedNumber(kind: LinkKind, parent: { id: number; no: string | null }, fallback: string) {
+  const base = String(parent.no || "").trim() || fallback;
+  const t = LINKS[kind];
+  const rows = (await db().prepare(`SELECT ${t.no} AS no FROM ${t.table} WHERE parent_id = ?`).bind(parent.id).all<{ no: string | null }>()).results;
+  const used = rows.map((r) => String(r.no || "")).filter((no) => no.startsWith(`${base}-`)).map((no) => parseInt(no.slice(base.length + 1), 10)).filter((n) => !isNaN(n));
+  return `${base}-${(used.length ? Math.max(...used) : 0) + 1}`;
+}
+
+// A parent with linked documents is not deleted (they would lose it); the linked ones are removed or re-linked first.
+async function assertNoChildren(kind: LinkKind, id: number) {
+  const t = LINKS[kind];
+  const row = await db().prepare(`SELECT COUNT(*) AS n FROM ${t.table} WHERE parent_id = ?`).bind(id).first<{ n: number }>();
+  if (Number(row?.n)) throw new Error(`Bu sənədə ${row?.n} sənəd bağlıdır — əvvəlcə onları silin və ya başqa ana sənədə bağlayın.`);
+}
+
+// What the form offers as parents: the firm's documents of the parent types that are not linked themselves (the customer's only,
+// when a VÖEN is given) — whoever registers may pick a parent they do not otherwise see, so only the number, date, type and
+// customer are given.
+export async function parentCandidates(user: SessionUser, kind: LinkKind, input: { companyId: number; documentType: string; voen?: string; exclude?: number }) {
+  await ensureSchema();
+  const scope = await outgoingCompanyScope(user);
+  if (!input.companyId || (scope && !scope.includes(input.companyId))) return { parentTypes: [] as string[], derived: false, items: [] };
+  const rule = await linkRule(kind, input.companyId, input.documentType);
+  if (!rule.parentTypes.length) return { ...rule, items: [] };
+  const t = LINKS[kind];
+  const voen = String(input.voen || "").trim();
+  const items = (await db().prepare(`SELECT id, ${t.no} AS no, ${t.date} AS date, document_type, ${t.voen} AS voen, ${t.name} AS name FROM ${t.table}
+    WHERE company_id = ? AND parent_id IS NULL AND id != ? AND lower(trim(COALESCE(document_type, ''))) IN (${rule.parentTypes.map(() => "lower(trim(?))").join(",")})
+    ${voen ? `AND (trim(COALESCE(${t.voen}, '')) = ? OR trim(COALESCE(${t.voen}, '')) = '')` : ""} ORDER BY id DESC LIMIT 300`)
+    .bind(input.companyId, input.exclude || 0, ...rule.parentTypes, ...(voen ? [voen] : [])).all()).results;
+  return { ...rule, items };
+}
+
 // ---------- Şirkətdaxili sənədlər (Versiya 3.51) ----------
 // Documents used only inside the firm (anbar qaiməsi, daxili akt, xidməti yazı...): neither sent out nor received. They are only
 // registered — the number is typed by hand (as written on the paper), there is no approval, task or notification. The types are
@@ -3009,8 +3168,9 @@ function internalValues(record: Record<string, unknown>) {
 export async function getInternalDocuments(user: SessionUser) {
   await ensureSchema();
   const access = await internalAccess(user);
-  const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name
-    FROM internal_documents d LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.document_date DESC, d.id DESC`).all<Record<string, unknown>>()).results;
+  const rows = (await db().prepare(`SELECT d.*, c.name AS company_name, (SELECT name FROM employees WHERE id = d.responsible_employee_id) AS responsible_name,
+    p.document_no AS parent_no, p.document_type AS parent_type
+    FROM internal_documents d LEFT JOIN internal_documents p ON p.id = d.parent_id LEFT JOIN companies c ON c.id = d.company_id ORDER BY d.document_date DESC, d.id DESC`).all<Record<string, unknown>>()).results;
   const items = rows.flatMap((row) => {
     const rights = internalRights(access, user, row);
     if (!rights.visible) return [];
@@ -3036,7 +3196,7 @@ export async function getInternalDocuments(user: SessionUser) {
   return { items, departments, types, canRegister: registerIn.length > 0, registerIn };
 }
 
-type InternalInput = { companyId?: unknown; documentNo?: string; documentDate?: string; documentType?: string; summary?: string; relatedDepartments?: unknown; responsibleEmployeeId?: unknown; customerVoen?: string; customerName?: string; note?: string; allowDuplicate?: boolean };
+type InternalInput = { parentId?: unknown; companyId?: unknown; documentNo?: string; documentDate?: string; documentType?: string; summary?: string; relatedDepartments?: unknown; responsibleEmployeeId?: unknown; customerVoen?: string; customerName?: string; note?: string; allowDuplicate?: boolean };
 
 // The type must be one of the firm's "Şirkətdaxili sənəd" templates; its name is stored as written there.
 async function internalType(companyId: number, value: unknown) {
@@ -3080,18 +3240,22 @@ export async function createInternalDocument(user: SessionUser, input: InternalI
   const access = await internalAccess(user);
   const docType = await internalType(companyId, input.documentType);
   requireRegisterType(access, companyId, docType);
-  const documentNo = input.documentNo?.trim();
+  const customer = await internalCustomer(input.customerVoen, input.customerName);
+  const link = await checkParent("internal", { companyId, documentType: docType, parentId: input.parentId, voen: customer.voen });
+  // Versiya 3.52: a linked document whose template derives its number gets "AQ-12-1" when its number is left empty.
+  const documentNo = input.documentNo?.trim() || (link.parent && link.rule.derived ? await derivedNumber("internal", link.parent, `#${link.parent.id}`) : "");
   if (!documentNo) throw new Error("Sənədin nömrəsini yazın.");
   if (input.documentDate && !isoDate(input.documentDate)) throw new Error("Sənədin tarixi düzgün deyil.");
   if (!input.allowDuplicate) await assertNoInternalDuplicate(companyId, docType, documentNo);
   const related = await documentDepartments(companyId, "internal", docType, input.relatedDepartments);
-  const customer = await internalCustomer(input.customerVoen, input.customerName);
   const result = await db().prepare(`INSERT INTO internal_documents
     (company_id, document_no, document_date, document_type, summary, related_departments, responsible_employee_id, customer_voen, customer_name, note, created_by, created_by_name, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(companyId, documentNo, isoDate(input.documentDate) || bakuDateIso(), docType, input.summary?.trim() || null, related, internalResponsible(access, companyId, input.responsibleEmployeeId),
       customer.voen, customer.name, input.note?.trim() || null, user.id, user.name, new Date().toISOString()).run();
-  return { id: Number(result.meta.last_row_id), documentNo };
+  const id = Number(result.meta.last_row_id);
+  if (link.parent) await db().prepare("UPDATE internal_documents SET parent_id = ? WHERE id = ?").bind(link.parent.id, id).run();
+  return { id, documentNo };
 }
 
 // The firm stays; everything else may be corrected, the number included (it is the paper's own number).
@@ -3117,6 +3281,9 @@ export async function updateInternalDocument(user: SessionUser, input: InternalI
     ? await internalCustomer(input.customerVoen ?? String(current.customer_voen || ""), input.customerName ?? String(current.customer_name || ""))
     : { voen: current.customer_voen, name: current.customer_name };
   const responsible = input.responsibleEmployeeId !== undefined ? internalResponsible(access, companyId, input.responsibleEmployeeId) : current.responsible_employee_id;
+  const link = input.parentId !== undefined || typeChanged
+    ? await checkParent("internal", { companyId, documentType: docType, parentId: input.parentId ?? current.parent_id, voen: customer.voen, selfId: input.id }) : null;
+  if (link) await db().prepare("UPDATE internal_documents SET parent_id = ? WHERE id = ?").bind(link.parent?.id ?? null, input.id).run();
   await db().prepare(`UPDATE internal_documents SET document_no = ?, document_date = ?, document_type = ?, summary = ?, related_departments = ?, responsible_employee_id = ?,
     customer_voen = ?, customer_name = ?, note = ? WHERE id = ?`)
     .bind(documentNo, isoDate(input.documentDate) ?? current.document_date, docType, pick(input.summary, current.summary), related, responsible ?? null,
@@ -3128,6 +3295,7 @@ export async function deleteInternalDocument(user: SessionUser, id: number) {
   const current = await db().prepare("SELECT * FROM internal_documents WHERE id = ?").bind(id).first<Record<string, unknown>>();
   if (!current) throw new Error("Sənəd tapılmadı.");
   if (!internalRights(await internalAccess(user), user, current).may.delete) throw new Error("FORBIDDEN");
+  await assertNoChildren("internal", id);
   await db().prepare("DELETE FROM internal_documents WHERE id = ?").bind(id).run();
   // Files in the server folders are the archive and stay; only a copy kept inside the system goes with the record.
   if (current.file_key && env.FILES) await env.FILES.delete(String(current.file_key));
