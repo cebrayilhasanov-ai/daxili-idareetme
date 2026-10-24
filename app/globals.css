@@ -1230,3 +1230,47 @@ body:has(.chatgroupdialog) [data-slot=dialog-overlay]{z-index:70}.chatgroupdialo
 .chatgroupowner{margin:0;font-size:13px;color:#334155}
 .chatgroupmembers>input{margin-bottom:8px}.chatgroupmembers>div{max-height:280px;overflow-y:auto}
 .chatgrouphint{color:#64748b;font-size:12px}
+/* Versiya 3.54: Kadrlar → Əməkhaqqı cədvəlləri (tabel, əlavə saatlar, əməkhaqqı cədvəli) */
+.payrollpage .payrolltoolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:14px 22px 0}
+.payrolltoolbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#64748b;font-weight:600}
+.payrolltoolbar select,.payrolltoolbar input{height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;background:#fff;color:#0f172a;font-size:14px}
+.payrolltoolbar>b{align-self:center;font-size:15px;color:#0f172a}.payrolltoolbar .hrtabs{margin:0 0 0 auto}
+.payrollpage .hrnote{margin:14px 22px 0;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;color:#166534;padding:10px 14px;font-size:12px;font-weight:700}
+.payrollpage .hralert{cursor:default}
+.payrollactions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;margin:12px 22px 0}
+.payrollactions .hint{margin-right:auto;color:#b45309;font-size:12px;font-weight:600}
+.payrollpage p.hint{margin:10px 22px 16px;color:#64748b;font-size:12px;line-height:1.5}
+.tabelstatuses{display:flex;flex-wrap:wrap;gap:8px;margin:14px 22px 0}
+.tabelstatus{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 12px;border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:10px;background:#fff;font-size:13px}
+.tabelstatus .chip{padding:1px 8px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:11px;font-weight:700}
+.tabelstatus.submitted{border-left-color:#2563eb}.tabelstatus.submitted .chip{background:#dbeafe;color:#1d4ed8}
+.tabelstatus.accepted{border-left-color:#16a34a}.tabelstatus.accepted .chip{background:#dcfce7;color:#166534}
+.tabelstatus.returned{border-left-color:#ea580c}.tabelstatus.returned .chip{background:#ffedd5;color:#9a3412}
+.tabelstatus small{color:#64748b;font-size:11px}.tabelstatusbuttons{display:flex;gap:6px}
+.tabelscroll{margin:12px 22px 0;overflow:auto;max-height:70vh;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+.tabelgrid,.paytable{border-collapse:separate;border-spacing:0;font-size:12px;width:max-content;min-width:100%}
+.tabelgrid th,.tabelgrid td,.paytable th,.paytable td{border-right:1px solid #eef2f7;border-bottom:1px solid #eef2f7;padding:0;text-align:center;white-space:nowrap}
+.tabelgrid thead th,.paytable thead th{position:sticky;top:0;z-index:2;background:#f8fafc;color:#475569;font-weight:700;padding:6px 4px}
+.tabelgrid thead th small{display:block;font-size:10px;font-weight:500;color:#94a3b8}
+.tabelgrid thead th.off{background:#fef2f2;color:#b91c1c}
+.tabelgrid td{min-width:30px;height:30px}.tabelgrid td input{width:30px;height:28px;border:0;background:transparent;text-align:center;font:inherit;color:inherit;padding:0}
+.tabelgrid td input:focus{outline:2px solid #2563eb;outline-offset:-2px;background:#fff}
+.tabelgrid .namecol,.paytable td.l,.paytable th.l{position:sticky;left:0;z-index:1;background:#fff;text-align:left;padding:4px 10px;min-width:190px}
+.tabelgrid thead .namecol,.paytable thead th.l{z-index:3;background:#f8fafc}
+.tabelgrid .namecol small,.paytable td.l small{display:block;color:#94a3b8;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.tabelgrid tr.deptrow td{position:sticky;left:0;text-align:left;padding:6px 10px;background:#f1f5f9;font-weight:700;color:#0f172a}
+.tabelgrid tr.deptrow span{margin-left:8px;color:#64748b;font-weight:500;font-size:11px}
+.tabelgrid td.code-İ,.tabelgrid td.code-B{background:#f8fafc;color:#94a3b8}.tabelgrid td.code-B{color:#dc2626}
+.tabelgrid td.code-M,.tabelgrid td.code-Ö,.tabelgrid td.code-S,.tabelgrid td.code-T{background:#ecfdf5;color:#047857;font-weight:700}
+.tabelgrid td.code-X{background:#fff7ed;color:#c2410c;font-weight:700}.tabelgrid td.code-E{background:#eff6ff;color:#1d4ed8;font-weight:700}
+.tabelgrid td.code-Q{background:#fef2f2;color:#b91c1c;font-weight:700}.tabelgrid td.code-out,.tabelgrid td.out{background:#f1f5f9;color:#cbd5e1}
+.tabelgrid td.locked{cursor:not-allowed}.tabelgrid td.manual{box-shadow:inset 0 -2px 0 #f59e0b}
+.tabelgrid td.bad{background:#fee2e2!important;box-shadow:inset 0 0 0 2px #dc2626}
+.tabelgrid td.muted{color:#94a3b8;padding:0 6px}
+.tabellegend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 22px 18px;font-size:12px;color:#475569}
+.tabellegend .legendnote{flex-basis:100%;color:#64748b}
+.paytable td{padding:4px 8px}.paytable td.n{text-align:right;font-variant-numeric:tabular-nums}.paytable .strong{font-weight:700;color:#0f172a}
+.paytable th{white-space:normal;max-width:110px}.paytable .warn{color:#dc2626;font-weight:700}
+.paytable tfoot td{position:sticky;bottom:0;background:#f8fafc;font-weight:700;padding:6px 8px}
+.paytable .payinput{width:84px;height:28px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px;text-align:right;font:inherit}
+@media (max-width:700px){.payrolltoolbar .hrtabs{margin-left:0}.tabelscroll{margin:12px 8px 0}.tabelgrid .namecol,.paytable td.l{min-width:140px}}

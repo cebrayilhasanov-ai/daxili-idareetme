@@ -100,9 +100,9 @@ export function DocumentsOverview({ showTemplates, showOutgoing, showIncoming, s
   return <SectionOverview cards={cards} loading={!counts}/>;
 }
 
-type HrTab = "violations" | "orders" | "personnel" | "customers" | "calendar" | "settings" | "reports";
-export function HrOverview({ showViolations, showPersonnel, showOrders, showReports, activeCompanyId, open }: {
-  showViolations: boolean; showPersonnel: boolean; showOrders: boolean; showReports: boolean; activeCompanyId: number | null; open: (tab: HrTab) => void;
+type HrTab = "violations" | "orders" | "payroll" | "personnel" | "customers" | "calendar" | "settings" | "reports";
+export function HrOverview({ showViolations, showPersonnel, showOrders, showPayroll, showReports, activeCompanyId, open }: {
+  showViolations: boolean; showPersonnel: boolean; showOrders: boolean; showPayroll: boolean; showReports: boolean; activeCompanyId: number | null; open: (tab: HrTab) => void;
 }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   useEffect(() => {
@@ -138,9 +138,11 @@ export function HrOverview({ showViolations, showPersonnel, showOrders, showRepo
   if (showOrders) cards.push({ key: "orders", title: "Əmrlər", text: "Məzuniyyət, işdən çıxma və digər əmrlər.", onOpen: () => open("orders"), stats: [
     { label: "imzalı nüsxə gözləyir", value: n("ordersPending"), alert: true }, { label: "cəmi", value: n("orders") },
   ] });
+  // Versiya 3.54: the tabel (department heads) and the payroll (payroll accountant).
+  if (showPayroll) cards.push({ key: "payroll", title: "Əməkhaqqı cədvəlləri", text: "Aylıq tabel, əlavə saatlar və əməkhaqqı cədvəli.", onOpen: () => open("payroll") });
   if (showReports) cards.push({ key: "reports", title: "Hesabatlar", text: "İşçilər, əmrlər, məzuniyyətlər və nöqsanlar üzrə hesabatlar.", onOpen: () => open("reports") });
   // Same order as the menu (Versiya 2.71): daily work first, settings-like sections last.
-  const order = ["personnel", "orders", "violations", "customers", "calendar", "settings", "reports"];
+  const order = ["personnel", "orders", "payroll", "violations", "customers", "calendar", "settings", "reports"];
   cards.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   return <SectionOverview cards={cards} loading={!counts}/>;
 }

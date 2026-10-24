@@ -20,6 +20,7 @@ export const SECTION_KEYS = [
   "hr.violations",
   "hr.personnel",
   "hr.orders",
+  "hr.payroll",
   "tasks.reports",
   "documents.reports",
   "hr.reports",
@@ -32,17 +33,18 @@ export type SectionAction = (typeof ACTIONS)[number];
 export const ACTION_LABELS: Record<SectionAction, string> = { view: "Baxış", add: "Əlavə et", edit: "Dəyişiklik et", delete: "Sil" };
 
 export const LEVELED_SECTIONS: readonly SectionKey[] = [
-  "dashboard.customers", "tasks.requests", "documents.outgoing", "documents.incoming", "documents.internal", "hr.violations", "hr.personnel", "hr.orders",
+  "dashboard.customers", "tasks.requests", "documents.outgoing", "documents.incoming", "documents.internal", "hr.violations", "hr.personnel", "hr.orders", "hr.payroll",
 ];
 // Sections that start CLOSED (personal ID data, salaries; from Versiya 3.41 the Hesabatlar of Tapşırıqlar, Sənədlər and Kadrlar;
-// from 3.51 Şirkətdaxili sənədlər — a new register, so nobody gets it until the admin opens it).
-export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel", "hr.orders", "tasks.reports", "documents.reports", "hr.reports", "documents.internal"];
+// from 3.51 Şirkətdaxili sənədlər — a new register, so nobody gets it until the admin opens it; from 3.54 Əməkhaqqı cədvəlləri).
+export const OPT_IN_SECTIONS: readonly SectionKey[] = ["hr.personnel", "hr.orders", "hr.payroll", "tasks.reports", "documents.reports", "hr.reports", "documents.internal"];
 // Rights a leveled section does NOT give by default (before 2.62 customers were edited/deleted and violations recorded only by the admin).
 const DEFAULT_DENIED: Partial<Record<SectionKey, readonly SectionAction[]>> = {
   "dashboard.customers": ["edit", "delete"],
   "hr.violations": ["add", "edit", "delete"],
   "hr.personnel": ACTIONS,
   "hr.orders": ACTIONS,
+  "hr.payroll": ACTIONS,
   "documents.internal": ACTIONS,
 };
 
@@ -94,7 +96,7 @@ export function deniedFromStored(stored: string[]): Set<string> {
 // Since Versiya 3.00 every section is given per firm (the dialog lists the firms one under another, no "Ümumi" part): Şəxsi işlərim,
 // Sabit işlər and Çat are plain on/off (stored as ["view"]); Müştərilər and Çat do not belong to a firm and are open when any firm opens them.
 // Versiya 3.41: Hesabatlar under Tapşırıqlar, Sənədlər and Kadrlar — plain on/off per firm, closed until the admin opens them.
-export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "tasks.reports", "documents.incoming", "documents.outgoing", "documents.internal", "dashboard.customers", "documents.reports", "hr.personnel", "hr.orders", "hr.violations", "hr.reports", "chat"] as const;
+export const FIRM_SECTIONS = ["tasks.requests", "tasks.mine", "tasks.fixed", "tasks.reports", "documents.incoming", "documents.outgoing", "documents.internal", "dashboard.customers", "documents.reports", "hr.personnel", "hr.orders", "hr.payroll", "hr.violations", "hr.reports", "chat"] as const;
 export type FirmSection = (typeof FIRM_SECTIONS)[number];
 export const TYPED_SECTIONS: readonly FirmSection[] = ["documents.outgoing", "documents.incoming", "documents.internal"];
 export const isFirmSection = (section: string): section is FirmSection => (FIRM_SECTIONS as readonly string[]).includes(section);
@@ -136,9 +138,15 @@ export const SECTION_PARTS: Partial<Record<SectionKey, SectionPartGroup[]>> = {
     { key: "other", label: "Digər əmrlər", parts: [{ key: "other", label: "Digər əmrlər", actions: ACTIONS }] },
     { key: "settings", label: "Parametrlər", parts: [{ key: "settings", label: "Parametrlər", actions: FIXED }] },
   ],
+  // Versiya 3.54: Əməkhaqqı cədvəlləri — the payroll accountant (e.g. the head of Mühasibatlıq). A department head fills the tabel
+  // of their own department without this right; it gives the tabel of every department of the firm and the payroll.
+  "hr.payroll": [
+    { key: "timesheet", label: "Bütün şöbələrin tabeli", parts: [{ key: "timesheet", label: "Bütün şöbələrin tabeli (qəbul et, geri qaytar)", actions: FIXED }] },
+    { key: "payroll", label: "Əməkhaqqı cədvəli", parts: [{ key: "payroll", label: "Əməkhaqqı cədvəli (doldur, təsdiqlə)", actions: FIXED }] },
+  ],
 };
 // Sections whose every right is given in their parts: the section's own checkbox only opens it (Baxış).
-export const PARTS_ONLY_SECTIONS: readonly SectionKey[] = ["hr.orders"];
+export const PARTS_ONLY_SECTIONS: readonly SectionKey[] = ["hr.orders", "hr.payroll"];
 export const sectionParts = (section: string): SectionPart[] => (SECTION_PARTS[section as SectionKey] ?? []).flatMap((g) => g.parts);
 export type PartRights = Record<SectionAction, boolean>;
 export type PartsRights = Record<string, PartRights>;
