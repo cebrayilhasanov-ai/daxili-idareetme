@@ -1,6 +1,6 @@
 "use client";
 
-// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36; sabit işlərdə dövr sütunlarının süzgəci — 3.37; cədvəllər öz içində sürüşür, başlıq sabit — 3.38; menyu adları İşlər və Tapşırıqlarım, “Verdiyim tapşırıqlar” tabı — 3.47; geri qaytarma səbəbi və yeni son tarix — 3.48; səbəb Qiymətləndirmədən ayrıldı — 3.49; Şirkətdaxili sənədlər — 3.51; Ana sənəd / Bağlı sənədlər — 3.52): how each section works, written into the program. A guide is shown only to those who may open its
+// Təlimatlar (Versiya 2.78; Tapşırıqlar və Sorğular — 2.79; Çat və Tənzimləmələr — 2.81; təsdiq qaydası — 2.82; şablon papkalarının seçilməsi — 2.83; sabit işlərdə ✓-suz rəngli xanalar — 2.84; rəhbər əməkdaşlarının şəxsi işlərini görür — 2.85; müştəri üzrə sənəd tarixçəsi və qayıtmayan imzalı nüsxələr zəngdə — 2.86; “Sənəd dövriyyəsi” sütunu — 2.87; “Bütün firmalar” seçimi — 2.88; sabit işlərdə hesablama başlanğıcı və icra qeydinin geri götürülməsi — 2.89; sabit işin redaktəsi, silinməsi və cədvəl filtrləri — 2.90; həftəlik işin son tarixi növbəti həftədə — 2.91; işçi rəngləri və həftə tarixlərinin düzəlişi — 2.92; bir “Sabit işlər” bölməsi, rüblük / yarımillik / illik işlər, bir icazə — 2.93; rüblük işin sabit son tarixi, uzun dövrlərin hesablanması və “Əməkdaşlarımın sabit işləri” — 2.94; təyin edilməyən firma xanası boz — 2.95; admin hesabı iş və tapşırıq yaratmır, bölmə görünür — 2.97–2.98; firma üzrə Giriş icazələri və sənəd növləri üzrə qeydiyyat — 2.99; firmalar alt-alta, bütün bölmələr firma üzrə — 3.00; “Başqa firmadan köçür” — 3.01; tamamlanmış işin faylı dəyişir, həvalədə yalnız addımın faylı — 3.02; bir neçə fayl (ən çox 10) — 3.04; şəxsi işin avtomatik 1-ci addımı, addımın açıqlaması və göndərərkən faylların seçilməsi — 3.05; 1-ci addım silinmir — 3.09; rüblük iş son tarixədək təyin edilibsə dövr hesablanır — 3.10; oxunmamış çat mesajının silinməsi — 3.11; Ana səhifə → Mənim performansım — 3.12; dizayn faylı ilə eyni görünüş — 3.13; Sabit işlərdə Firma sütunu sola düzülür — 3.14; rəhbərin və əməkdaşlarının sabit işləri bir cədvəldə — 3.15; cədvəllərdə şrift 2px böyüdü — 3.16; Nöqsanlar: “Əlaqəli məlumat” faylları və Ctrl+V ilə ekran görüntüsü — 3.17; Nöqsanlar qaralama və təsdiq ilə — 3.18; Personallar kartının hər hissəsinə ayrıca icazə — 3.19; Əmrlərin hər tabına ayrıca icazə — 3.20; siyahıların avtomatik yenilənməsi — 3.21; günlük sabit işlər və icra qeydinə fayl — 3.22; günlük işlərin başlığında yalnız gün — 3.23; müştərilərin Excel-dən yüklənməsi — 3.24; Inter şrifti, kiçik yazılar böyük və tünd — 3.25; Şəxsi işlərim → Qeydlərim — 3.26; Rəhbərə müraciət (sabit işdən və addımdan), Mənə müraciətlər — 3.27; müraciətə cavab 🔔-də — 3.28; Siyahı | Lövhə görünüşü və şəxsi işdə firmanın mütləq olması — 3.31; Vaciblik (işlərdə, tapşırıqlarda, sorğularda) — 3.32; tamamlanmış işlər əvvəlcə gizli, Siyahı | Lövhə düymələri tab formasında — 3.33; düymələr tabların sırasında, sağda — 3.34; sorğunun növü — 3.36; sabit işlərdə dövr sütunlarının süzgəci — 3.37; cədvəllər öz içində sürüşür, başlıq sabit — 3.38; menyu adları İşlər və Tapşırıqlarım, “Verdiyim tapşırıqlar” tabı — 3.47; geri qaytarma səbəbi və yeni son tarix — 3.48; səbəb Qiymətləndirmədən ayrıldı — 3.49; Şirkətdaxili sənədlər — 3.51; Ana sənəd / Bağlı sənədlər — 3.52; çat qrupları (şöbə rəhbərləri yaradır) — 3.53): how each section works, written into the program. A guide is shown only to those who may open its
 // section, and each of its parts only to the audience it is for (everyone, the registrar, department heads, the director, the admin).
 // The texts follow what the code does; when a section's rules change, its guide here changes with it.
 
@@ -691,7 +691,7 @@ const GUIDES: Guide[] = [
   },
   {
     id: "chat", group: "Çat", title: "Çat", path: "Yuxarıdakı 💬 düyməsi", section: "chat",
-    intro: "Proqramın istifadəçiləri arasında daxili yazışma: ümumi işçi qrupu və şəxsi söhbətlər, fayl göndərmək, yeni mesaj bildirişləri.",
+    intro: "Proqramın istifadəçiləri arasında daxili yazışma: ümumi işçi qrupu, şöbə rəhbərlərinin yaratdığı iş qrupları və şəxsi söhbətlər, fayl göndərmək, yeni mesaj bildirişləri.",
     parts: [
       { audience: "all", title: "Çatı açmaq və pəncərə", blocks: [
         { list: [
@@ -704,9 +704,38 @@ const GUIDES: Guide[] = [
         { list: [
           "Yuxarıda Axtarış — ada görə süzür.",
           "Ən yuxarıda həmişə “Ümumi işçi qrupu” (bütün aktiv istifadəçilər) durur.",
+          "Onun altında üzvü olduğunuz iş qrupları — son mesajın vaxtına görə; bağlanmış qruplar (“bağlanıb”) onlardan sonra.",
           "Sonra yazışdığınız adamlar — son mesajın vaxtına görə, ən sonuncu birinci. Yeni mesaj gələndə və ya siz yazanda həmin adam yuxarı qalxır.",
           "Sonda hələ yazışmadığınız istifadəçilər (əlifba ilə, “Yazışma yoxdur”) — adına basanda söhbət elə orada açılır.",
           "Adın altında son mesajın əvvəli, sağda vaxt və oxunmamış mesajların sayı görünür.",
+        ] },
+      ] },
+      { audience: "all", title: "İş qrupları", blocks: [
+        { list: [
+          "İş qrupunu yalnız şöbə rəhbərləri və direktor yaradır. Siz qrupa əlavə ediləndə o, siyahınızda görünür və qrupun bütün köhnə yazışmasını görürsünüz.",
+          "Qrupun başlığında firma, şöbə və üzvlərin sayı yazılır.",
+          "Qrupdan çıxarılsanız, qrup siyahınızdan tam yox olur — köhnə mesajları da görmürsünüz.",
+          "Bağlanmış qrupun yazışmasını oxumaq olar, amma ona yazmaq olmur.",
+        ] },
+      ] },
+      { audience: "head", title: "İş qrupunu yaratmaq və idarə etmək", blocks: [
+        { steps: [
+          "“Söhbətlər” başlığındakı “+” (Yeni qrup) düyməsinə basın — bu düymə yalnız şöbə rəhbərində və direktorda görünür.",
+          "Qrupun adını yazın. Bir neçə şöbəyə (və ya firmaya) rəhbərlik edirsinizsə, qrupun hansı şöbəyə aid olduğunu seçin.",
+          "Üzvləri seçin — istənilən aktiv istifadəçini, başqa şöbələrdən də; ada görə axtarmaq olar. Siz qrupda avtomatik olursunuz.",
+          "“Qrupu yarat” basın — qrup bütün üzvlərin siyahısında görünür.",
+        ] },
+        { list: [
+          "Qrupu açanda başlıqdakı ⚙ düyməsi ilə adını dəyişmək, üzv əlavə etmək və ya çıxarmaq olar. Çıxarılan üzvdən qrup tam gizlənir, yeni üzv bütün yazışmanı görür.",
+          "Arxiv düyməsi qrupu bağlayır (yazmaq olmur, oxumaq olur); yenidən basanda qrup açılır.",
+          "Qrupu onun aid olduğu şöbənin indiki rəhbəri idarə edir. Rəhbər dəyişəndə qrupu yeni rəhbər idarə edir və o, qrupa avtomatik üzv olur.",
+          "Qrupun yaradılması, dəyişdirilməsi və bağlanması Əməliyyat jurnalına yazılır.",
+        ] },
+      ] },
+      { audience: "admin", title: "Admin və iş qrupları", blocks: [
+        { list: [
+          "Admin bütün iş qruplarını görür, üzvü olmadığı qrupları da — onlarda yalnız baxır, yaza bilmir və bu qruplarda mesaj oxunmamış sayılmır.",
+          "Admin iş qrupu yaratmır və qrupları idarə etmir — bunu şöbə rəhbərləri edir.",
         ] },
       ] },
       { audience: "all", title: "Mesaj yazmaq", blocks: [
@@ -715,7 +744,7 @@ const GUIDES: Guide[] = [
           "📎 ilə fayl əlavə olunur (ən çox 25 MB).",
           "Şəxsi söhbətdə öz mesajınızın yanında ✓ — göndərilib, ✓✓ — qarşı tərəf oxuyub.",
           "Söhbət yalnız ekranda açıq olanda oxunmuş sayılır.",
-          "Öz mesajınızı yalnız hələ heç kim oxumayıbsa silə bilərsiniz: siçanı mesajın üstünə gətirin və yanındakı səbət düyməsinə basın. Şəxsi söhbətdə bu ✓ olanda mümkündür, ✓✓ olandan sonra mümkün deyil. Ümumi işçi qrupunda mesajı ən azı bir nəfər oxuyubsa, silmək olmur.",
+          "Öz mesajınızı yalnız hələ heç kim oxumayıbsa silə bilərsiniz: siçanı mesajın üstünə gətirin və yanındakı səbət düyməsinə basın. Şəxsi söhbətdə bu ✓ olanda mümkündür, ✓✓ olandan sonra mümkün deyil. Qruplarda (ümumi və iş qruplarında) mesajı ən azı bir nəfər oxuyubsa, silmək olmur.",
           "Silinən mesajın yerində hamı üçün “🚫 Mesaj silindi” yazısı qalır, mesajın mətni və faylı silinir. Başqasının mesajını heç kim, admin də silə bilməz. Silmə Əməliyyat jurnalına yazılır.",
         ] },
       ] },

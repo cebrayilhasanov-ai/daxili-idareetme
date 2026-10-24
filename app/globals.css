@@ -1220,3 +1220,13 @@ body.chatresizing{user-select:none;cursor:grabbing}
 .returnnotebox{display:flex;flex-direction:column;gap:4px;margin:4px 0;padding:8px 10px;border:1px solid #fed7aa;border-left:3px solid #ea580c;border-radius:8px;background:#fff7ed}
 .returnnotebox>b{font-size:12px;color:#9a3412}.returnnotebox .returnnote{margin-top:0;font-size:13px;color:#26364d}
 .stepreturndue{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b}.stepreview .steprequestactions .stepreturndue input{flex:0 0 auto;min-width:0;width:190px;height:32px}
+/* Versiya 3.53: chat work groups */
+.chatgroupactions{margin-left:auto;display:flex;gap:6px;flex:none}.chatgroupactions+.chatpagectl{margin-left:8px}
+.chatgroupactions .chatsound svg{width:16px;height:16px}
+.chatlisthead .chatsound+.chatsound{margin-left:6px}.chatlisthead>div:first-child{margin-right:auto}
+.threadlist .chatclosedtag,.chatclosedtag{display:inline-block;min-width:0;height:auto;margin-left:6px;padding:1px 6px;border-radius:6px;background:#e2e8f0!important;color:#475569!important;font-size:11px;font-style:normal;font-weight:600}
+.composer.chatreadonly{padding:16px 22px;color:#64748b;font-size:13px;text-align:center}
+body:has(.chatgroupdialog) [data-slot=dialog-overlay]{z-index:70}.chatgroupdialog{z-index:71!important}
+.chatgroupowner{margin:0;font-size:13px;color:#334155}
+.chatgroupmembers>input{margin-bottom:8px}.chatgroupmembers>div{max-height:280px;overflow-y:auto}
+.chatgrouphint{color:#64748b;font-size:12px}
