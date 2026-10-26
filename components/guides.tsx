@@ -41,6 +41,7 @@ const GUIDES: Guide[] = [
           "Tablar: Ümumi görünüş · Tapşırıqlar · Sabit işlər · Rəhbərin qeydləri · Keçmiş dövrlər. “Ümumi görünüş”də: Performans trendi (son 7 rübün balı), Tapşırıq bölgüsü (Tamamlanan, Davam edən, Gecikən, Başlanmayan), Bal tərkibi (hər hissənin 100 üzərindən dəyəri), rübün tapşırıqları (vəziyyət və qiymət zolağı), rəhbərin son qeydi və sabit işlər.",
           "“Keçmiş dövrlər” — son 8 rübün balı və göstəriciləri bir cədvəldə.",
           "“Ümumi baxış” tabı — Ana səhifənin əvvəlki görünüşü (qiymətləndirmə, tapşırıq və nöqsan qrafikləri).",
+          "“Ümumi baxış”da şöbə rəhbəri (Firmalar → Struktur) “Şöbəm” kartını görür (Versiya 3.59): rəhbəri olduğu hər şöbə üçün bu gün işləyən personalların sayı və onların Personallar kartlarındakı aylıq əmək haqlarının cəmi. Yalnız cəmi görünür, ayrı-ayrı işçilərin maaşı yox; ayrıca icazə lazım deyil. Firmanın direktoru (və admin) “Şöbələr” cədvəlində firmanın bütün şöbələrini, sonda ümumi cəmi görür. Yuxarıda firma seçilibsə, yalnız o firma göstərilir.",
         ] },
       ] },
       { audience: "all", title: "Necə hesablanır", blocks: [
