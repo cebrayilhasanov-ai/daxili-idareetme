@@ -1,31 +1,34 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Check, Printer, RotateCcw, Save, Send, Undo2 } from "lucide-react";
+import { Check, FileSpreadsheet, Printer, RotateCcw, Save, Send, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDay, indexCalendar, normalizeParams, weekday, type CalendarDay, type HrParams } from "@/lib/hr-calc";
-import { money } from "@/lib/hr-orders";
 import {
-  DAY_CODES, EMPTY_INPUTS, OVERTIME_MULTIPLIER, PAYROLL_INPUT_KEYS, normalizeMark, normalizeOvertime, overtimeHours, payrollRow, periodDays, timesheetRow,
-  type LeavePay, type PayrollInputs, type PayrollRow, type TimesheetLeave,
+  DAY_CODES, EMPTY_INPUTS, OVERTIME_MULTIPLIER, PAYROLL_INPUT_KEYS, isHours, jobKindLabel, normalizeMark, normalizeOvertime, overtimeHours, payrollRow, periodDays, timesheetRow,
+  type LeavePay, type PayrollInputs, type PayrollRow, type SettlementPay, type TimesheetLeave,
 } from "@/lib/payroll-calc";
 
 // Kadrlar → Əməkhaqqı cədvəlləri (Versiya 3.54): per firm and month the tabel (filled automatically from the production calendar
 // and leave orders; a head writes only what differs and hands it in), the overtime tabel and the payroll built from them.
 // Versiya 3.55: two tabs — Tabel (overtime is a second line under each worker) and Hesablanan əməkhaqqı; whoever sees salaries
 // also gets the payroll worked out live in the tabel itself.
+// Versiya 3.56: the payroll in the firm's own Excel form (salary by the month's norm hours, Əsas / Əlavə place of work, final
+// settlement, aliment and advance after tax); both tabs can be saved as an Excel file.
 // Edits stay on the page until "Yadda saxla", then go to /api/hr/payroll in one request.
 
 type Access = { allDepartments: boolean; editAll: boolean; heads: string[]; payView: boolean; payEdit: boolean };
-type Emp = { id: number; last_name: string; first_name: string; patronymic: string | null; position: string | null; department: string | null; hire_date: string; termination_date: string | null; work_week: number; monthly_salary?: number | null };
+type Emp = { id: number; last_name: string; first_name: string; patronymic: string | null; position: string | null; department: string | null; hire_date: string; termination_date: string | null; work_week: number; monthly_salary?: number | null; fin?: string | null; job_kind?: string | null };
 type Sheet = { department: string; status: string; submitted_by: string | null; submitted_at: string | null; decided_by: string | null; decided_at: string | null; return_note: string | null };
-type SnapshotRow = PayrollRow & { hr_employee_id: number; name: string; position: string | null; department: string; workedDays: number; normDays: number; overtime: number; inputs: PayrollInputs; leaveDetails: LeavePay[] };
+// Rows of a month approved before Versiya 3.56 lack the newer fields.
+type SnapshotRow = Omit<PayrollRow, "settlementPay" | "payable"> & { settlementPay?: number; payable?: number; hr_employee_id: number; name: string; fin?: string | null; jobKind?: string; position: string | null; department: string;
+  workedDays: number; normDays: number; workedHours?: number; normHours?: number; overtime: number; inputs: PayrollInputs; leaveDetails: LeavePay[]; settlementDetails?: SettlementPay[] };
 type MonthData = {
   firms: { id: number; name: string }[]; period: string; companyId: number | null; access: Access | null;
   employees?: Emp[]; calendar?: CalendarDay[]; leaves?: (TimesheetLeave & { order_no: string | null; order_id: number | null })[]; params?: HrParams; departments?: Sheet[];
   marks?: { hr_employee_id: number; marks: Record<string, string>; overtime: Record<string, number> }[];
   payroll?: { status: string; approved_by: string | null; approved_at: string | null; snapshot: SnapshotRow[] | null };
-  leavePay?: LeavePay[]; inputs?: (PayrollInputs & { hr_employee_id: number })[];
+  leavePay?: LeavePay[]; settlementPay?: SettlementPay[]; inputs?: (PayrollInputs & { hr_employee_id: number })[];
 };
 type Edit = { marks: Record<string, string>; overtime: Record<string, string> };
 type InputEdit = Record<string, string>;
@@ -38,7 +41,61 @@ const personName = (e: { last_name: string; first_name: string; patronymic: stri
 const deptName = (name: string) => name || "Şöbə göstərilməyib";
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 const num = (value: number) => value.toLocaleString("az-AZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const INPUT_LABELS: Record<(typeof PAYROLL_INPUT_KEYS)[number], string> = { bonus: "Mükafat", otherAdd: "Digər əlavə", advance: "Avans", alimony: "Aliment", otherDed: "Digər tutulma" };
+const safeName = (value: string) => value.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\s+/g, "_").slice(0, 60) || "firma";
+
+// One worker of the payroll, whether worked out live or taken from an approved month.
+type PayRow = { id: number; name: string; fin: string | null; jobKind: string; position: string | null; department: string; workedHours: number | null; normHours: number | null; overtime: number;
+  inputs: PayrollInputs; leavePay: LeavePay[]; settlement: SettlementPay[]; pay: PayrollRow };
+type PayColumn = { key: string; label: string; kind: "text" | "money" | "hours"; width: number; value: (r: PayRow) => unknown; total?: boolean; strong?: boolean; input?: (typeof PAYROLL_INPUT_KEYS)[number] };
+const col = (key: string, label: string, kind: PayColumn["kind"], width: number, value: PayColumn["value"], more: Partial<PayColumn> = {}): PayColumn => ({ key, label, kind, width, value, total: kind !== "text", ...more });
+// The columns and their groups as in the firm's Excel payroll (A-M); a group without a label is one column over both header rows.
+const PAY_GROUPS: { label?: string; columns: PayColumn[] }[] = [
+  { columns: [col("no", "№", "text", 5, () => "")] },
+  { columns: [col("fin", "FİN", "text", 10, (r) => r.fin || "")] },
+  { columns: [col("name", "Soyadı, adı, atasının adı", "text", 30, (r) => r.name)] },
+  { columns: [col("post", "Şöbə-vəzifəsi", "text", 30, (r) => [r.department, r.position].filter(Boolean).join(" — "))] },
+  { columns: [col("job", "İş yeri", "text", 8, (r) => jobKindLabel(r.jobKind))] },
+  { columns: [col("salary", "Əmək haqqı", "money", 11, (r) => r.pay.salary)] },
+  { label: "HESABLANIB", columns: [
+    col("hours", "Faktiki iş saatları", "hours", 9, (r) => r.workedHours),
+    col("salaryPart", "Hesablanmış əmək haqqı", "money", 11, (r) => r.pay.salaryPart),
+    col("overtimePay", "Əlavə saat", "money", 10, (r) => r.pay.overtimePay),
+    col("bonus", "Mükafat / Maddi yardım", "money", 11, (r) => r.inputs.bonus, { input: "bonus" }),
+    col("leave", "Məzuniyyət / Son hesablaşma", "money", 12, (r) => r.pay.leavePay + r.pay.settlementPay),
+  ] },
+  { columns: [col("gross", "CƏMİ", "money", 11, (r) => r.pay.gross, { strong: true })] },
+  { label: "TUTULMUŞDUR", columns: [
+    col("tax", "Gəlir vergisi", "money", 10, (r) => r.pay.tax),
+    col("dsmf", "Pensiya Fondu", "money", 10, (r) => r.pay.dsmf),
+    col("unemployment", "İ.S.H. 0,5%", "money", 9, (r) => r.pay.unemployment),
+    col("medical", "İ.T.S.H.", "money", 9, (r) => r.pay.medical),
+    col("withheld", "CƏMİ tutulmuşdur", "money", 11, (r) => r.pay.withheld, { strong: true }),
+  ] },
+  { label: "İşəgötürən tərəfindən", columns: [
+    col("employerDsmf", "Pensiya Fondu", "money", 10, (r) => r.pay.employerDsmf),
+    col("employerUnemployment", "İ.S.H. 0,5%", "money", 9, (r) => r.pay.employerUnemployment),
+    col("employerMedical", "İ.T.S.H.", "money", 9, (r) => r.pay.employerMedical),
+  ] },
+  { columns: [col("payable", "Ödənilməli məbləğ", "money", 11, (r) => r.pay.payable, { strong: true })] },
+  { columns: [col("alimony", "Aliment", "money", 10, (r) => r.inputs.alimony, { input: "alimony" })] },
+  { columns: [col("advance", "Ödənilmiş avans", "money", 10, (r) => r.inputs.advance, { input: "advance" })] },
+  { columns: [col("net", "Qalıq məbləğ", "money", 11, (r) => r.pay.net, { strong: true })] },
+];
+const PAY_COLUMNS = PAY_GROUPS.flatMap((g) => g.columns);
+const shown = (c: PayColumn, value: unknown) => value === null || value === undefined ? "—" : c.kind === "hours" ? String(value) : Number(value) ? num(Number(value)) : "—";
+// The month's norm hours of a 5-day week — the one most workers have — for the summary under the table.
+function normHoursOf(list: PayRow[]) {
+  const counts = new Map<number, number>();
+  for (const r of list) if (r.normHours !== null) counts.set(r.normHours, (counts.get(r.normHours) || 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+type XCell = { value?: string | number; type?: NumberConstructor | StringConstructor; format?: string; fontWeight?: "bold"; fontSize?: number; backgroundColor?: string; textColor?: string; wrap?: boolean;
+  align?: "left" | "center" | "right"; alignVertical?: "top" | "center" | "bottom"; borderStyle?: "thin"; columnSpan?: number; rowSpan?: number };
+async function saveWorkbook(sheets: { data: (XCell | null)[][]; sheet: string; columns: { width: number }[]; stickyRowsCount?: number }[], fileName: string) {
+  const { default: writeXlsxFile } = await import("write-excel-file/browser");
+  await writeXlsxFile(sheets).toFile(fileName);
+}
 
 function printTable(title: string, subtitle: string, head: string, body: string, extra = "") {
   const w = window.open("", "_blank", "width=1200,height=800");
@@ -47,6 +104,7 @@ function printTable(title: string, subtitle: string, head: string, body: string,
     @page{size:A4 landscape;margin:10mm}body{font:10px/1.35 Arial,sans-serif;color:#000;margin:0}h1{font-size:14px;text-align:center;margin:0 0 2px}p.sub{text-align:center;margin:0 0 10px}
     table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:2px 3px;text-align:center}td.l,th.l{text-align:left}td.n{text-align:right;white-space:nowrap}th{background:#eee}
     tr.dept td{background:#f4f4f4;font-weight:bold;text-align:left}tr.total td{font-weight:bold}.off{background:#f0f0f0}.sign{display:flex;justify-content:space-between;margin-top:28px;font-size:11px}
+    .sumblock{display:flex;gap:48px;margin-top:16px}.sumblock table{width:auto}.sumblock td{border:0;padding:1px 6px}
   </style></head><body><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(subtitle)}</p><table><thead>${head}</thead><tbody>${body}</tbody></table>
   <div class="sign"><span>Tərtib etdi: ____________________</span><span>Struktur bölmənin rəhbəri: ____________________</span><span>Baş mühasib: ____________________</span></div>${extra}
   <script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`);
@@ -212,35 +270,120 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
     })() : "";
     printTable("İş vaxtının uçot tabeli", `${firm} · ${periodLabel(data.period)}`, main.headRow, main.body, extra);
   };
+  // The payroll in the firm's own form (Versiya 3.56): one list of columns for the screen, the print and the Excel file.
+  const firmName = data.firms.find((f) => f.id === data.companyId)?.name || "";
+  const payTitle = `${firmName} ${data.period.slice(0, 4)}-ci il ${MONTHS[Number(data.period.slice(5, 7)) - 1]} ayı üçün hesablanmış əmək haqqı cədvəli`;
+  const payrollSummary = (list: PayRow[]) => {
+    const t = (pick: (r: PayRow) => number) => sum(list, pick);
+    return {
+      left: [["Əmək haqqı fondu", t((r) => r.pay.gross)], ["Gəlir vergisi (işçidən tutulan)", t((r) => r.pay.tax)], ["Pensiya Fondu (işçidən tutulan)", t((r) => r.pay.dsmf)], ["İşsizlikdən sığorta haqqı (işçidən tutulan)", t((r) => r.pay.unemployment)], ["İcbari tibbi sığorta (işçidən tutulan)", t((r) => r.pay.medical)]] as [string, number][],
+      right: [["Pensiya Fondu (işəgötürən tərəfindən)", t((r) => r.pay.employerDsmf)], ["İşsizlikdən sığorta haqqı (işəgötürən tərəfindən)", t((r) => r.pay.employerUnemployment)], ["İcbari tibbi sığorta (işəgötürən tərəfindən)", t((r) => r.pay.employerMedical)], ["İşəgötürənin cəmi xərci", t((r) => r.pay.employerCost)]] as [string, number][],
+      normHours: normHoursOf(list),
+    };
+  };
   const printPayroll = () => {
     const h = escapeHtml;
     const list = payrollRows();
-    const headRow = "<tr><th>№</th><th class=\"l\">Soyadı, adı, atasının adı</th><th class=\"l\">Vəzifə</th><th>Maaş</th><th>Norma / işlənib (gün)</th><th>Əməkhaqqı</th><th>Əlavə saat</th><th>Məzuniyyət haqqı</th><th>Mükafat, digər</th><th>Hesablanıb</th><th>Gəlir vergisi</th><th>DSMF</th><th>İşsizlik</th><th>İTS</th><th>Avans, aliment, digər</th><th>Ödənilməli</th></tr>";
-    const body = list.map((r, i) => `<tr><td>${i + 1}</td><td class="l">${h(r.name)}</td><td class="l">${h(r.position || "")}</td><td class="n">${num(r.pay.salary)}</td><td>${r.normDays} / ${r.workedDays}</td><td class="n">${num(r.pay.salaryPart)}</td><td class="n">${num(r.pay.overtimePay)}</td><td class="n">${num(r.pay.leavePay)}</td><td class="n">${num(r.inputs.bonus + r.inputs.otherAdd)}</td><td class="n">${num(r.pay.gross)}</td><td class="n">${num(r.pay.tax)}</td><td class="n">${num(r.pay.dsmf)}</td><td class="n">${num(r.pay.unemployment)}</td><td class="n">${num(r.pay.medical)}</td><td class="n">${num(r.pay.otherDeductions)}</td><td class="n">${num(r.pay.net)}</td></tr>`).join("")
-      + `<tr class="total"><td></td><td class="l" colspan="4">Cəmi</td>${(["salaryPart", "overtimePay", "leavePay"] as const).map((k) => `<td class="n">${num(sum(list, (r) => r.pay[k]))}</td>`).join("")}<td class="n">${num(sum(list, (r) => r.inputs.bonus + r.inputs.otherAdd))}</td>${(["gross", "tax", "dsmf", "unemployment", "medical", "otherDeductions", "net"] as const).map((k) => `<td class="n">${num(sum(list, (r) => r.pay[k]))}</td>`).join("")}</tr>`;
-    const firm = data.firms.find((f) => f.id === data.companyId)?.name || "";
-    printTable("Hesablama-ödəmə cədvəli", `${firm} · ${periodLabel(data.period)}${approved ? "" : " · təsdiqlənməyib (qaralama)"}`, headRow, body);
+    const groupsRow = PAY_GROUPS.map((g) => g.label ? `<th colspan="${g.columns.length}">${h(g.label)}</th>` : `<th rowspan="2"${g.columns[0].kind === "text" ? ' class="l"' : ""}>${h(g.columns[0].label)}</th>`).join("");
+    const labelsRow = PAY_GROUPS.filter((g) => g.label).flatMap((g) => g.columns).map((c) => `<th>${h(c.label)}</th>`).join("");
+    const body = list.map((r, i) => `<tr>${PAY_COLUMNS.map((c) => c.key === "no" ? `<td>${i + 1}</td>` : c.kind === "text" ? `<td class="l">${h(String(c.value(r) ?? ""))}</td>` : `<td class="n">${shown(c, c.value(r))}</td>`).join("")}</tr>`).join("")
+      + `<tr class="total">${PAY_COLUMNS.map((c, i) => i === 2 ? "<td class=\"l\">Cəmi</td>" : c.total ? `<td class="n">${shown(c, sum(list, (r) => Number(c.value(r)) || 0))}</td>` : "<td></td>").join("")}</tr>`;
+    const s = payrollSummary(list);
+    const line = ([label, value]: [string, number]) => `<tr><td class="l">${h(label)}</td><td class="n">${num(value)}</td></tr>`;
+    const summary = `<div class="sumblock"><table>${s.left.map(line).join("")}</table><table><tr><td class="l">Ayın iş saatları</td><td class="n">${s.normHours ?? "—"}</td></tr>${s.right.map(line).join("")}</table></div>`;
+    printTable(payTitle, approved ? "" : "Təsdiqlənməyib (qaralama)", `<tr>${groupsRow}</tr><tr>${labelsRow}</tr>`, body, summary);
+  };
+  const excelPayroll = async () => {
+    const list = payrollRows();
+    const head = (value: string, extra: XCell = {}): XCell => ({ value, fontWeight: "bold", backgroundColor: "#DCE6F2", align: "center", alignVertical: "center", wrap: true, borderStyle: "thin", ...extra });
+    const cell = (c: PayColumn, value: unknown): XCell => c.kind === "text" ? { value: String(value ?? ""), wrap: true, borderStyle: "thin", alignVertical: "top" }
+      : { value: Number(value) || 0, type: Number, format: c.kind === "hours" ? "0.##" : "#,##0.00", borderStyle: "thin", alignVertical: "top" };
+    const groupsRow: (XCell | null)[] = [], labelsRow: (XCell | null)[] = [];
+    for (const g of PAY_GROUPS) {
+      if (!g.label) { groupsRow.push(head(g.columns[0].label, { rowSpan: 2 })); labelsRow.push(null); continue; }
+      g.columns.forEach((c, i) => { groupsRow.push(i ? null : head(g.label!, { columnSpan: g.columns.length })); labelsRow.push(head(c.label)); });
+    }
+    const out: (XCell | null)[][] = [
+      [{ value: payTitle, fontWeight: "bold", fontSize: 13, columnSpan: PAY_COLUMNS.length, align: "center" }],
+      ...(approved ? [] : [[{ value: "Təsdiqlənməyib (qaralama)", textColor: "#B91C1C" }]]),
+      [null], groupsRow, labelsRow,
+      ...list.map((r, i) => PAY_COLUMNS.map((c): XCell => c.key === "no" ? { value: i + 1, type: Number, borderStyle: "thin", alignVertical: "top" } : cell(c, c.value(r)))),
+      PAY_COLUMNS.map((c, i): XCell => i === 2 ? { value: "Cəmi", fontWeight: "bold", borderStyle: "thin" } : c.total ? { ...cell(c, sum(list, (r) => Number(c.value(r)) || 0)), fontWeight: "bold" } : { borderStyle: "thin" }),
+      [null],
+    ];
+    // The summary under the table, as in the firm's Excel: the fund and the worker's deductions on the left, the employer's on the right.
+    const s = payrollSummary(list);
+    const right: [string, number | null, string][] = [["Ayın iş saatları", s.normHours, "0.##"], ...s.right.map(([l, v]): [string, number, string] => [l, v, "#,##0.00"])];
+    for (let i = 0; i < Math.max(s.left.length, right.length); i++) {
+      const l = s.left[i], r = right[i];
+      const row: (XCell | null)[] = Array.from({ length: PAY_COLUMNS.length }, () => null);
+      if (l) { row[3] = { value: l[0], columnSpan: 4 }; row[7] = { value: l[1], type: Number, format: "#,##0.00", fontWeight: "bold" }; }
+      if (r) { row[9] = { value: r[0], columnSpan: 6 }; row[15] = r[1] === null ? { value: "—" } : { value: r[1], type: Number, format: r[2], fontWeight: "bold" }; }
+      out.push(row);
+    }
+    await saveWorkbook([{ data: out, sheet: "Əməkhaqqı", columns: PAY_COLUMNS.map((c) => ({ width: c.width })), stickyRowsCount: approved ? 4 : 5 }], `Əməkhaqqı_${safeName(firmName)}_${data.period}.xlsx`);
+  };
+  // The tabel as the firm keeps it in Excel (A-T): one row per worker, a column per day, then the totals; overtime on a second sheet.
+  const excelSheet = async () => {
+    const head = (value: string): XCell => ({ value, fontWeight: "bold", backgroundColor: "#DCE6F2", align: "center", alignVertical: "center", wrap: true, borderStyle: "thin" });
+    const pay = access.payView;
+    const lead = ["S/S", ...(pay ? ["FİN"] : []), "İşçinin tam adı", "Şöbə-vəzifəsi", "İş yeri", ...(pay ? ["Maaş"] : []), "Daxil olan", "Çıxan"];
+    const leadWidths = [5, ...(pay ? [10] : []), 32, 34, 8, ...(pay ? [10] : []), 11, 11];
+    const leadCells = (r: (typeof rows)[number]): XCell[] => [
+      { value: numberOf.get(r.emp.id) || 0, type: Number, borderStyle: "thin" },
+      ...(pay ? [{ value: r.emp.fin || "", borderStyle: "thin" } as XCell] : []),
+      { value: personName(r.emp), borderStyle: "thin" }, { value: [deptName(r.department), r.emp.position].filter(Boolean).join(" — "), borderStyle: "thin" },
+      { value: jobKindLabel(r.emp.job_kind), borderStyle: "thin" },
+      ...(pay ? [{ value: Number(r.emp.monthly_salary) || 0, type: Number, format: "#,##0.00", borderStyle: "thin" } as XCell] : []),
+      { value: formatDay(r.emp.hire_date), borderStyle: "thin" }, { value: r.emp.termination_date ? formatDay(r.emp.termination_date) : "", borderStyle: "thin" },
+    ];
+    const dayHeads = days.map((d): XCell => ({ ...head(String(Number(d.slice(8)))), ...(calendar.get(d)?.kind === "holiday" || weekday(d) > 5 ? { backgroundColor: "#FDE2E2" } : {}) }));
+    const dayCell = (value: string | number): XCell => typeof value === "number" || isHours(value)
+      ? { value: Number(String(value).replace(",", ".")), type: Number, format: "0.##", align: "center", borderStyle: "thin" } : { value, align: "center", borderStyle: "thin" };
+    const width = lead.length + days.length + 2;
+    const title = (text: string): XCell[] => [{ value: `${firmName} · ${periodLabel(data.period)} — ${text}`, fontWeight: "bold", fontSize: 13, columnSpan: width }];
+    const tabel: (XCell | null)[][] = [title("İş vaxtının uçot tabeli"), [null], [...lead.map(head), ...dayHeads, head("Cəmi iş günü"), head("Cəmi iş saatı")]];
+    const overtime: (XCell | null)[][] = [title("Əlavə iş saatlarının uçot tabeli"), [null], [...lead.map(head), ...dayHeads, head("Cəmi saat")]];
+    for (const g of groups) {
+      if (!g.rows.length) continue;
+      tabel.push([{ value: `${deptName(g.sheet.department)} — ${STATUS[g.sheet.status] || ""}`, fontWeight: "bold", backgroundColor: "#F1F5F9", columnSpan: width }]);
+      for (const r of g.rows) {
+        tabel.push([...leadCells(r), ...r.sheet.cells.map((c) => dayCell(c.value)), { value: r.sheet.workedDays, type: Number, fontWeight: "bold", borderStyle: "thin" }, { value: r.sheet.workedHours, type: Number, format: "0.##", fontWeight: "bold", borderStyle: "thin" }]);
+        if (overtimeHours(r.overtime) > 0) overtime.push([...leadCells(r), ...days.map((d): XCell => r.overtime[d.slice(8)] ? dayCell(r.overtime[d.slice(8)]) : { borderStyle: "thin" }), { value: overtimeHours(r.overtime), type: Number, format: "0.##", fontWeight: "bold", borderStyle: "thin" }]);
+      }
+    }
+    const columns = [...leadWidths, ...days.map(() => 4.5), 9, 9].map((w) => ({ width: w }));
+    await saveWorkbook([
+      { data: tabel, sheet: "Tabel", columns, stickyRowsCount: 3 },
+      ...(overtime.length > 3 ? [{ data: overtime, sheet: "Əlavə saatlar", columns, stickyRowsCount: 3 }] : []),
+    ], `Tabel_${safeName(firmName)}_${data.period}.xlsx`);
   };
   const toolbar = <>
     {dirty > 0 && <span className="hint">{dirty} sətirdə yadda saxlanmamış dəyişiklik var</span>}
     {dirty > 0 && <Button variant="outline" disabled={busy} onClick={() => { setEdits({}); setInputEdits({}); }}><Undo2 />Ləğv et</Button>}
     <Button disabled={busy || !dirty} onClick={() => void save()}><Save />Yadda saxla</Button>
     <Button variant="outline" onClick={() => tab === "payroll" ? printPayroll() : printSheet()}><Printer />Çap et</Button>
+    <Button variant="outline" onClick={() => void (tab === "payroll" ? excelPayroll() : excelSheet()).catch((e) => window.alert(e instanceof Error ? e.message : "Excel faylı hazırlanmadı."))}><FileSpreadsheet />Excel</Button>
   </>;
 
 
   // The payroll: an approved month as it was approved; otherwise worked out live from the tabel and the inputs on the page.
-  function payrollRows() {
-    if (approved && data.payroll.snapshot) return data.payroll.snapshot.map((s) => ({ id: s.hr_employee_id, name: s.name, position: s.position, department: s.department, normDays: s.normDays, workedDays: s.workedDays, overtime: s.overtime, inputs: s.inputs, leavePay: s.leaveDetails || [], pay: s as PayrollRow }));
+  function payrollRows(): PayRow[] {
+    if (approved && data.payroll.snapshot) return data.payroll.snapshot.map((s) => ({ id: s.hr_employee_id, name: s.name, fin: s.fin ?? null, jobKind: s.jobKind ?? "main", position: s.position, department: s.department,
+      workedHours: s.workedHours ?? null, normHours: s.normHours ?? null, overtime: s.overtime, inputs: { ...EMPTY_INPUTS, ...s.inputs }, leavePay: s.leaveDetails || [], settlement: s.settlementDetails || [],
+      // Months approved before Versiya 3.56 have no payable / settlement figures of their own.
+      pay: { ...s, settlementPay: s.settlementPay ?? 0, payable: s.payable ?? Math.round((s.gross - s.withheld) * 100) / 100 } }));
     return rows.map((r) => {
       const typed = inputEdits[r.emp.id] || {};
       const base = inputsOf(r.emp.id);
       const inputs: PayrollInputs = { ...base, note: typed.note ?? base.note };
       for (const key of PAYROLL_INPUT_KEYS) { const raw = typed[key]; if (raw !== undefined) { const v = Number(String(raw).replace(",", ".")); inputs[key] = Number.isFinite(v) && v >= 0 ? v : 0; } }
       const leavePay = data.leavePay.filter((l) => l.hr_employee_id === r.emp.id);
+      const settlement = (data.settlementPay || []).filter((s) => s.hr_employee_id === r.emp.id);
       const ot = overtimeHours(r.overtime);
-      return { id: r.emp.id, name: personName(r.emp), position: r.emp.position, department: r.department, normDays: r.sheet.norm.days, workedDays: r.sheet.workedDays, overtime: ot, inputs, leavePay,
-        pay: payrollRow({ salary: r.emp.monthly_salary ?? null, period: data.period, row: r.sheet, overtime: ot, leavePay, inputs }) };
+      return { id: r.emp.id, name: personName(r.emp), fin: r.emp.fin ?? null, jobKind: r.emp.job_kind === "additional" ? "additional" : "main", position: r.emp.position, department: r.department,
+        workedHours: r.sheet.workedHours, normHours: r.sheet.norm.hours, overtime: ot, inputs, leavePay, settlement,
+        pay: payrollRow({ salary: r.emp.monthly_salary ?? null, period: data.period, row: r.sheet, overtime: ot, leavePay, settlement, inputs, jobKind: r.emp.job_kind }) };
     });
   }
 
@@ -248,9 +391,15 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
     const list = payrollRows();
     const open = data.departments.filter((d) => d.status !== "accepted");
     const editable = access.payEdit && !approved;
-    const cell = (id: number, key: (typeof PAYROLL_INPUT_KEYS)[number], value: number) => editable
-      ? <input className="payinput" inputMode="decimal" value={inputEdits[id]?.[key] ?? (value ? String(value) : "")} onChange={(e) => setInputEdits((c) => ({ ...c, [id]: { ...(c[id] || {}), [key]: e.target.value } }))} />
-      : <>{value ? num(value) : "—"}</>;
+    const inputCell = (r: PayRow, key: (typeof PAYROLL_INPUT_KEYS)[number]) => editable
+      ? <input className="payinput" inputMode="decimal" value={inputEdits[r.id]?.[key] ?? (r.inputs[key] ? String(r.inputs[key]) : "")} onChange={(e) => setInputEdits((c) => ({ ...c, [r.id]: { ...(c[r.id] || {}), [key]: e.target.value } }))} />
+      : <>{r.inputs[key] ? num(r.inputs[key]) : "—"}</>;
+    const titleOf = (c: PayColumn, r: PayRow) => c.key === "overtimePay" && r.overtime ? `${r.overtime} saat × ${num(r.pay.hourly)} × ${OVERTIME_MULTIPLIER}`
+      : c.key === "salaryPart" && r.workedHours !== null ? `${num(r.pay.salary)} / ${r.normHours} saat × ${r.workedHours} saat`
+      : c.key === "leave" ? [...r.leavePay.map((l) => `Məzuniyyət, əmr № ${l.order_no || "—"}: ${l.days} gün × ${num(l.daily)} (orta günlük${l.averageMonths ? `, ${l.averageMonths} ay` : ", tarixçə yoxdur — vəzifə maaşından"})`),
+        ...r.settlement.flatMap((s) => s.lines.map((l) => `Son hesablaşma, əmr № ${s.order_no || "—"}: ${l.label} — ${num(l.amount)}`))].join("\n")
+      : c.key === "tax" && r.jobKind === "additional" ? "Əlavə iş yeri — 200 ₼ güzəşt tətbiq olunmur" : "";
+    const summary = payrollSummary(list);
     return <>
       {approved ? <div className="hrnote">✓ Təsdiqlənib{data.payroll.approved_by ? `: ${data.payroll.approved_by}` : ""}{data.payroll.approved_at ? `, ${formatDay(data.payroll.approved_at)}` : ""}. Hesablanmış məbləğlər işçi kartlarının “Əmək haqqı” bölməsinə yazılıb.</div>
         : open.length > 0 ? <div className="hralert">⚠ Təsdiq üçün bütün şöbələrin tabeli qəbul edilməlidir. Qəbul edilməyib: {open.map((d) => deptName(d.department)).join(", ")}.</div> : null}
@@ -260,27 +409,26 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
           ? <Button variant="outline" disabled={busy} onClick={() => { if (window.confirm("Təsdiq ləğv edilsin? Cədvəl yenidən dəyişdirilə biləcək.")) void send({ action: "unapprove" }); }}>Təsdiqi ləğv et</Button>
           : <Button disabled={busy || dirty > 0 || open.length > 0} onClick={() => { if (window.confirm(`${periodLabel(data.period)} əməkhaqqı cədvəli təsdiqlənsin?`)) void send({ action: "approve" }); }}><Check />Təsdiqlə</Button>)}
       </div>
+      <h3 className="paytitle">{payTitle}</h3>
       <div className="tabelscroll"><table className="paytable">
-        <thead><tr><th>№</th><th className="l">İşçi</th><th>Maaş</th><th>Norma / işlənib, gün</th><th>Əməkhaqqı</th><th>Əlavə saat</th><th>Məzuniyyət haqqı</th><th>{INPUT_LABELS.bonus}</th><th>{INPUT_LABELS.otherAdd}</th><th className="strong">Hesablanıb</th><th>Gəlir vergisi</th><th>DSMF</th><th>İşsizlik</th><th>İTS</th><th>{INPUT_LABELS.advance}</th><th>{INPUT_LABELS.alimony}</th><th>{INPUT_LABELS.otherDed}</th><th className="strong">Ödənilməli</th><th>İşəgötürən: DSMF / işsizlik / İTS</th></tr></thead>
-        <tbody>{list.map((r, i) => <tr key={r.id}>
-          <td>{i + 1}</td><td className="l"><b>{r.name}</b><small>{[deptName(r.department), r.position].filter(Boolean).join(" · ")}</small></td>
-          <td className="n">{r.pay.salary ? num(r.pay.salary) : <span className="warn" title="Kartda vəzifə maaşı yoxdur">—</span>}</td>
-          <td>{r.normDays} / {r.workedDays}</td><td className="n">{num(r.pay.salaryPart)}</td>
-          <td className="n" title={r.overtime ? `${r.overtime} saat × ${num(r.pay.hourly)} × ${OVERTIME_MULTIPLIER}` : ""}>{r.pay.overtimePay ? num(r.pay.overtimePay) : "—"}</td>
-          <td className="n" title={r.leavePay.map((l) => `Əmr № ${l.order_no || "—"}: ${l.days} gün × ${num(l.daily)} (orta günlük${l.averageMonths ? `, ${l.averageMonths} ay` : ", tarixçə yoxdur — vəzifə maaşından"})`).join("\n")}>{r.pay.leavePay ? num(r.pay.leavePay) : "—"}</td>
-          <td className="n">{cell(r.id, "bonus", r.inputs.bonus)}</td><td className="n">{cell(r.id, "otherAdd", r.inputs.otherAdd)}</td>
-          <td className="n strong">{num(r.pay.gross)}</td><td className="n">{num(r.pay.tax)}</td><td className="n">{num(r.pay.dsmf)}</td><td className="n">{num(r.pay.unemployment)}</td><td className="n">{num(r.pay.medical)}</td>
-          <td className="n">{cell(r.id, "advance", r.inputs.advance)}</td><td className="n">{cell(r.id, "alimony", r.inputs.alimony)}</td><td className="n">{cell(r.id, "otherDed", r.inputs.otherDed)}</td>
-          <td className="n strong">{num(r.pay.net)}</td><td className="n">{num(r.pay.employerDsmf)} / {num(r.pay.employerUnemployment)} / {num(r.pay.employerMedical)}</td>
-        </tr>)}</tbody>
-        <tfoot><tr><td></td><td className="l">Cəmi ({list.length} işçi)</td><td></td><td></td>
-          {(["salaryPart", "overtimePay", "leavePay"] as const).map((k) => <td key={k} className="n">{num(sum(list, (r) => r.pay[k]))}</td>)}
-          <td className="n">{num(sum(list, (r) => r.inputs.bonus))}</td><td className="n">{num(sum(list, (r) => r.inputs.otherAdd))}</td>
-          {(["gross", "tax", "dsmf", "unemployment", "medical"] as const).map((k) => <td key={k} className="n">{num(sum(list, (r) => r.pay[k]))}</td>)}
-          <td className="n">{num(sum(list, (r) => r.inputs.advance))}</td><td className="n">{num(sum(list, (r) => r.inputs.alimony))}</td><td className="n">{num(sum(list, (r) => r.inputs.otherDed))}</td>
-          <td className="n">{num(sum(list, (r) => r.pay.net))}</td><td className="n">{money(sum(list, (r) => r.pay.employerCost - r.pay.gross))}</td></tr></tfoot>
+        <thead>
+          <tr>{PAY_GROUPS.map((g) => g.label ? <th key={g.label} colSpan={g.columns.length} className="group">{g.label}</th> : <th key={g.columns[0].key} rowSpan={2} className={`${g.columns[0].key === "name" ? "l" : ""}${g.columns[0].strong ? " strong" : ""}`}>{g.columns[0].label}</th>)}</tr>
+          <tr>{PAY_GROUPS.filter((g) => g.label).flatMap((g) => g.columns).map((c) => <th key={c.key} className={c.strong ? "strong" : ""}>{c.label}</th>)}</tr>
+        </thead>
+        <tbody>{list.map((r, i) => <tr key={r.id}>{PAY_COLUMNS.map((c) => {
+          if (c.key === "no") return <td key={c.key}>{i + 1}</td>;
+          if (c.key === "name") return <td key={c.key} className="l"><b>{r.name}</b></td>;
+          if (c.input) return <td key={c.key} className="n">{inputCell(r, c.input)}</td>;
+          if (c.key === "salary" && !r.pay.salary) return <td key={c.key} className="n"><span className="warn" title="Kartda vəzifə maaşı yoxdur">—</span></td>;
+          return <td key={c.key} className={`${c.kind === "text" ? "t" : "n"}${c.strong ? " strong" : ""}`} title={titleOf(c, r)}>{c.kind === "text" ? String(c.value(r) ?? "") : shown(c, c.value(r))}</td>;
+        })}</tr>)}</tbody>
+        <tfoot><tr>{PAY_COLUMNS.map((c, i) => <td key={c.key} className={i === 2 ? "l" : "n"}>{i === 2 ? `Cəmi (${list.length} işçi)` : c.total ? shown(c, sum(list, (r) => Number(c.value(r)) || 0)) : ""}</td>)}</tr></tfoot>
       </table></div>
-      <p className="hint">Əməkhaqqı = maaş × işlənmiş gün / norma gün. Əlavə saat = saat × (maaş / norma saat) × {OVERTIME_MULTIPLIER}. Məzuniyyət haqqı imzalı məzuniyyət əmrlərindən: bu aya düşən günlər × orta günlük əməkhaqqı (məzuniyyət iki aya düşəndə hər ay öz günlərinin haqqını alır və həmin ayda vergiyə cəlb olunur). Vergi və ayırmalar 2026-cı il özəl qeyri-neft sektoru dərəcələri ilə — ilkin versiya, mühasib yoxlamalıdır.</p>
+      <div className="paysummary">
+        <dl>{summary.left.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{num(value)}</dd></div>)}</dl>
+        <dl><div><dt>Ayın iş saatları</dt><dd>{summary.normHours ?? "—"}</dd></div>{summary.right.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{num(value)}</dd></div>)}</dl>
+      </div>
+      <p className="hint">Hesablanmış əməkhaqqı = vəzifə maaşı / ayın norma saatı × faktiki iş saatı (tabeldən). Əlavə saat = saat × (maaş / norma saat) × {OVERTIME_MULTIPLIER}. Məzuniyyət haqqı imzalı məzuniyyət əmrlərindən (bu aya düşən günlər × orta günlük), son hesablaşma imzalı xitam əmrindən (istifadə olunmamış məzuniyyətə görə kompensasiya, işdən çıxma müavinəti). Əlavə iş yerində (kartda “İş yeri: Əlavə”) gəlir vergisində 200 ₼ güzəşt tətbiq olunmur. Ödənilməli = Cəmi − tutulmuşdur; Qalıq = Ödənilməli − aliment − ödənilmiş avans. Dərəcələr 2026, özəl qeyri-neft sektoru — mühasib yoxlamalıdır.</p>
     </>;
   }
 

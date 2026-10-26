@@ -23,7 +23,7 @@ export const PART_INPUTS: Record<string, string[]> = {
   personal: ["lastName", "firstName", "patronymic", "birthDate", "gender", "phone", "photoKey", "photoName", "note"],
   emergency: ["emergencyName", "emergencyRelation", "emergencyPhone"],
   idcard: ["fin", "idSeries", "idNumber", "idIssuedBy", "idIssuedAt", "idValidUntil", "regAddress", "idFrontKey", "idFrontName", "idBackKey", "idBackName"],
-  workplace: ["companyId", "department", "position", "hireDate", "workWeek", "userEmployeeId"],
+  workplace: ["companyId", "department", "position", "hireDate", "workWeek", "jobKind", "userEmployeeId"],
   contract: ["contractNo", "contractDate", "contractType", "contractEndDate", "probationMonths", "hireOrderNo", "hireOrderDate"],
   entitlement: ["priorExperienceMonths", "priorExperienceDays", "baseLeaveDays", "extraLeaveDays", "extraLeaveNote", "openingBalanceDate", "openingBalanceDays"],
   salary: ["monthlySalary"],

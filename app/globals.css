@@ -1275,5 +1275,10 @@ body:has(.chatgroupdialog) [data-slot=dialog-overlay]{z-index:70}.chatgroupdialo
 .paytable td{padding:4px 8px}.paytable td.n{text-align:right;font-variant-numeric:tabular-nums}.paytable .strong{font-weight:700;color:#0f172a}
 .paytable th{white-space:normal;max-width:110px}.paytable .warn{color:#dc2626;font-weight:700}
 .paytable tfoot td{position:sticky;bottom:0;background:#f8fafc;font-weight:700;padding:6px 8px}
+.paytable thead tr:nth-child(2) th{top:31px}.paytable th.group{background:#eef2ff;color:#3730a3;letter-spacing:.04em}
+.paytable td.t{white-space:normal;min-width:70px;max-width:220px;text-align:left;color:#475569;font-size:11.5px}
+.paytitle{margin:14px 22px 0;font-size:15px;font-weight:700;color:#0f172a;text-align:center}
+.paysummary{display:flex;flex-wrap:wrap;gap:12px 48px;margin:14px 22px 0}.paysummary dl{margin:0;min-width:300px}.paysummary dl>div{display:flex;justify-content:space-between;gap:24px;padding:3px 0;border-bottom:1px dashed #e2e8f0;font-size:12.5px}
+.paysummary dt{color:#475569}.paysummary dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;color:#0f172a}
 .paytable .payinput{width:84px;height:28px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px;text-align:right;font:inherit}
 @media (max-width:700px){.payrolltoolbar .hrtabs{margin-left:0}.tabelscroll{margin:12px 8px 0}.tabelgrid .namecol,.paytable td.l{min-width:140px}}

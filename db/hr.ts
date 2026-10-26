@@ -18,11 +18,13 @@ const EXTRA_COLUMNS: [string, string][] = [
   ["contract_no", "TEXT"], ["contract_date", "TEXT"], ["contract_type", "TEXT"], ["contract_end_date", "TEXT"], ["probation_months", "INTEGER"],
   ["hire_order_no", "TEXT"], ["hire_order_date", "TEXT"],
   ["emergency_name", "TEXT"], ["emergency_relation", "TEXT"], ["emergency_phone", "TEXT"], ["marital_status", "TEXT"], ["termination_order_id", "INTEGER"],
+  // Versiya 3.56: the place of work — 'main' (əsas) or 'additional' (əlavə iş yeri, əvəzçilik: no 200 ₼ income tax exemption).
+  ["job_kind", "TEXT NOT NULL DEFAULT 'main'"],
 ];
 
 let schemaReady = false;
 // Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
-const SCHEMA_VERSION = "3.50";
+const SCHEMA_VERSION = "3.56";
 export async function ensureHrSchema() {
   if (schemaReady) return;
   if (await schemaIsCurrent("hr", SCHEMA_VERSION)) { schemaReady = true; return; }
@@ -254,6 +256,7 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
   if (openingDays !== null && !Number.isFinite(openingDays)) throw new Error("Başlanğıc qalıq düzgün rəqəm deyil.");
   if ((openingDate === null) !== (openingDays === null)) throw new Error("Başlanğıc qalıq üçün həm tarixi, həm gün sayını daxil edin.");
   const workWeek = Number(input.workWeek) === 6 ? 6 : 5;
+  const jobKind = input.jobKind === "additional" ? "additional" : "main";
   const contractType = input.contractType === "fixed" || input.contractType === "indefinite" ? input.contractType : null;
   const contractDate = date(input.contractDate, "Müqavilənin tarixi");
   const contractEnd = contractType === "fixed" ? date(input.contractEndDate, "Müqavilənin bitmə tarixi") : null;
@@ -280,10 +283,10 @@ export async function saveHrEmployee(input: Record<string, unknown>) {
     text(input.photoKey), text(input.photoName), priorDays,
     text(input.contractNo), contractDate, contractType, contractEnd, probation,
     text(input.hireOrderNo), date(input.hireOrderDate, "İşə qəbul əmrinin tarixi"),
-    emergencyName, text(input.emergencyRelation), emergencyPhone,
+    emergencyName, text(input.emergencyRelation), emergencyPhone, jobKind,
   ];
   const columns = "company_id, department, position, last_name, first_name, patronymic, fin, id_series, id_number, id_issued_by, id_issued_at, id_valid_until, birth_date, gender, reg_address, phone, id_front_key, id_front_name, id_back_key, id_back_name, hire_date, termination_date, termination_reason, prior_experience_months, base_leave_days, extra_leave_days, extra_leave_note, work_week, monthly_salary, opening_balance_date, opening_balance_days, user_employee_id, note, "
-    + "photo_key, photo_name, prior_experience_days, contract_no, contract_date, contract_type, contract_end_date, probation_months, hire_order_no, hire_order_date, emergency_name, emergency_relation, emergency_phone";
+    + "photo_key, photo_name, prior_experience_days, contract_no, contract_date, contract_type, contract_end_date, probation_months, hire_order_no, hire_order_date, emergency_name, emergency_relation, emergency_phone, job_kind";
   const now = new Date().toISOString();
   let savedId: number;
   if (id) {
@@ -488,7 +491,7 @@ export async function storedHrInput(id: number): Promise<Record<string, unknown>
     fin: e.fin, idSeries: e.id_series, idNumber: e.id_number, idIssuedBy: e.id_issued_by, idIssuedAt: e.id_issued_at, idValidUntil: e.id_valid_until,
     birthDate: e.birth_date, gender: e.gender, regAddress: e.reg_address, phone: e.phone, idFrontKey: e.id_front_key, idFrontName: e.id_front_name, idBackKey: e.id_back_key, idBackName: e.id_back_name,
     hireDate: e.hire_date, priorExperienceMonths: e.prior_experience_months, priorExperienceDays: e.prior_experience_days, baseLeaveDays: e.base_leave_days, extraLeaveDays: e.extra_leave_days, extraLeaveNote: e.extra_leave_note,
-    workWeek: e.work_week, monthlySalary: e.monthly_salary, openingBalanceDate: e.opening_balance_date, openingBalanceDays: e.opening_balance_days, userEmployeeId: e.user_employee_id, note: e.note,
+    workWeek: e.work_week, jobKind: e.job_kind || "main", monthlySalary: e.monthly_salary, openingBalanceDate: e.opening_balance_date, openingBalanceDays: e.opening_balance_days, userEmployeeId: e.user_employee_id, note: e.note,
     photoKey: e.photo_key, photoName: e.photo_name, contractNo: e.contract_no, contractDate: e.contract_date, contractType: e.contract_type, contractEndDate: e.contract_end_date, probationMonths: e.probation_months,
     hireOrderNo: e.hire_order_no, hireOrderDate: e.hire_order_date, emergencyName: e.emergency_name, emergencyRelation: e.emergency_relation, emergencyPhone: e.emergency_phone,
     priorJobs: jobs.map((j) => ({ id: j.id, customerId: j.customer_id, position: j.position, startDate: j.start_date, endDate: j.end_date, terminationReason: j.termination_reason || "" })),

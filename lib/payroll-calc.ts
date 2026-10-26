@@ -7,6 +7,10 @@ import { addDays, isWorkingDay, monthEnd, round2, workNorm, type CalendarIndex, 
 // follow the order. The payroll takes the card salary × worked days / norm days, overtime from the separate overtime tabel,
 // leave pay from the leave orders (split by month: each month gets the pay of its own leave days and is taxed in that month),
 // and the 2026–2028 private non-oil sector rates. The rates are a first version, to be checked against the accountant's rules.
+// Versiya 3.56 (the firm's own Excel payroll): the salary part is card salary / the month's norm hours × the hours worked;
+// a worker whose job here is an additional one (əvəzçilik) gets no 200 ₼ income tax exemption; the final settlement of a
+// worker dismissed in the month (leave compensation, severance) comes from the signed termination order; the advance and the
+// alimony are taken from what is payable after tax.
 
 export type DayCode = "İ" | "B" | "M" | "Ö" | "S" | "T" | "X" | "E" | "Q" | "—";
 export const DAY_CODES: { code: DayCode; label: string }[] = [
@@ -96,10 +100,15 @@ export const overtimeHours = (overtime: Record<string, number>) => round2(Object
 const BASE_RATE: Record<number, number> = { 2026: 0.03, 2027: 0.05, 2028: 0.07 };
 export const OVERTIME_MULTIPLIER = 2; // Əmək Məcəlləsi: overtime is paid at least double.
 
-export function incomeTax(gross: number, year: number) {
+export type JobKind = "main" | "additional";
+export const JOB_KINDS: { key: JobKind; label: string }[] = [{ key: "main", label: "Əsas" }, { key: "additional", label: "Əlavə" }];
+export const jobKindLabel = (value: unknown) => (value === "additional" ? "Əlavə" : "Əsas");
+
+// The 200 ₼ exemption applies only at the main place of work.
+export function incomeTax(gross: number, year: number, jobKind: JobKind = "main") {
   const rate = BASE_RATE[year] ?? BASE_RATE[year < 2026 ? 2026 : 2028];
   if (gross <= 0) return 0;
-  if (gross <= 2500) return round2(Math.max(0, gross - 200) * rate);
+  if (gross <= 2500) return round2(Math.max(0, gross - (jobKind === "additional" ? 0 : 200)) * rate);
   const fixed2 = 2500 * rate;
   if (gross <= 8000) return round2(fixed2 + (gross - 2500) * 0.1);
   return round2(fixed2 + 550 + (gross - 8000) * 0.14);
@@ -116,26 +125,34 @@ export function contributions(gross: number) {
   };
 }
 
-export type PayrollInputs = { bonus: number; otherAdd: number; advance: number; alimony: number; otherDed: number; note: string };
-export const EMPTY_INPUTS: PayrollInputs = { bonus: 0, otherAdd: 0, advance: 0, alimony: 0, otherDed: 0, note: "" };
-export const PAYROLL_INPUT_KEYS = ["bonus", "otherAdd", "advance", "alimony", "otherDed"] as const;
+// Versiya 3.56: "Digər əlavə" and "Digər tutulma" are no longer in the payroll (the firm's form has neither); old stored values are ignored.
+export type PayrollInputs = { bonus: number; advance: number; alimony: number; note: string };
+export const EMPTY_INPUTS: PayrollInputs = { bonus: 0, advance: 0, alimony: 0, note: "" };
+export const PAYROLL_INPUT_KEYS = ["bonus", "advance", "alimony"] as const;
 export type LeavePay = { hr_employee_id: number; order_no: string | null; kind: string; days: number; daily: number; amount: number; averageMonths: number };
 
-export function payrollRow(input: { salary: number | null; period: string; row: TimesheetRow; overtime: number; leavePay: LeavePay[]; inputs: PayrollInputs }) {
+// The final settlement of a worker dismissed in the month, from the signed termination order (its salary line is left out —
+// the salary of the month comes from the tabel).
+export type SettlementPay = { hr_employee_id: number; order_no: string | null; date: string; amount: number; lines: { label: string; amount: number }[] };
+
+export function payrollRow(input: { salary: number | null; period: string; row: TimesheetRow; overtime: number; leavePay: LeavePay[]; settlement?: SettlementPay[]; inputs: PayrollInputs; jobKind?: JobKind | string | null }) {
   const salary = Number(input.salary) || 0;
   const { row } = input;
-  const salaryPart = row.norm.days ? round2((salary * row.workedDays) / row.norm.days) : 0;
   const hourly = row.norm.hours ? salary / row.norm.hours : 0;
+  const salaryPart = round2(hourly * row.workedHours);
   const overtimePay = round2(input.overtime * hourly * OVERTIME_MULTIPLIER);
   const leavePay = round2(input.leavePay.reduce((sum, l) => sum + l.amount, 0));
-  const gross = round2(salaryPart + overtimePay + leavePay + input.inputs.bonus + input.inputs.otherAdd);
-  const tax = incomeTax(gross, Number(input.period.slice(0, 4)));
+  const settlementPay = round2((input.settlement || []).reduce((sum, s) => sum + s.amount, 0));
+  const bonus = Number(input.inputs.bonus) || 0, advance = Number(input.inputs.advance) || 0, alimony = Number(input.inputs.alimony) || 0;
+  const gross = round2(salaryPart + overtimePay + bonus + leavePay + settlementPay);
+  const tax = incomeTax(gross, Number(input.period.slice(0, 4)), input.jobKind === "additional" ? "additional" : "main");
   const c = contributions(gross);
   const withheld = round2(tax + c.dsmf + c.unemployment + c.medical);
-  const otherDeductions = round2(input.inputs.advance + input.inputs.alimony + input.inputs.otherDed);
+  const payable = round2(gross - withheld);
+  const otherDeductions = round2(advance + alimony);
   return {
-    salary, salaryPart, hourly: round2(hourly), overtimePay, leavePay, gross, tax, ...c, withheld, otherDeductions,
-    net: round2(gross - withheld - otherDeductions),
+    salary, salaryPart, hourly: round2(hourly), overtimePay, leavePay, settlementPay, gross, tax, ...c, withheld, payable, otherDeductions,
+    net: round2(payable - otherDeductions),
     employerCost: round2(gross + c.employerDsmf + c.employerUnemployment + c.employerMedical),
   };
 }

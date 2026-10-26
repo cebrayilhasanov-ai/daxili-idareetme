@@ -4,13 +4,15 @@ import { ensureHrSchema, getHrParams } from "@/db/hr";
 import { averageEarnings, indexCalendar, leaveDaysBetween, diffDays, monthEnd, round2, type CalendarDay, type SalaryRow } from "@/lib/hr-calc";
 import {
   EMPTY_INPUTS, PAID_LEAVE_KINDS, PAYROLL_INPUT_KEYS, normalizeMark, normalizeOvertime, overtimeHours, payrollRow, timesheetRow,
-  type LeavePay, type PayrollInputs,
+  type LeavePay, type PayrollInputs, type SettlementPay,
 } from "@/lib/payroll-calc";
 
 // Kadrlar → Əməkhaqqı cədvəlləri (Versiya 3.54). Per firm and month: the tabel of each department (filled by its head, handed in,
 // accepted or sent back by the payroll accountant), the overtime tabel, and the payroll built from the accepted tabels.
 // Only what differs from the automatic value of a day is stored (hr_timesheet_marks), so a change in the production calendar
 // or a leave order signed later shows up by itself until the department's tabel is accepted.
+// Versiya 3.56: the payroll also gets each worker's FİN and place of work (Əsas / Əlavə) and the final settlement of the
+// workers dismissed in the month (signed termination orders).
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
@@ -76,17 +78,17 @@ const dept = (value: unknown) => String(value ?? "").trim();
 const json = <T>(raw: unknown, fallback: T): T => { try { const v = JSON.parse(String(raw || "")); return v && typeof v === "object" ? v as T : fallback; } catch { return fallback; } };
 const money = (value: unknown) => { const n = Number(String(value ?? "").replace(",", ".")); return Number.isFinite(n) && n >= 0 ? round2(n) : 0; };
 
-type Employee = { id: number; last_name: string; first_name: string; patronymic: string | null; position: string | null; department: string | null; hire_date: string; termination_date: string | null; work_week: number; monthly_salary?: number | null };
+type Employee = { id: number; last_name: string; first_name: string; patronymic: string | null; position: string | null; department: string | null; hire_date: string; termination_date: string | null; work_week: number; monthly_salary?: number | null; fin?: string | null; job_kind?: string | null };
 type Leave = { id: number; hr_employee_id: number; kind: string; start_date: string; end_date: string; order_no: string | null; order_id: number | null };
 type Sheet = { department: string; status: string; submitted_by: string | null; submitted_at: string | null; decided_by: string | null; decided_at: string | null; return_note: string | null };
 
 // The firm's workers employed at any time in the month, as far as the viewer may see them.
 async function monthEmployees(companyId: number, period: string, access: PayrollAccess): Promise<Employee[]> {
   const from = `${period}-01`, to = monthEnd(from);
-  const rows = (await db().prepare(`SELECT id, last_name, first_name, patronymic, position, department, hire_date, termination_date, work_week, monthly_salary FROM hr_employees
+  const rows = (await db().prepare(`SELECT id, last_name, first_name, patronymic, position, department, hire_date, termination_date, work_week, monthly_salary, fin, job_kind FROM hr_employees
     WHERE company_id = ? AND hire_date <= ? AND (termination_date IS NULL OR termination_date = '' OR termination_date >= ?) ORDER BY last_name, first_name`).bind(companyId, to, from).all<Employee>()).results;
   const visible = rows.filter((e) => access.allDepartments || access.heads.includes(dept(e.department)));
-  return access.payView ? visible : visible.map((e) => ({ ...e, monthly_salary: undefined }));
+  return access.payView ? visible : visible.map((e) => ({ ...e, monthly_salary: undefined, fin: undefined }));
 }
 
 async function loadMonth(companyId: number, period: string, access: PayrollAccess) {
@@ -138,14 +140,30 @@ async function leavePayOf(employees: Employee[], leaves: Leave[], period: string
   });
 }
 
+// Signed termination orders dated in the month: what the settlement adds to the month's pay besides the salary of the worked days.
+async function settlementPayOf(employees: Employee[], period: string) {
+  if (!employees.length) return [] as SettlementPay[];
+  const from = `${period}-01`, to = monthEnd(from);
+  const ids = employees.map((e) => e.id);
+  const orders = (await db().prepare(`SELECT hr_employee_id, order_no, start_date, extra FROM hr_orders WHERE grp = 'termination' AND status = 'signed' AND start_date BETWEEN ? AND ? AND hr_employee_id IN (${ids.map(() => "?").join(",")})`)
+    .bind(from, to, ...ids).all<{ hr_employee_id: number; order_no: string | null; start_date: string; extra: string | null }>()).results;
+  return orders.flatMap((o) => {
+    const snapshot = json<{ settlement?: { lines?: { label: string; amount: number }[] } }>(o.extra, {}).settlement;
+    const lines = (snapshot?.lines || []).slice(1).filter((l) => Number(l.amount)).map((l) => ({ label: l.label, amount: round2(Number(l.amount)) }));
+    if (!lines.length) return [];
+    return [{ hr_employee_id: o.hr_employee_id, order_no: o.order_no, date: o.start_date, amount: round2(lines.reduce((sum, l) => sum + l.amount, 0)), lines }];
+  });
+}
+
 export async function getPayrollMonth(companyId: number, period: string, access: PayrollAccess) {
   const month = await loadMonth(companyId, period, access);
-  if (!access.payView) return { ...month, leavePay: [], inputs: [] };
+  if (!access.payView) return { ...month, leavePay: [], settlementPay: [], inputs: [] };
   const ids = month.employees.map((e) => e.id);
   const inputs = ids.length ? (await db().prepare(`SELECT hr_employee_id, data FROM hr_payroll_inputs WHERE period = ? AND hr_employee_id IN (${ids.map(() => "?").join(",")})`).bind(period, ...ids).all<{ hr_employee_id: number; data: string }>()).results : [];
   return {
     ...month,
     leavePay: await leavePayOf(month.employees, month.leaves, period),
+    settlementPay: await settlementPayOf(month.employees, period),
     inputs: inputs.map((r) => ({ hr_employee_id: r.hr_employee_id, ...EMPTY_INPUTS, ...json<Partial<PayrollInputs>>(r.data, {}) })),
   };
 }
@@ -276,8 +294,9 @@ export async function setPayrollStatus(user: { name: string }, companyId: number
     const row = timesheetRow(emp, period, month.leaves, stored?.marks || {}, calendar, month.params);
     const inputs = month.inputs.find((i) => i.hr_employee_id === emp.id) || EMPTY_INPUTS;
     const leavePay = month.leavePay.filter((l) => l.hr_employee_id === emp.id);
-    const pay = payrollRow({ salary: emp.monthly_salary ?? null, period, row, overtime: overtimeHours(stored?.overtime || {}), leavePay, inputs });
-    return { hr_employee_id: emp.id, name: [emp.last_name, emp.first_name, emp.patronymic].filter(Boolean).join(" "), position: emp.position, department: dept(emp.department), workedDays: row.workedDays, normDays: row.norm.days, overtime: overtimeHours(stored?.overtime || {}), inputs, leaveDetails: leavePay, ...pay };
+    const settlement = month.settlementPay.filter((s) => s.hr_employee_id === emp.id);
+    const pay = payrollRow({ salary: emp.monthly_salary ?? null, period, row, overtime: overtimeHours(stored?.overtime || {}), leavePay, settlement, inputs, jobKind: emp.job_kind });
+    return { hr_employee_id: emp.id, name: [emp.last_name, emp.first_name, emp.patronymic].filter(Boolean).join(" "), fin: emp.fin || null, jobKind: emp.job_kind === "additional" ? "additional" : "main", position: emp.position, department: dept(emp.department), workedDays: row.workedDays, normDays: row.norm.days, workedHours: row.workedHours, normHours: row.norm.hours, overtime: overtimeHours(stored?.overtime || {}), inputs, leaveDetails: leavePay, settlementDetails: settlement, ...pay };
   });
   const now = new Date().toISOString();
   await db().batch([

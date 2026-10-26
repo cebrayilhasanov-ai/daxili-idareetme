@@ -24,7 +24,7 @@ type HrEmployee = {
   id_issued_by: string | null; id_issued_at: string | null; id_valid_until: string | null; birth_date: string | null; gender: string | null;
   reg_address: string | null; phone: string | null; id_front_key: string | null; id_front_name: string | null; id_back_key: string | null; id_back_name: string | null;
   hire_date: string; termination_date: string | null; termination_reason: string | null; prior_experience_months: number; base_leave_days: number | null;
-  extra_leave_days: number; extra_leave_note: string | null; work_week: number; monthly_salary: number | null; opening_balance_date: string | null;
+  extra_leave_days: number; extra_leave_note: string | null; work_week: number; job_kind?: string | null; monthly_salary: number | null; opening_balance_date: string | null;
   opening_balance_days: number | null; user_employee_id: number | null; user_employee_name: string | null; note: string | null;
   photo_key: string | null; photo_name: string | null; prior_experience_days: number | null;
   contract_no: string | null; contract_date: string | null; contract_type: string | null; contract_end_date: string | null; probation_months: number | null;
@@ -136,7 +136,7 @@ function employeeCard(e: HrEmployee, data: HrData, today: string): CardSection[]
     { part: "personal", title: "Şəxsi məlumatlar", fields: [["Soyad", dash(e.last_name)], ["Ad", dash(e.first_name)], ["Ata adı", dash(e.patronymic)], ["Doğum tarixi", dayOrDash(e.birth_date)], ["Cins", dash(e.gender)], ["Telefon", dash(formatPhone(e.phone))]] },
     { part: "emergency", title: "Təcili əlaqə şəxsi", fields: [["Adı, soyadı", dash(e.emergency_name)], ["Qohumluq", dash(e.emergency_relation)], ["Telefon", dash(formatPhone(e.emergency_phone))]] },
     { part: "idcard", title: "Şəxsiyyət vəsiqəsi", fields: [["FİN", dash(e.fin)], ["Seriya və nömrə", dash([e.id_series, e.id_number].filter(Boolean).join(" "))], ["Verən orqan", dash(e.id_issued_by)], ["Verilmə tarixi", dayOrDash(e.id_issued_at)], ["Etibarlıdır (tarixədək)", dayOrDash(e.id_valid_until)], ["Qeydiyyat ünvanı", dash(e.reg_address)]] },
-    { part: true, title: "İş yeri", fields: [["Firma", dash(e.company_name)], ["Şöbə", dash(e.department)], ["Vəzifə", dash(e.position)], ["İşə qəbul tarixi", dayOrDash(e.hire_date)], ["Bu firmada staj", serviceText(serviceParts(e.hire_date, asOf))], ["İş həftəsi", `${e.work_week || 5} günlük`],
+    { part: true, title: "İş yeri", fields: [["Firma", dash(e.company_name)], ["Şöbə", dash(e.department)], ["Vəzifə", dash(e.position)], ["İşə qəbul tarixi", dayOrDash(e.hire_date)], ["Bu firmada staj", serviceText(serviceParts(e.hire_date, asOf))], ["İş həftəsi", `${e.work_week || 5} günlük`], ["İş yeri", e.job_kind === "additional" ? "Əlavə (əvəzçilik)" : "Əsas"],
       ...(parts.salary.view ? [["Vəzifə maaşı", e.monthly_salary ? money(e.monthly_salary) : "—"] as [string, string]] : []), ...(parts.workplace.view ? [["Sistem istifadəçisi", dash(e.user_employee_name)] as [string, string]] : [])] },
     { part: "priorJobs", title: "Əvvəlki iş yerləri", table: prior.jobs.length ? { head: ["İş yeri", "VÖEN", "Vəzifə", "Dövr", "Staj", "İşdən çıxma əsası"], rows: prior.jobs.map((j) => [dash(j.customer_name), dash(j.customer_voen), j.position, `${formatDay(j.start_date)} – ${formatDay(j.end_date)}`, serviceText(serviceParts(j.start_date, j.end_date)), j.termination_reason ? reasonLabel(j.termination_reason) : "—"]) } : undefined,
       note: `Əvvəlki iş yerlərindəki ümumi staj: ${serviceText(prior.total)}${prior.jobs.length ? "" : " (əl ilə daxil edilib)"}` },
@@ -351,7 +351,7 @@ function toForm(e: HrEmployee | null): Record<string, string> {
     photoKey: s(e?.photo_key), photoName: s(e?.photo_name),
     fin: s(e?.fin), idSeries: e ? s(e.id_series) : "AA", idNumber: s(e?.id_number), idIssuedBy: s(e?.id_issued_by), idIssuedAt: s(e?.id_issued_at), idValidUntil: s(e?.id_valid_until), regAddress: s(e?.reg_address),
     idFrontKey: s(e?.id_front_key), idFrontName: s(e?.id_front_name), idBackKey: s(e?.id_back_key), idBackName: s(e?.id_back_name),
-    companyId: s(e?.company_id), department: s(e?.department), position: s(e?.position), hireDate: s(e?.hire_date), workWeek: s(e?.work_week || 5), monthlySalary: s(e?.monthly_salary), userEmployeeId: s(e?.user_employee_id),
+    companyId: s(e?.company_id), department: s(e?.department), position: s(e?.position), hireDate: s(e?.hire_date), workWeek: s(e?.work_week || 5), jobKind: e?.job_kind === "additional" ? "additional" : "main", monthlySalary: s(e?.monthly_salary), userEmployeeId: s(e?.user_employee_id),
     priorYears: prior ? String(Math.floor(prior / 12)) : "", priorMonths: prior ? String(prior % 12) : "", priorDays: e?.prior_experience_days ? String(e.prior_experience_days) : "",
     baseLeaveDays: s(e?.base_leave_days), extraLeaveDays: e?.extra_leave_days ? String(e.extra_leave_days) : "", extraLeaveNote: s(e?.extra_leave_note),
     openingBalanceDate: s(e?.opening_balance_date), openingBalanceDays: s(e?.opening_balance_days), terminationDate: s(e?.termination_date), terminationReason: s(e?.termination_reason), note: s(e?.note),
@@ -531,6 +531,7 @@ function CardTab({ employee, data, call, onSaved, onClose }: { employee: HrEmplo
       <label className="field">Vəzifə<Input disabled={workplaceLocked} list="hr-positions" value={form.position} onChange={(e) => set("position")(e.target.value)} /><datalist id="hr-positions">{positions.map((p) => <option key={p} value={p} />)}</datalist></label>
       {field("İşə qəbul tarixi *", "hireDate", { type: "date", disabled: workplaceLocked })}
       <label className="field">İş həftəsi<select disabled={workplaceLocked} value={form.workWeek} onChange={(e) => set("workWeek")(e.target.value)}><option value="5">5 günlük</option><option value="6">6 günlük</option></select></label>
+      <label className="field">İş yeri<select disabled={workplaceLocked} value={form.jobKind} onChange={(e) => set("jobKind")(e.target.value)}><option value="main">Əsas</option><option value="additional">Əlavə (əvəzçilik)</option></select></label>
       {parts.salary.view && field("Vəzifə maaşı (₼)", "monthlySalary", { inputMode: "decimal", disabled: !(employee ? parts.salary.edit : may("salary")) })}
       {parts.workplace.view && <label className="field">Sistem istifadəçisi (istəyə bağlı)<select disabled={workplaceLocked} value={form.userEmployeeId} onChange={(e) => set("userEmployeeId")(e.target.value)}><option value="">— sistemdə işləmir —</option>{data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}
     </div></fieldset>
