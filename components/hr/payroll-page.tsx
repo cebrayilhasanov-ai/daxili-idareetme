@@ -48,12 +48,13 @@ type PayRow = { id: number; name: string; fin: string | null; jobKind: string; p
   inputs: PayrollInputs; leavePay: LeavePay[]; settlement: SettlementPay[]; pay: PayrollRow };
 type PayColumn = { key: string; label: string; kind: "text" | "money" | "hours"; width: number; value: (r: PayRow) => unknown; total?: boolean; strong?: boolean; input?: (typeof PAYROLL_INPUT_KEYS)[number] };
 const col = (key: string, label: string, kind: PayColumn["kind"], width: number, value: PayColumn["value"], more: Partial<PayColumn> = {}): PayColumn => ({ key, label, kind, width, value, total: kind !== "text", ...more });
-// The columns and their groups as in the firm's Excel payroll (A-M); a group without a label is one column over both header rows.
+// The columns and their groups as in the firm's Excel payroll (A-M; Versiya 3.58: Şöbə and Vəzifəsi in separate columns); a group without a label is one column over both header rows.
 const PAY_GROUPS: { label?: string; columns: PayColumn[] }[] = [
   { columns: [col("no", "№", "text", 5, () => "")] },
   { columns: [col("fin", "FİN", "text", 10, (r) => r.fin || "")] },
   { columns: [col("name", "Soyadı, adı, atasının adı", "text", 30, (r) => r.name)] },
-  { columns: [col("post", "Şöbə-vəzifəsi", "text", 30, (r) => [r.department, r.position].filter(Boolean).join(" — "))] },
+  { columns: [col("department", "Şöbə", "text", 20, (r) => r.department)] },
+  { columns: [col("post", "Vəzifəsi", "text", 22, (r) => r.position || "")] },
   { columns: [col("job", "İş yeri", "text", 8, (r) => jobKindLabel(r.jobKind))] },
   { columns: [col("salary", "Əmək haqqı", "money", 11, (r) => r.pay.salary)] },
   { label: "HESABLANIB", columns: [
