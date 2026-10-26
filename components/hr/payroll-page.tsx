@@ -12,6 +12,8 @@ import {
 
 // Kadrlar → Əməkhaqqı cədvəlləri (Versiya 3.54): per firm and month the tabel (filled automatically from the production calendar
 // and leave orders; a head writes only what differs and hands it in), the overtime tabel and the payroll built from them.
+// Versiya 3.55: two tabs — Tabel (overtime is a second line under each worker) and Hesablanan əməkhaqqı; whoever sees salaries
+// also gets the payroll worked out live in the tabel itself.
 // Edits stay on the page until "Yadda saxla", then go to /api/hr/payroll in one request.
 
 type Access = { allDepartments: boolean; editAll: boolean; heads: string[]; payView: boolean; payEdit: boolean };
@@ -38,7 +40,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (c) => ({ "&": "&
 const num = (value: number) => value.toLocaleString("az-AZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const INPUT_LABELS: Record<(typeof PAYROLL_INPUT_KEYS)[number], string> = { bonus: "Mükafat", otherAdd: "Digər əlavə", advance: "Avans", alimony: "Aliment", otherDed: "Digər tutulma" };
 
-function printTable(title: string, subtitle: string, head: string, body: string) {
+function printTable(title: string, subtitle: string, head: string, body: string, extra = "") {
   const w = window.open("", "_blank", "width=1200,height=800");
   if (!w) { window.alert("Çap pəncərəsi açılmadı — brauzerdə bu sayt üçün açılan pəncərələrə icazə verin."); return; }
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
@@ -46,7 +48,7 @@ function printTable(title: string, subtitle: string, head: string, body: string)
     table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:2px 3px;text-align:center}td.l,th.l{text-align:left}td.n{text-align:right;white-space:nowrap}th{background:#eee}
     tr.dept td{background:#f4f4f4;font-weight:bold;text-align:left}tr.total td{font-weight:bold}.off{background:#f0f0f0}.sign{display:flex;justify-content:space-between;margin-top:28px;font-size:11px}
   </style></head><body><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(subtitle)}</p><table><thead>${head}</thead><tbody>${body}</tbody></table>
-  <div class="sign"><span>Tərtib etdi: ____________________</span><span>Struktur bölmənin rəhbəri: ____________________</span><span>Baş mühasib: ____________________</span></div>
+  <div class="sign"><span>Tərtib etdi: ____________________</span><span>Struktur bölmənin rəhbəri: ____________________</span><span>Baş mühasib: ____________________</span></div>${extra}
   <script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`);
   w.document.close();
 }
@@ -65,7 +67,7 @@ export function PayrollPage() {
   const [data, setData] = useState<MonthData | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"tabel" | "overtime" | "payroll">("tabel");
+  const [tab, setTab] = useState<"tabel" | "payroll">("tabel");
   const [edits, setEdits] = useState<Record<number, Edit>>({});
   const [inputEdits, setInputEdits] = useState<Record<number, InputEdit>>({});
   const load = async (companyId?: number | null, period?: string) => {
@@ -106,8 +108,7 @@ export function PayrollPage() {
       <label>Ay<input type="month" value={data.period} onChange={(e) => { if (e.target.value && leaveGuard()) void load(data.companyId, e.target.value); }} /></label>
       <div className="fixedsubtabs hrtabs">
         <button className={shownTab === "tabel" ? "on" : ""} onClick={() => setTab("tabel")}>Tabel</button>
-        <button className={shownTab === "overtime" ? "on" : ""} onClick={() => setTab("overtime")}>Əlavə saatlar</button>
-        {access.payView && <button className={shownTab === "payroll" ? "on" : ""} onClick={() => setTab("payroll")}>Əməkhaqqı cədvəli</button>}
+        {access.payView && <button className={shownTab === "payroll" ? "on" : ""} onClick={() => setTab("payroll")}>Hesablanan əməkhaqqı</button>}
       </div>
     </div>
     {!data.employees?.length ? <div className="empty"><p>{periodLabel(data.period)} ayında görünən işçi yoxdur (statusu “İşləyir” olan, firması və şöbəsi kartda göstərilmiş işçilər).</p></div>
@@ -117,7 +118,7 @@ export function PayrollPage() {
 }
 
 function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits, setInputEdits, dirty }: {
-  data: Required<MonthData>; access: Access; tab: "tabel" | "overtime" | "payroll"; busy: boolean; send: (payload: Record<string, unknown>) => Promise<boolean>;
+  data: Required<MonthData>; access: Access; tab: "tabel" | "payroll"; busy: boolean; send: (payload: Record<string, unknown>) => Promise<boolean>;
   edits: Record<number, Edit>; setEdits: React.Dispatch<React.SetStateAction<Record<number, Edit>>>; inputEdits: Record<number, InputEdit>; setInputEdits: React.Dispatch<React.SetStateAction<Record<number, InputEdit>>>; dirty: number;
 }) {
   const params = useMemo(() => normalizeParams(data.params), [data.params]);
@@ -185,18 +186,31 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
     </span>}
   </div>)}</div>;
 
+  // The tabel (N-1t); when anyone has overtime, the overtime tabel follows on its own page.
   const printSheet = () => {
-    const overtimeView = tab === "overtime";
     const h = escapeHtml;
-    const headRow = `<tr><th>№</th><th class="l">Soyadı, adı, atasının adı</th><th class="l">Vəzifə</th>${days.map((d) => `<th class="${calendar.get(d)?.kind === "holiday" || weekday(d) > 5 ? "off" : ""}">${Number(d.slice(8))}</th>`).join("")}${overtimeView ? "<th>Cəmi saat</th>" : "<th>İş günü</th><th>Saat</th><th>M</th><th>X</th><th>Digər</th>"}</tr>`;
-    const body = groups.map(({ sheet, rows: list }) => `<tr class="dept"><td colspan="${days.length + (overtimeView ? 4 : 8)}">${h(deptName(sheet.department))} — ${h(STATUS[sheet.status] || "")}</td></tr>` + list.map((r) => {
-      const cells = overtimeView ? days.map((d) => `<td>${r.overtime[d.slice(8)] || ""}</td>`).join("") : r.sheet.cells.map((c) => `<td>${h(c.value)}</td>`).join("");
-      const t = r.sheet.totals;
-      const totals = overtimeView ? `<td>${overtimeHours(r.overtime)}</td>` : `<td>${r.sheet.workedDays}</td><td>${r.sheet.workedHours}</td><td>${t.M}</td><td>${t.X}</td><td>${t.Ö + t.S + t.T + t.Q || ""}</td>`;
-      return `<tr><td>${numberOf.get(r.emp.id)}</td><td class="l">${h(personName(r.emp))}</td><td class="l">${h(r.emp.position || "")}</td>${cells}${totals}</tr>`;
-    }).join("")).join("");
     const firm = data.firms.find((f) => f.id === data.companyId)?.name || "";
-    printTable(overtimeView ? "Əlavə iş saatlarının uçot tabeli" : "İş vaxtının uçot tabeli", `${firm} · ${periodLabel(data.period)}`, headRow, body);
+    const build = (overtimeView: boolean) => {
+      const headRow = `<tr><th>№</th><th class="l">Soyadı, adı, atasının adı</th><th class="l">Vəzifə</th>${days.map((d) => `<th class="${calendar.get(d)?.kind === "holiday" || weekday(d) > 5 ? "off" : ""}">${Number(d.slice(8))}</th>`).join("")}${overtimeView ? "<th>Cəmi saat</th>" : "<th>İş günü</th><th>Saat</th><th>M</th><th>X</th><th>Digər</th>"}</tr>`;
+      const body = groups.map(({ sheet, rows: list }) => {
+        const shown = overtimeView ? list.filter((r) => overtimeHours(r.overtime) > 0) : list;
+        if (!shown.length) return "";
+        return `<tr class="dept"><td colspan="${days.length + (overtimeView ? 4 : 8)}">${h(deptName(sheet.department))} — ${h(STATUS[sheet.status] || "")}</td></tr>` + shown.map((r) => {
+          const cells = overtimeView ? days.map((d) => `<td>${r.overtime[d.slice(8)] || ""}</td>`).join("") : r.sheet.cells.map((c) => `<td>${h(c.value)}</td>`).join("");
+          const t = r.sheet.totals;
+          const totals = overtimeView ? `<td>${overtimeHours(r.overtime)}</td>` : `<td>${r.sheet.workedDays}</td><td>${r.sheet.workedHours}</td><td>${t.M}</td><td>${t.X}</td><td>${t.Ö + t.S + t.T + t.Q || ""}</td>`;
+          return `<tr><td>${numberOf.get(r.emp.id)}</td><td class="l">${h(personName(r.emp))}</td><td class="l">${h(r.emp.position || "")}</td>${cells}${totals}</tr>`;
+        }).join("");
+      }).join("");
+      return { headRow, body };
+    };
+    const main = build(false);
+    const extra = rows.some((r) => overtimeHours(r.overtime) > 0) ? (() => {
+      const ot = build(true);
+      return `<div style="page-break-before:always"></div><h1>Əlavə iş saatlarının uçot tabeli</h1><p class="sub">${h(firm)} · ${h(periodLabel(data.period))}</p><table><thead>${ot.headRow}</thead><tbody>${ot.body}</tbody></table>
+      <div class="sign"><span>Tərtib etdi: ____________________</span><span>Struktur bölmənin rəhbəri: ____________________</span><span>Baş mühasib: ____________________</span></div>`;
+    })() : "";
+    printTable("İş vaxtının uçot tabeli", `${firm} · ${periodLabel(data.period)}`, main.headRow, main.body, extra);
   };
   const printPayroll = () => {
     const h = escapeHtml;
@@ -270,28 +284,26 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
     </>;
   }
 
-  const overtimeView = tab === "overtime";
+  // Whoever sees salaries gets the month's payroll next to each worker, recalculated as the tabel is typed.
+  const payOf = access.payView ? new Map(payrollRows().map((p) => [p.id, p.pay])) : null;
+  const totalCols = 8 + (payOf ? 2 : 0);
   return <>
     {approved && <div className="hrnote">✓ Bu ayın əməkhaqqı cədvəli təsdiqlənib — tabel dəyişdirilmir.</div>}
     {statusBar}
     <div className="payrollactions">{toolbar}</div>
     <div className="tabelscroll"><table className="tabelgrid">
-      <thead><tr><th>№</th><th className="l namecol">İşçi</th>{dayHead}{overtimeView ? <th>Cəmi saat</th> : <><th title="İşlənmiş gün">Gün</th><th title="İşlənmiş saat">Saat</th><th title="Norma: gün / saat">Norma</th><th>M</th><th>X</th><th>E</th><th>Q</th><th title="Ödənişsiz, sosial, təhsil məzuniyyəti">Ö/S/T</th></>}</tr></thead>
+      <thead><tr><th>№</th><th className="l namecol">İşçi</th>{dayHead}<th title="İşlənmiş gün">Gün</th><th title="İşlənmiş saat">Saat</th><th title="Norma: gün / saat">Norma</th><th>M</th><th>X</th><th>E</th><th>Q</th><th title="Ödənişsiz, sosial, təhsil məzuniyyəti">Ö/S/T</th>
+        {payOf && <><th className="paycol" title="Əməkhaqqı, əlavə saat, məzuniyyət haqqı, mükafat və digər əlavələr — vergidən əvvəl">Hesablanıb</th><th className="paycol" title="Vergi, ayırmalar və tutulmalardan sonra">Ödəniləcək</th></>}</tr></thead>
       <tbody>{groups.map(({ sheet, rows: list }) => <Fragment key={sheet.department}>
-        <tr className="deptrow"><td colSpan={days.length + (overtimeView ? 3 : 10)}>{deptName(sheet.department)} <span>{STATUS[sheet.status]}</span></td></tr>
+        <tr className="deptrow"><td colSpan={days.length + 2 + totalCols}>{deptName(sheet.department)} <span>{STATUS[sheet.status]}</span></td></tr>
         {list.map((r) => {
           const editable = canEdit(r.department);
           const t = r.sheet.totals;
-          return <tr key={r.emp.id}>
-            <td>{numberOf.get(r.emp.id)}</td><td className="l namecol"><b>{personName(r.emp)}</b><small>{r.emp.position || ""}</small></td>
-            {overtimeView ? days.map((d) => {
-              const day = d.slice(8);
-              const typed = r.edit?.overtime[day];
-              const value = typed ?? (r.overtime[day] ? String(r.overtime[day]) : "");
-              const bad = typed !== undefined && normalizeOvertime(typed) === null;
-              const out = r.sheet.cells.find((c) => c.date === d)?.value === "—";
-              return <td key={d} className={`${out ? "out" : ""}${bad ? " bad" : ""}`}>{editable && !out ? <input value={value} inputMode="decimal" onChange={(e) => setMark(r.emp.id, "overtime", day, e.target.value)} /> : value}</td>;
-            }) : r.sheet.cells.map((c) => {
+          const pay = payOf?.get(r.emp.id);
+          const ot = overtimeHours(r.overtime);
+          return <Fragment key={r.emp.id}><tr className="mainrow">
+            <td rowSpan={2}>{numberOf.get(r.emp.id)}</td><td rowSpan={2} className="l namecol"><b>{personName(r.emp)}</b><small>{r.emp.position || ""}</small></td>
+            {r.sheet.cells.map((c) => {
               const day = c.date.slice(8);
               const typed = r.edit?.marks[day];
               const bad = typed !== undefined && normalizeMark(typed) === null;
@@ -300,17 +312,27 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
               const title = leave ? `${DAY_CODES.find((x) => x.code === c.value)?.label || ""}${leave.order_no ? `, əmr № ${leave.order_no}` : ""} — dəyişmək olmaz` : c.manual ? `Avtomatik: ${c.auto}` : "";
               return <td key={c.date} className={cls} title={title}>{editable && !c.locked ? <input value={typed ?? c.value} onChange={(e) => setMark(r.emp.id, "marks", day, e.target.value)} onFocus={(e) => e.target.select()} /> : c.value}</td>;
             })}
-            {overtimeView ? <td><b>{overtimeHours(r.overtime) || ""}</b></td> : <>
-              <td><b>{r.sheet.workedDays}</b></td><td>{r.sheet.workedHours}</td><td className="muted">{r.sheet.norm.days} / {r.sheet.norm.hours}</td>
-              <td>{t.M || ""}</td><td>{t.X || ""}</td><td>{t.E || ""}</td><td>{t.Q || ""}</td><td>{t.Ö + t.S + t.T || ""}</td></>}
-          </tr>;
+            <td><b>{r.sheet.workedDays}</b></td><td>{r.sheet.workedHours}</td><td className="muted">{r.sheet.norm.days} / {r.sheet.norm.hours}</td>
+            <td>{t.M || ""}</td><td>{t.X || ""}</td><td>{t.E || ""}</td><td>{t.Q || ""}</td><td>{t.Ö + t.S + t.T || ""}</td>
+            {payOf && <><td rowSpan={2} className="paycol">{pay?.salary ? num(pay.gross) : <span className="warn" title="Kartda vəzifə maaşı yoxdur">—</span>}</td><td rowSpan={2} className="paycol strong">{pay?.salary ? num(pay.net) : "—"}</td></>}
+          </tr>
+          <tr className="otrow">
+            {days.map((d) => {
+              const day = d.slice(8);
+              const typed = r.edit?.overtime[day];
+              const value = typed ?? (r.overtime[day] ? String(r.overtime[day]) : "");
+              const bad = typed !== undefined && normalizeOvertime(typed) === null;
+              const out = r.sheet.cells.find((c) => c.date === d)?.value === "—";
+              return <td key={d} className={`${out ? "out" : ""}${bad ? " bad" : ""}`} title="Əlavə saat">{editable && !out ? <input value={value} inputMode="decimal" onChange={(e) => setMark(r.emp.id, "overtime", day, e.target.value)} /> : value}</td>;
+            })}
+            <td colSpan={8} className="otlabel">Əlavə saat{ot ? <>: <b>{ot}</b></> : ""}</td>
+          </tr></Fragment>;
         })}
       </Fragment>)}</tbody>
     </table></div>
     <div className="tabellegend">
-      {overtimeView ? <span>Hər gün üçün iş vaxtından artıq işlənmiş saatları yazın. Əməkhaqqında saatlıq dərəcənin {OVERTIME_MULTIPLIER} misli ilə hesablanır.</span>
-        : <><span><b>Rəqəm</b> — işlənmiş saat</span>{DAY_CODES.map((c) => <span key={c.code}><b>{c.code}</b> — {c.label}</span>)}
-          <span className="legendnote">Xanalar istehsalat təqvimi ilə avtomatik dolur. Yalnız fərqləri yazın: saat (məs. 4), E, Q, X və ya İ. Boz xanalar məzuniyyət əmrindən və xəstəlik vərəqəsindən gəlir — dəyişdirilmir. Xananı silsəniz, avtomatik dəyər qayıdır.</span></>}
+      <span><b>Rəqəm</b> — işlənmiş saat</span>{DAY_CODES.map((c) => <span key={c.code}><b>{c.code}</b> — {c.label}</span>)}
+      <span className="legendnote">Xanalar istehsalat təqvimi ilə avtomatik dolur. Yalnız fərqləri yazın: saat (məs. 4), E, Q, X və ya İ. Boz xanalar məzuniyyət əmrindən və xəstəlik vərəqəsindən gəlir — dəyişdirilmir. Xananı silsəniz, avtomatik dəyər qayıdır. Hər işçinin altındakı nazik sətir — “Əlavə saat”: iş vaxtından artıq işlənmiş saatlar, əməkhaqqında saatlıq dərəcənin {OVERTIME_MULTIPLIER} misli ilə hesablanır.{payOf ? " “Hesablanıb” və “Ödəniləcək” xana dəyişən kimi yenilənir; ətraflı hesablama “Hesablanan əməkhaqqı” tabındadır." : ""}</span>
     </div>
   </>;
 }

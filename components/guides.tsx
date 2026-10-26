@@ -695,7 +695,8 @@ const GUIDES: Guide[] = [
     parts: [
       { audience: "all", title: "Tabel necə dolur", blocks: [
         { list: [
-          "Yuxarıda firma (bir neçə firmanız varsa) və ay seçilir. Tablar: Tabel · Əlavə saatlar · Əməkhaqqı cədvəli (sonuncu yalnız mühasibatlıqda).",
+          "Yuxarıda firma (bir neçə firmanız varsa) və ay seçilir. İki tab var: Tabel və Hesablanan əməkhaqqı (ikincisi yalnız maaşları görmək hüququ olanda). Əlavə saatlar ayrıca tab deyil — Tabeldə hər işçinin altındakı nazik “Əlavə saat” sətridir.",
+          "Maaşları görmək hüququ olan işçi Tabelin sağında “Hesablanıb” (vergidən əvvəl) və “Ödəniləcək” (tutulmalardan sonra) sütunlarını da görür: xana dəyişən kimi, yadda saxlamadan, hər iki tabdakı məbləğlər yenidən hesablanır.",
           "Cədvəldə həmin ayda işləyən işçilər şöbələr üzrə qruplaşdırılıb: kartda firması həmin firma olan, işə qəbul tarixi ayın sonunadək, işdən çıxma tarixi isə ayın əvvəlindən sonra olan işçilər. Şöbə Personallar kartındakı şöbədir.",
           "Hər gün avtomatik dolur: iş günü — iş saatı (8; bayramqabağı qısaldılmış gün — 7; 6 günlük iş həftəsində — 6,67), istirahət günü — İ, bayram — B (Kadrlar → İstehsalat təqvimi), işə qəbuldan əvvəlki və işdən çıxdıqdan sonrakı günlər — “—”.",
           "İmzalanmış məzuniyyət əmrinin günləri özü yazılır: əmək məzuniyyəti — M, ödənişsiz — Ö, sosial — S, təhsil — T; kartda qeydə alınmış xəstəlik vərəqəsi — X. Bu xanalar boz fonda və kilidlidir — dəyişmək üçün əmri dəyişmək lazımdır. Əmək məzuniyyətinin içinə düşən bayram günü B qalır.",
@@ -707,11 +708,11 @@ const GUIDES: Guide[] = [
         { steps: [
           "Kadrlar → Əməkhaqqı cədvəlləri: rəhbəri olduğunuz şöbələrin tabeli açılır (ayrıca icazə lazım deyil).",
           "Yalnız fərqləri yazın — xanaya basıb: saat (məs. 4 — natamam gün), E (ezamiyyət), Q (səbəbsiz gəlməmə), X (xəstəlik — vərəqə hələ kartda qeydə alınmayıbsa), İ (istirahət). Dəyişdirilmiş xananın altında sarı xətt görünür; xananı silsəniz, avtomatik dəyər qayıdır. Yanlış yazılan xana qırmızı olur və saxlanmır.",
-          "“Əlavə saatlar” tabında iş vaxtından artıq işlənmiş saatları günlər üzrə yazın.",
+          "İş vaxtından artıq işlənmiş saatları işçinin altındakı “Əlavə saat” sətrində, həmin günün xanasına yazın; sətrin sonunda cəmi görünür.",
           "“Yadda saxla” basın — dəyişikliklər saxlanmayınca başqa aya və ya firmaya keçəndə xəbərdarlıq çıxır.",
           "Hazır olanda şöbənin adının yanındakı “Təqdim et” düyməsini basın. Təqdim edilmiş tabeli yalnız mühasibatlıq geri qaytarsa dəyişə bilərsiniz — səbəb şöbənin adının yanında yazılır.",
         ] },
-        { list: ["“Çap et” — tabel A4 albom vərəqdə (forma N-1t), imza yerləri ilə."] },
+        { list: ["“Çap et” — tabel A4 albom vərəqdə (forma N-1t), imza yerləri ilə; əlavə saat varsa, Əlavə iş saatlarının uçot tabeli ayrıca vərəqdə gəlir."] },
       ] },
       { audience: "registrar", title: "Mühasibatlıq: tabellərin qəbulu", blocks: [
         { list: [
@@ -721,7 +722,7 @@ const GUIDES: Guide[] = [
       ] },
       { audience: "registrar", title: "Mühasibatlıq: əməkhaqqı cədvəli", blocks: [
         { list: [
-          "“Əməkhaqqı cədvəli” hissəsinin Baxışı olan işçi tabı görür (maaşlar yalnız ona göndərilir), Dəyişiklik et ilə doldurur və təsdiqləyir.",
+          "“Əməkhaqqı cədvəli” hissəsinin Baxışı olan işçi “Hesablanan əməkhaqqı” tabını və Tabeldəki məbləğ sütunlarını görür (maaşlar yalnız ona göndərilir), Dəyişiklik et ilə doldurur və təsdiqləyir. Məbləğlər tabel əsasında avtomatik hesablanır — tabeldə xana dəyişən kimi yenilənir.",
           "Əməkhaqqı = kartdakı vəzifə maaşı × işlənmiş gün / ayın norma günü.",
           "Əlavə saat = saat × (maaş / ayın norma saatı) × 2.",
           "Məzuniyyət haqqı imzalı məzuniyyət əmrindən gəlir (əmək, təhsil və digər məzuniyyət): bu aya düşən məzuniyyət günləri × orta günlük əməkhaqqı. Məzuniyyət iki aya düşəndə hər ay öz günlərinin haqqını alır və həmin ayda vergiyə cəlb olunur. Orta günlük — məzuniyyətin başladığı aydan əvvəlki 12 ayın (Hesablama parametrləri) kartdakı Əmək haqqı məbləğlərinin ortası / 30,4; tarixçə yoxdursa, vəzifə maaşından. Xanaya kursoru gətirəndə hesablama görünür. Sosial məzuniyyət (DSMF ödəyir) burada hesablanmır.",
