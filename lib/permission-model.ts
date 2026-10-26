@@ -138,11 +138,12 @@ export const SECTION_PARTS: Partial<Record<SectionKey, SectionPartGroup[]>> = {
     { key: "other", label: "Digər əmrlər", parts: [{ key: "other", label: "Digər əmrlər", actions: ACTIONS }] },
     { key: "settings", label: "Parametrlər", parts: [{ key: "settings", label: "Parametrlər", actions: FIXED }] },
   ],
+  // Versiya 3.57: the parts are named simply "Tabel" and "Maaş".
   // Versiya 3.54: Əməkhaqqı cədvəlləri — the payroll accountant (e.g. the head of Mühasibatlıq). A department head fills the tabel
   // of their own department without this right; it gives the tabel of every department of the firm and the payroll.
   "hr.payroll": [
-    { key: "timesheet", label: "Bütün şöbələrin tabeli", parts: [{ key: "timesheet", label: "Bütün şöbələrin tabeli (qəbul et, geri qaytar)", actions: FIXED }] },
-    { key: "payroll", label: "Əməkhaqqı cədvəli", parts: [{ key: "payroll", label: "Əməkhaqqı cədvəli (doldur, təsdiqlə)", actions: FIXED }] },
+    { key: "timesheet", label: "Tabel", parts: [{ key: "timesheet", label: "Tabel (bütün şöbələr: doldur, qəbul et, geri qaytar)", actions: FIXED }] },
+    { key: "payroll", label: "Maaş", parts: [{ key: "payroll", label: "Maaş (hesablanan əməkhaqqı: doldur, təsdiqlə)", actions: FIXED }] },
   ],
 };
 // Sections whose every right is given in their parts: the section's own checkbox only opens it (Baxış).

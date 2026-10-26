@@ -8,8 +8,8 @@ import { todayIso } from "@/lib/hr-calc";
 
 // Kadrlar → Əməkhaqqı cədvəlləri (Versiya 3.54). A department head fills the tabel of the departments they head (Firmalar →
 // Struktur) with no extra right. Giriş icazələri → Əməkhaqqı cədvəlləri (hr.payroll, closed by default, per firm) gives the
-// payroll accountant "Bütün şöbələrin tabeli" (see / change every department's tabel, accept or send it back) and
-// "Əməkhaqqı cədvəli" (see / fill and approve the payroll). Salaries leave the server only with the payroll's Baxış.
+// payroll accountant "Tabel" (see / change every department's tabel, accept or send it back) and
+// "Maaş" (see / fill and approve the payroll). Salaries leave the server only with the payroll's Baxış.
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
