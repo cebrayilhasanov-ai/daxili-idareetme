@@ -15,6 +15,7 @@ import {
   type LeaveLegal, type OrderEmployee, type OrderGroup, type SettlementSnapshot, type TerminationExtra, type TerminationLegal,
 } from "@/lib/hr-orders";
 import { docxParagraphs } from "@/lib/docx-text";
+import { leaveEndDate, leavePay, leavePayHtml, leaveTaxLines, type LeavePayResult } from "@/lib/leave-pay";
 import { allPartsRights, partsRightsOf, type PartsRights, type SectionAction } from "@/lib/permission-model";
 
 // Kadrlar → Əmrlər: leave, termination and other orders are written here (never on the card), printed from the system and take
@@ -45,7 +46,7 @@ const tabsOf = (data: OrdersData, companyId: number | string | null | undefined)
 const anyFirm = (data: OrdersData, tab: string, action: SectionAction) => !data.partRights || data.companies.some((c) => tabsOf(data, c.id)[tab][action]);
 const seesPay = (data: OrdersData, companyId: number | null | undefined) => !data.paySeen || Boolean(data.paySeen[String(companyId ?? "")]);
 type Send = (payload: Record<string, unknown>) => Promise<OrdersData & { savedId?: number }>;
-type Pay = { monthlySalary: number | null; salaries: SalaryRow[] };
+type Pay = { monthlySalary: number | null; jobKind?: string; salaries: SalaryRow[] };
 
 const personName = (o: { last_name: string | null; first_name: string | null; patronymic: string | null }) => [o.last_name, o.first_name, o.patronymic].filter(Boolean).join(" ");
 const kindLabel = (key: string | null) => ORDER_LEAVE_KINDS.find((k) => k.key === key)?.label || key || "—";
@@ -137,6 +138,19 @@ function settlementHtml(order: Order, s: SettlementSnapshot, draft: boolean) {
   <table class="calc">${avg}</table>
   <p class="note">Məbləğlər vergi və məcburi sosial sığorta tutulmalarından əvvəl göstərilib.</p>`;
 }
+// Versiya 3.60: the leave pay of a (paid) leave order — the same calculation the payroll uses (lib/leave-pay).
+const PAID_KINDS = ["annual", "study", "other"];
+function computeLeavePay(emp: Employee, data: OrdersData, pay: Pay, kind: string, start: string, end: string, orderId: number | null): LeavePayResult | null {
+  if (!PAID_KINDS.includes(kind) || !isIsoDate(start) || !isIsoDate(end) || end < start) return null;
+  const leaves = data.leaves.filter((l) => l.hr_employee_id === emp.id && l.order_id !== (orderId || 0));
+  return leavePay({ emp: { ...emp, monthly_salary: pay.monthlySalary }, kind, start, end, salaries: pay.salaries, calendar: indexCalendar(data.calendar), params: normalizeParams(data.params), leaves });
+}
+function leavePayBlock(result: LeavePayResult, emp: Employee, pay: Pay, data: OrdersData, kind: string, orderNo: string | null) {
+  const params = normalizeParams(data.params);
+  return leavePayHtml(result, { name: personName(emp), position: emp.position, department: emp.department, company: emp.company_name, hireDate: emp.hire_date, orderNo, kindLabel: kindLabel(kind),
+    taxes: leaveTaxLines(result, { monthly_salary: pay.monthlySalary, job_kind: pay.jobKind }, params) });
+}
+
 function openPrint(title: string, body: string) {
   const w = window.open("", "_blank", "width=820,height=960");
   if (!w) { window.alert("Çap pəncərəsi açılmadı — brauzerdə bu sayt üçün açılan pəncərələrə icazə verin."); return; }
@@ -160,6 +174,15 @@ async function printOrder(order: Order, data: OrdersData) {
     const emp = data.employees.find((e) => e.id === order.hr_employee_id);
     if (!snapshot && emp && order.start_date) snapshot = computeSettlement(emp, data, await loadPay(emp.id), order.start_date, order.kind || "", extra)?.snapshot || null;
     if (snapshot) body += settlementHtml(order, snapshot, !extra.settlement);
+  }
+  // A paid leave order is printed with its leave pay on a page of its own, for those who may see the worker's salaries.
+  if (order.grp === "leave" && order.status !== "cancelled" && seesPay(data, order.company_id) && PAID_KINDS.includes(order.kind || "") && order.start_date && order.end_date) {
+    const emp = data.employees.find((e) => e.id === order.hr_employee_id);
+    if (emp) {
+      const pay = await loadPay(emp.id);
+      const result = computeLeavePay(emp, data, pay, order.kind || "", order.start_date, order.end_date, order.id);
+      if (result) body += `<div class="pagebreak"></div>${leavePayBlock(result, emp, pay, data, order.kind || "", order.order_no)}`;
+    }
   }
   openPrint(`Əmr № ${order.order_no}`, body);
 }
@@ -250,7 +273,7 @@ const nextNumber = (data: OrdersData, grp: OrderGroup, companyId: number | null,
 };
 
 // ---------------------------------------------------------------- leave orders
-const emptyLeaveForm = (): Record<string, string> => ({ id: "", companyId: "", hrEmployeeId: "", kind: "annual", startDate: "", endDate: "", orderDate: todayIso(), basis: "İşçinin ərizəsi" });
+const emptyLeaveForm = (): Record<string, string> => ({ id: "", companyId: "", hrEmployeeId: "", kind: "annual", startDate: "", endDate: "", days: "", orderDate: todayIso(), basis: "İşçinin ərizəsi" });
 function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
   const [form, setForm] = useState(emptyLeaveForm);
   const [open, setOpen] = useState(false);
@@ -258,6 +281,17 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
   const params = useMemo(() => normalizeParams(data.params), [data.params]);
   const legal = useMemo(() => normalizeLeaveLegal(data.legal), [data.legal]);
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  // Versiya 3.60: typing the number of leave days (or changing the start / kind with days typed) fills the last day — an annual leave
+  // is longer by the holidays it meets (Əmək Məcəlləsi 114.6); typing the last day itself clears the typed number.
+  const setDated = (key: "startDate" | "days" | "kind" | "endDate") => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => {
+    const next = { ...f, [key]: e.target.value };
+    if (key === "endDate") return { ...next, days: "" };
+    const typed = Number(next.days);
+    const worker = data.employees.find((x) => String(x.id) === next.hrEmployeeId);
+    if (next.days && Number.isInteger(typed) && typed > 0 && isIsoDate(next.startDate)) next.endDate = leaveEndDate(next.startDate, typed, next.kind, indexCalendar(data.calendar), worker?.work_week || 5, params) || next.endDate;
+    return next;
+  });
+  const [pay, setPay] = useState<{ id: number; pay: Pay } | null>(null);
   // A new order is given only to workers of the firms where the tab's Əlavə et is given.
   const employees = data.employees.filter((e) => !e.termination_date && (!form.companyId || String(e.company_id) === form.companyId) && (Boolean(form.id) || tabsOf(data, e.company_id).leave.add));
   const emp = data.employees.find((e) => String(e.id) === form.hrEmployeeId) || null;
@@ -273,10 +307,25 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
   const body = emp && plan && plan.days ? leaveOrderText(emp, input, plan) : null;
   const balance = emp && isIsoDate(form.startDate) ? leaveBalance(emp, leaves, params, form.startDate) : null;
   const nextNo = !form.id && emp ? nextNumber(data, "leave", emp.company_id, form.orderDate) : "";
+  const paySeen = emp ? seesPay(data, emp.company_id) : false;
+  useEffect(() => {
+    if (!emp || !paySeen || pay?.id === emp.id) return;
+    let cancelled = false;
+    void loadPay(emp.id).then((p) => { if (!cancelled) setPay({ id: emp.id, pay: p }); }).catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Əmək haqqı məlumatı açılmadı."); });
+    return () => { cancelled = true; };
+  }, [emp, pay?.id, paySeen, setError]);
+  const workerPay = emp && pay?.id === emp.id ? pay.pay : null;
+  const leaveResult = emp && workerPay ? computeLeavePay(emp, data, workerPay, form.kind, form.startDate, form.endDate, form.id ? Number(form.id) : null) : null;
+  const printLeavePay = () => {
+    if (!emp || !workerPay || !leaveResult) return;
+    openPrint(`Məzuniyyət haqqı — ${personName(emp)}`, leavePayBlock(leaveResult, emp, workerPay, data, form.kind, form.id ? data.orders.find((o) => String(o.id) === form.id)?.order_no || null : null));
+  };
   const save = async () => {
     let result: (OrdersData & { savedId?: number }) | null = null;
     const isNew = !form.id;
-    if (!(await run("save", async () => { result = await send({ action: "leave", ...form }); }))) return;
+    const { days: _typedDays, ...payload } = form;
+    void _typedDays;
+    if (!(await run("save", async () => { result = await send({ action: "leave", ...payload }); }))) return;
     const done = result as unknown as OrdersData & { savedId?: number };
     const saved = done.orders.find((o) => o.id === done.savedId);
     setForm(emptyLeaveForm()); setOpen(false);
@@ -285,7 +334,7 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
   };
   const edit = (o: Order) => {
     const e = data.employees.find((x) => x.id === o.hr_employee_id);
-    setForm({ id: String(o.id), companyId: String(e?.company_id || ""), hrEmployeeId: String(o.hr_employee_id), kind: o.kind || "annual", startDate: o.start_date || "", endDate: o.end_date || "", orderDate: o.order_date, basis: o.basis || "" });
+    setForm({ id: String(o.id), companyId: String(e?.company_id || ""), hrEmployeeId: String(o.hr_employee_id), kind: o.kind || "annual", startDate: o.start_date || "", endDate: o.end_date || "", days: "", orderDate: o.order_date, basis: o.basis || "" });
     setOpen(true); setError(""); setNotice("");
   };
   return <div className="ordersbody">
@@ -297,9 +346,10 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
       <div className="hrgrid">
         <label className="field">Firma<select value={form.companyId} disabled={Boolean(form.id)} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value, hrEmployeeId: "" }))}><option value="">Bütün firmalar</option>{data.companies.filter((c) => Boolean(form.id) || tabsOf(data, c.id).leave.add).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label className="field hrwide">İşçi *<select value={form.hrEmployeeId} disabled={Boolean(form.id)} onChange={set("hrEmployeeId")}><option value="">Seçin</option>{employees.map((e) => <option key={e.id} value={e.id}>{personName(e)}{e.position ? ` — ${e.position}` : ""}{e.company_name ? `, ${e.company_name}` : ""}</option>)}</select></label>
-        <label className="field">Məzuniyyətin növü *<select value={form.kind} onChange={set("kind")}>{ORDER_LEAVE_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
-        <label className="field">Başlama tarixi *<Input type="date" value={form.startDate} onChange={set("startDate")} /></label>
-        <label className="field">Bitmə tarixi (son gün) *<Input type="date" value={form.endDate} onChange={set("endDate")} /></label>
+        <label className="field">Məzuniyyətin növü *<select value={form.kind} onChange={setDated("kind")}>{ORDER_LEAVE_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
+        <label className="field">Başlama tarixi *<Input type="date" value={form.startDate} onChange={setDated("startDate")} /></label>
+        <label className="field">Gün sayı<Input inputMode="numeric" value={form.days} placeholder="məs. 21" onChange={setDated("days")} /><small>bitmə tarixi özü hesablanır{form.kind === "annual" ? " (bayram günləri sayılmır, məzuniyyət uzanır)" : ""}</small></label>
+        <label className="field">Bitmə tarixi (son gün) *<Input type="date" value={form.endDate} onChange={setDated("endDate")} /></label>
         <label className="field">Əmrin tarixi *<Input type="date" value={form.orderDate} onChange={set("orderDate")} /></label>
         <label className="field hrwide">Əsas<Input value={form.basis} placeholder="məs. İşçinin 25.09.2026-cı il tarixli ərizəsi" onChange={set("basis")} /></label>
       </div>
@@ -314,10 +364,35 @@ function LeaveOrders({ data, send }: { data: OrdersData; send: Send }) {
         {plan.legalText && <p className="orderlegal"><b>Hüquqi əsas:</b> {plan.legalText}</p>}
         {plan.warnings.map((w) => <small key={w} className="hrhint hrwarn">⚠ {w}</small>)}
         {body && <div className="orderpreview"><b>{body.title}</b><ol>{body.items.map((i) => <li key={i}>{i}</li>)}</ol></div>}
+        {paySeen && PAID_KINDS.includes(form.kind) && !leaveResult && plan.days > 0 && !workerPay && <small className="hrhint">Məzuniyyət haqqı hesablanır...</small>}
+        {leaveResult && <LeavePayPanel result={leaveResult} onPrint={printLeavePay} />}
       </div>}
       <div className="hractions"><button className="inlinecancel" disabled={Boolean(busy)} onClick={() => { setOpen(false); setForm(emptyLeaveForm()); }}>Ləğv et</button><Button disabled={Boolean(busy) || !form.hrEmployeeId || !form.startDate || !form.endDate || !plan?.days} onClick={() => void save()}>{busy === "save" ? "Saxlanılır..." : form.id ? "Dəyişiklikləri saxla" : "Əmri qeydə al"}</Button></div>
     </div>}
     <OrderRegister grp="leave" columns={LEAVE_COLUMNS} data={data} send={send} onEdit={edit} busy={busy} run={run} setNotice={setNotice} />
+  </div>;
+}
+
+// Versiya 3.60: the leave pay of the order being written — average, last-salary comparison, months, warnings and the legal basis.
+function LeavePayPanel({ result, onPrint }: { result: LeavePayResult; onPrint: () => void }) {
+  const a = result.average;
+  return <div className="orderleavepay">
+    <div className="orderfacts">
+      <span><small>Hesablaşma dövrü</small><b>{periodLabel(a.basePeriod.from)} – {periodLabel(a.basePeriod.to)}</b></span>
+      <span><small>Nəzərə alınan aylar</small><b>{a.months}{a.base.some((b) => b.status === "replaced") ? " (əvəzlənmə ilə)" : ""}</b></span>
+      <span><small>Orta aylıq</small><b>{a.months ? money(a.monthly) : "—"}</b></span>
+      <span><small>Orta günlük (÷ 30,4)</small><b>{a.months ? money(a.daily) : "—"}</b></span>
+      <span><small>Ödənilən gün</small><b>{result.schedule.paidDays}{result.schedule.holidays.length ? ` (+${result.schedule.holidays.length} bayram)` : ""}</b></span>
+      {result.schedule.returnDate && <span><small>İşə qayıtma</small><b>{formatDay(result.schedule.returnDate)}</b></span>}
+      <span><small>Orta əmək haqqı üzrə</small><b>{result.averageTotal === null ? "—" : money(result.averageTotal)}</b></span>
+      <span><small>Sonuncu əmək haqqı üzrə</small><b>{result.floorTotal === null ? "—" : money(result.floorTotal)}</b></span>
+      {result.difference > 0 && <span><small>Fərq ödənişi (111)</small><b>{money(result.difference)}</b></span>}
+      <span className="ordertotal"><small>Məzuniyyət haqqı (brüt)</small><b>{money(result.total)}</b></span>
+    </div>
+    {result.months.length > 1 && <small className="hrhint">Aylar üzrə: {result.months.map((m) => `${periodLabel(m.period)} — ${m.paidDays} gün, ${money(m.amount)}`).join("; ")}.</small>}
+    {a.base.filter((b) => b.status !== "counted").map((b) => <small key={b.period + b.status} className="hrhint">{periodLabel(b.period)}: {b.note}</small>)}
+    {result.warnings.map((w) => <small key={w} className="hrhint hrwarn">⚠ {w}</small>)}
+    <div className="hractions left"><Button variant="outline" onClick={onPrint}><Printer />Hesablamanı çap et</Button></div>
   </div>;
 }
 

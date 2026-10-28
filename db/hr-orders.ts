@@ -253,10 +253,10 @@ const parseExtra = (raw: unknown): TerminationExtra => {
 export async function getEmployeeSalaries(employeeId: number) {
   await ensureOrdersSchema();
   const [emp, salaries] = await Promise.all([
-    db().prepare("SELECT monthly_salary FROM hr_employees WHERE id = ?").bind(employeeId).first<{ monthly_salary: number | null }>(),
-    db().prepare("SELECT period, amount FROM hr_salaries WHERE hr_employee_id = ? ORDER BY period").bind(employeeId).all<SalaryRow>(),
+    db().prepare("SELECT monthly_salary, job_kind FROM hr_employees WHERE id = ?").bind(employeeId).first<{ monthly_salary: number | null; job_kind: string | null }>(),
+    db().prepare("SELECT period, amount, parts, replace_reason FROM hr_salaries WHERE hr_employee_id = ? ORDER BY period").bind(employeeId).all<SalaryRow>(),
   ]);
-  return { monthlySalary: emp?.monthly_salary ?? null, salaries: salaries.results };
+  return { monthlySalary: emp?.monthly_salary ?? null, jobKind: emp?.job_kind || "main", salaries: salaries.results };
 }
 
 async function settlementFor(employeeId: number, date: string, reasonKey: string, extra: TerminationExtra) {

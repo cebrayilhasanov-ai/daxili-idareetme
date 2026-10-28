@@ -15,13 +15,15 @@ import {
 // also gets the payroll worked out live in the tabel itself.
 // Versiya 3.56: the payroll in the firm's own Excel form (salary by the month's norm hours, Əsas / Əlavə place of work, final
 // settlement, aliment and advance after tax); both tabs can be saved as an Excel file.
+// Versiya 3.60: leave pay by lib/leave-pay (12 months, replaced months, not less than the last salary, split by month), the bonus
+// split into the pay system's bonus and a one-off bonus / material aid, rates by date and sector, exact arithmetic.
 // Edits stay on the page until "Yadda saxla", then go to /api/hr/payroll in one request.
 
 type Access = { allDepartments: boolean; editAll: boolean; heads: string[]; payView: boolean; payEdit: boolean };
 type Emp = { id: number; last_name: string; first_name: string; patronymic: string | null; position: string | null; department: string | null; hire_date: string; termination_date: string | null; work_week: number; monthly_salary?: number | null; fin?: string | null; job_kind?: string | null };
 type Sheet = { department: string; status: string; submitted_by: string | null; submitted_at: string | null; decided_by: string | null; decided_at: string | null; return_note: string | null };
 // Rows of a month approved before Versiya 3.56 lack the newer fields.
-type SnapshotRow = Omit<PayrollRow, "settlementPay" | "payable"> & { settlementPay?: number; payable?: number; hr_employee_id: number; name: string; fin?: string | null; jobKind?: string; position: string | null; department: string;
+type SnapshotRow = Omit<PayrollRow, "settlementPay" | "payable" | "parts" | "included" | "bonus" | "oneOff" | "exempt" | "rateWarning"> & { settlementPay?: number; payable?: number; hr_employee_id: number; name: string; fin?: string | null; jobKind?: string; position: string | null; department: string;
   workedDays: number; normDays: number; workedHours?: number; normHours?: number; overtime: number; inputs: PayrollInputs; leaveDetails: LeavePay[]; settlementDetails?: SettlementPay[] };
 type MonthData = {
   firms: { id: number; name: string }[]; period: string; companyId: number | null; access: Access | null;
@@ -61,7 +63,8 @@ const PAY_GROUPS: { label?: string; columns: PayColumn[] }[] = [
     col("hours", "Faktiki iş saatları", "hours", 9, (r) => r.workedHours),
     col("salaryPart", "Hesablanmış əmək haqqı", "money", 11, (r) => r.pay.salaryPart),
     col("overtimePay", "Əlavə saat", "money", 10, (r) => r.pay.overtimePay),
-    col("bonus", "Mükafat / Maddi yardım", "money", 11, (r) => r.inputs.bonus, { input: "bonus" }),
+    col("bonus", "Mükafat", "money", 11, (r) => r.inputs.bonus, { input: "bonus" }),
+    col("oneOff", "Birdəfəlik mükafat / Maddi yardım", "money", 11, (r) => r.inputs.oneOff, { input: "oneOff" }),
     col("leave", "Məzuniyyət / Son hesablaşma", "money", 12, (r) => r.pay.leavePay + r.pay.settlementPay),
   ] },
   { columns: [col("gross", "CƏMİ", "money", 11, (r) => r.pay.gross, { strong: true })] },
@@ -373,7 +376,7 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
     if (approved && data.payroll.snapshot) return data.payroll.snapshot.map((s) => ({ id: s.hr_employee_id, name: s.name, fin: s.fin ?? null, jobKind: s.jobKind ?? "main", position: s.position, department: s.department,
       workedHours: s.workedHours ?? null, normHours: s.normHours ?? null, overtime: s.overtime, inputs: { ...EMPTY_INPUTS, ...s.inputs }, leavePay: s.leaveDetails || [], settlement: s.settlementDetails || [],
       // Months approved before Versiya 3.56 have no payable / settlement figures of their own.
-      pay: { ...s, settlementPay: s.settlementPay ?? 0, payable: s.payable ?? Math.round((s.gross - s.withheld) * 100) / 100 } }));
+      pay: { ...s, settlementPay: s.settlementPay ?? 0, payable: s.payable ?? Math.round((s.gross - s.withheld) * 100) / 100, bonus: s.inputs?.bonus ?? 0, oneOff: s.inputs?.oneOff ?? 0, exempt: 0, included: s.gross, parts: [], rateWarning: "" } }));
     return rows.map((r) => {
       const typed = inputEdits[r.emp.id] || {};
       const base = inputsOf(r.emp.id);
@@ -384,7 +387,7 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
       const ot = overtimeHours(r.overtime);
       return { id: r.emp.id, name: personName(r.emp), fin: r.emp.fin ?? null, jobKind: r.emp.job_kind === "additional" ? "additional" : "main", position: r.emp.position, department: r.department,
         workedHours: r.sheet.workedHours, normHours: r.sheet.norm.hours, overtime: ot, inputs, leavePay, settlement,
-        pay: payrollRow({ salary: r.emp.monthly_salary ?? null, period: data.period, row: r.sheet, overtime: ot, leavePay, settlement, inputs, jobKind: r.emp.job_kind }) };
+        pay: payrollRow({ salary: r.emp.monthly_salary ?? null, period: data.period, row: r.sheet, overtime: ot, leavePay, settlement, inputs, jobKind: r.emp.job_kind, sector: data.params?.payrollSector }) };
     });
   }
 
@@ -397,9 +400,10 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
       : <>{r.inputs[key] ? num(r.inputs[key]) : "—"}</>;
     const titleOf = (c: PayColumn, r: PayRow) => c.key === "overtimePay" && r.overtime ? `${r.overtime} saat × ${num(r.pay.hourly)} × ${OVERTIME_MULTIPLIER}`
       : c.key === "salaryPart" && r.workedHours !== null ? `${num(r.pay.salary)} / ${r.normHours} saat × ${r.workedHours} saat`
-      : c.key === "leave" ? [...r.leavePay.map((l) => `Məzuniyyət, əmr № ${l.order_no || "—"}: ${l.days} gün × ${num(l.daily)} (orta günlük${l.averageMonths ? `, ${l.averageMonths} ay` : ", tarixçə yoxdur — vəzifə maaşından"})`),
+      : c.key === "leave" ? [...r.leavePay.map((l) => `Məzuniyyət, əmr № ${l.order_no || "—"}${l.start ? ` (${formatDay(l.start)} – ${formatDay(l.end)})` : ""}: bu ay ${l.days} gün — ${num(l.amount)}${l.applied === "floor" ? " (111-ci maddə: sonuncu əmək haqqı üzrə" + (l.difference ? `, fərq ödənişi ${num(l.difference)} daxil` : "") + ")" : ` (orta günlük ${num(l.daily)}, ${l.averageMonths} ay)`}${l.total !== undefined && l.total !== l.amount ? `; bütün məzuniyyət ${num(l.total)}` : ""}${l.warnings?.length ? `\n⚠ ${l.warnings.join("\n⚠ ")}` : ""}`),
         ...r.settlement.flatMap((s) => s.lines.map((l) => `Son hesablaşma, əmr № ${s.order_no || "—"}: ${l.label} — ${num(l.amount)}`))].join("\n")
-      : c.key === "tax" && r.jobKind === "additional" ? "Əlavə iş yeri — 200 ₼ güzəşt tətbiq olunmur" : "";
+      : c.key === "tax" && r.jobKind === "additional" ? "Əlavə iş yeri — 200 ₼ güzəşt tətbiq olunmur"
+      : c.key === "tax" && r.pay.exempt ? `İşdən çıxma müavinəti ${num(r.pay.exempt)} gəlir vergisindən və DSMF-dən azaddır (Vergi Məcəlləsi 102.1.4, "Sosial sığorta haqqında" Qanun 15)` : "";
     const summary = payrollSummary(list);
     return <>
       {approved ? <div className="hrnote">✓ Təsdiqlənib{data.payroll.approved_by ? `: ${data.payroll.approved_by}` : ""}{data.payroll.approved_at ? `, ${formatDay(data.payroll.approved_at)}` : ""}. Hesablanmış məbləğlər işçi kartlarının “Əmək haqqı” bölməsinə yazılıb.</div>
@@ -421,6 +425,7 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
           if (c.key === "name") return <td key={c.key} className="l"><b>{r.name}</b></td>;
           if (c.input) return <td key={c.key} className="n">{inputCell(r, c.input)}</td>;
           if (c.key === "salary" && !r.pay.salary) return <td key={c.key} className="n"><span className="warn" title="Kartda vəzifə maaşı yoxdur">—</span></td>;
+          if (c.key === "leave" && r.leavePay.some((l) => l.complete === false)) return <td key={c.key} className="n" title={titleOf(c, r)}><span className="warn">⚠ {shown(c, c.value(r))}</span></td>;
           return <td key={c.key} className={`${c.kind === "text" ? "t" : "n"}${c.strong ? " strong" : ""}`} title={titleOf(c, r)}>{c.kind === "text" ? String(c.value(r) ?? "") : shown(c, c.value(r))}</td>;
         })}</tr>)}</tbody>
         <tfoot><tr>{PAY_COLUMNS.map((c, i) => <td key={c.key} className={i === 2 ? "l" : "n"}>{i === 2 ? `Cəmi (${list.length} işçi)` : c.total ? shown(c, sum(list, (r) => Number(c.value(r)) || 0)) : ""}</td>)}</tr></tfoot>
@@ -429,7 +434,7 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
         <dl>{summary.left.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{num(value)}</dd></div>)}</dl>
         <dl><div><dt>Ayın iş saatları</dt><dd>{summary.normHours ?? "—"}</dd></div>{summary.right.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{num(value)}</dd></div>)}</dl>
       </div>
-      <p className="hint">Hesablanmış əməkhaqqı = vəzifə maaşı / ayın norma saatı × faktiki iş saatı (tabeldən). Əlavə saat = saat × (maaş / norma saat) × {OVERTIME_MULTIPLIER}. Məzuniyyət haqqı imzalı məzuniyyət əmrlərindən (bu aya düşən günlər × orta günlük), son hesablaşma imzalı xitam əmrindən (istifadə olunmamış məzuniyyətə görə kompensasiya, işdən çıxma müavinəti). Əlavə iş yerində (kartda “İş yeri: Əlavə”) gəlir vergisində 200 ₼ güzəşt tətbiq olunmur. Ödənilməli = Cəmi − tutulmuşdur; Qalıq = Ödənilməli − aliment − ödənilmiş avans. Dərəcələr 2026, özəl qeyri-neft sektoru — mühasib yoxlamalıdır.</p>
+      <p className="hint">Hesablanmış əməkhaqqı = vəzifə maaşı / ayın norma saatı × faktiki iş saatı (tabeldən). Əlavə saat = saat × (maaş / norma saat) × {OVERTIME_MULTIPLIER}. Məzuniyyət haqqı imzalı məzuniyyət əmrlərindən: məzuniyyətin başladığı aydan əvvəlki 12 təqvim ayının nəzərə alınan əmək haqqı ÷ 12 ÷ 30,4 × ödənilən günlər (bayramlar sayılmır), sonuncu əmək haqqından (müqavilə maaşı × məzuniyyətə düşən iş günləri / ayın iş günləri) az olmamaqla; iki aya düşəndə hər ay öz payını alır və öz gəlirləri ilə birlikdə vergiyə cəlb olunur (⚠ — hesablaşma dövründə məlumat çatışmır). Birdəfəlik mükafat / maddi yardım orta əmək haqqına daxil edilmir. Son hesablaşma imzalı xitam əmrindən (istifadə olunmamış məzuniyyətə görə kompensasiya, işdən çıxma müavinəti). Əlavə iş yerində (kartda “İş yeri: Əlavə”) gəlir vergisində 200 ₼ güzəşt tətbiq olunmur. Ödənilməli = Cəmi − tutulmuşdur; Qalıq = Ödənilməli − aliment − ödənilmiş avans. Dərəcələr ayın tarixinə və Hesablama parametrlərindəki sektora görə (Vergi Məcəlləsi 101, 102.1.6; “Sosial sığorta haqqında” 14; “Tibbi sığorta haqqında” 15-10); ləğv və ixtisar üzrə müavinət gəlir vergisindən və DSMF-dən azaddır. İSH 0,5% — mühasib yoxlamalıdır.</p>
     </>;
   }
 

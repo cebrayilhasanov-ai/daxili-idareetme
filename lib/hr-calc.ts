@@ -1,3 +1,5 @@
+import { Dec } from "@/lib/decimal";
+
 // HR calculations shared by the server and the HR page: work years, leave entitlement and balance, average earnings,
 // working-day norms from the production calendar (istehsalat təqvimi) and the final settlement on termination.
 // Every date is a plain "YYYY-MM-DD" string and all arithmetic runs in UTC, so time zones never shift a day.
@@ -43,7 +45,15 @@ export type HrParams = {
   excludeDayOffFromLeave: boolean;
   severanceSteps: { years: number; multiplier: number }[];
   dailyHours: number;
+  // Versiya 3.60: replace the months of 140.1 (332-VIIQD) in the average for leave; the sector whose tax and insurance rates apply.
+  replaceMonths: boolean;
+  payrollSector: PayrollSector;
 };
+export type PayrollSector = "private_nonoil" | "state_oil";
+export const PAYROLL_SECTORS: { key: PayrollSector; label: string }[] = [
+  { key: "private_nonoil", label: "Neft-qaz sahəsində fəaliyyəti olmayan, qeyri-dövlət sektoru" },
+  { key: "state_oil", label: "Dövlət sektoru və ya neft-qaz sahəsi" },
+];
 
 export const DEFAULT_HR_PARAMS: HrParams = {
   baseLeaveDays: 21,
@@ -55,6 +65,8 @@ export const DEFAULT_HR_PARAMS: HrParams = {
   excludeDayOffFromLeave: false,
   severanceSteps: [{ years: 0, multiplier: 1 }, { years: 1, multiplier: 1.4 }, { years: 5, multiplier: 1.7 }, { years: 10, multiplier: 2 }],
   dailyHours: 8,
+  replaceMonths: true,
+  payrollSector: "private_nonoil",
 };
 
 export function normalizeParams(raw: unknown): HrParams {
@@ -74,6 +86,8 @@ export function normalizeParams(raw: unknown): HrParams {
     severanceSteps: steps(input.severanceSteps, DEFAULT_HR_PARAMS.severanceSteps, (s) => Number.isFinite(Number(s.years)) && Number.isFinite(Number(s.multiplier)))
       .map((s) => ({ years: Number(s.years), multiplier: Number(s.multiplier) })).sort((a, b) => a.years - b.years),
     dailyHours: num(input.dailyHours, DEFAULT_HR_PARAMS.dailyHours) || DEFAULT_HR_PARAMS.dailyHours,
+    replaceMonths: typeof input.replaceMonths === "boolean" ? input.replaceMonths : DEFAULT_HR_PARAMS.replaceMonths,
+    payrollSector: PAYROLL_SECTORS.some((x) => x.key === input.payrollSector) ? input.payrollSector as PayrollSector : DEFAULT_HR_PARAMS.payrollSector,
   };
 }
 
@@ -292,18 +306,131 @@ export function leaveBalance(emp: HrEmployeeCalc, leaves: HrLeaveCalc[], params:
 }
 
 // ---------- earnings ----------
-export type SalaryRow = { period: string; amount: number };
+// One month of the card's "Əmək haqqı": `amount` is what counts towards the average for leave (Əmək Məcəlləsi 139, Nazirlər
+// Kabinetinin 25.08.1999 tarixli 137 nömrəli qərarı); since Versiya 3.60 an approved payroll also keeps the month's make-up in
+// `parts` (what was left out, e.g. a one-off bonus or leave compensation) and the month may carry the reason it is replaced.
+export type EarningPart = { key: string; label: string; amount: number; included: boolean };
+export type SalaryRow = { period: string; amount: number; parts?: string | EarningPart[] | null; replace_reason?: string | null };
 
-// Average monthly earnings over the months before `date`'s month; with fewer months on record, only those months count.
-export function averageEarnings(salaries: SalaryRow[], date: string, params: HrParams) {
+// Əmək Məcəlləsi 140.1, ikinci cümlə (30.12.2025 tarixli 332-VIIQD nömrəli Qanun, 16.01.2026-dan qüvvədədir): months not worked or
+// not fully worked for these reasons are replaced by the nearest fully worked calendar months. The same law added to 111.1 that
+// the average kept for leave is "not less than the last salary".
+export const LAW_332_IN_FORCE = "2026-01-16";
+export const REPLACE_REASONS: { key: string; label: string }[] = [
+  { key: "social_partial", label: "Qismən ödənişli sosial məzuniyyət" },
+  { key: "unpaid_employer", label: "İşçinin təşəbbüsü ilə olmayan ödənişsiz məzuniyyət" },
+  { key: "downtime", label: "İşçinin təqsiri olmadan boşdayanma" },
+];
+export const replaceReasonLabel = (key: string | null | undefined) => REPLACE_REASONS.find((r) => r.key === key)?.label || "";
+export function earningParts(raw: SalaryRow["parts"]): EarningPart[] {
+  if (!raw) return [];
+  try {
+    const list = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(list) ? list.filter((p) => p && typeof p === "object").map((p) => ({ key: String(p.key || ""), label: String(p.label || ""), amount: Number(p.amount) || 0, included: Boolean(p.included) })) : [];
+  } catch { return []; }
+}
+
+export type BaseMonthStatus = "counted" | "replacement" | "replaced" | "dropped" | "partial" | "missing";
+export type BaseMonth = { period: string; status: BaseMonthStatus; amount: number | null; excluded: number; note: string; replaces?: string; replacedBy?: string };
+export type AverageResult = {
+  // Kept for the earlier callers: the months that make up the average, their count and the rounded figures.
+  rows: { period: string; amount: number | null }[]; months: number; total: number; monthly: number; daily: number;
+  exact: { total: Dec; monthly: Dec | null; daily: Dec | null };
+  basePeriod: { from: string; to: string };
+  base: BaseMonth[];
+  fewerThanFull: boolean;
+  missing: string[];
+  complete: boolean;
+  warnings: string[];
+  legal: string[];
+};
+
+const MONTH_LABELS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avqust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
+export const monthLabel = (period: string) => `${MONTH_LABELS[Number(period.slice(5, 7)) - 1]} ${period.slice(0, 4)}`;
+
+// Average earnings for leave (and for unused-leave compensation, 140.4) at `date`:
+// · the 12 calendar months before the month of `date` (140.1), whatever work year the leave is for;
+// · a worker employed less than 12 calendar months by then — only the full calendar months of employment (140.2): a month counts
+//   when the worker was employed from its first day to its last;
+// · from 16.01.2026 a month marked with a reason of 140.1 is replaced by the nearest earlier fully worked month (one with
+//   earnings on record and no such reason); a month that has no such month to take its place is left out of the average;
+// · monthly = total / number of months, daily = monthly / 30,4 (140.3), both exact — nothing is rounded here.
+// A month of the period with no earnings on record is not taken as 0: it is listed in `missing` and the result is incomplete.
+export function legalAverage(emp: { hire_date: string; termination_date?: string | null }, salaries: SalaryRow[], date: string, params: HrParams, leaves: HrLeaveCalc[] = []): AverageResult {
+  const start = monthStart(date);
   const periods: string[] = [];
-  for (let i = params.avgMonths; i >= 1; i--) periods.push(addMonths(monthStart(date), -i).slice(0, 7));
-  const byPeriod = new Map(salaries.map((s) => [s.period, Number(s.amount) || 0]));
-  const rows = periods.map((period) => ({ period, amount: byPeriod.get(period) ?? null }));
-  const counted = rows.filter((r) => r.amount !== null && r.amount > 0);
-  const total = counted.reduce((sum, r) => sum + (r.amount || 0), 0);
-  const monthly = counted.length ? total / counted.length : 0;
-  return { rows, months: counted.length, total: round2(total), monthly: round2(monthly), daily: round2(monthly / params.avgDivisor) };
+  for (let i = params.avgMonths; i >= 1; i--) periods.push(addMonths(start, -i).slice(0, 7));
+  const byPeriod = new Map(salaries.map((s) => [s.period, s]));
+  const employedWhole = (p: string) => `${p}-01` >= emp.hire_date && (!emp.termination_date || monthEnd(`${p}-01`) <= emp.termination_date);
+  const fewerThanFull = emp.hire_date > `${periods[0]}-01`;
+  const replaceOn = params.replaceMonths && date >= LAW_332_IN_FORCE;
+  const warnings: string[] = [];
+  const legal = ["Əmək Məcəlləsi, 139-cu maddə və Nazirlər Kabinetinin 25.08.1999 tarixli 137 nömrəli qərarı (nəzərə alınan və alınmayan ödənişlər)", "Əmək Məcəlləsi, 140-cı maddənin 1-ci və 3-cü hissələri (12 təqvim ayı, ÷ 12, ÷ 30,4)"];
+  if (fewerThanFull) legal.push("Əmək Məcəlləsi, 140-cı maddənin 2-ci hissəsi (12 təqvim ayından az əmək münasibəti — faktiki işlənmiş tam təqvim ayları)");
+  const amountOf = (p: string) => { const s = byPeriod.get(p); return s ? Number(s.amount) : null; };
+  const excludedOf = (p: string) => round2(earningParts(byPeriod.get(p)?.parts).filter((x) => !x.included).reduce((sum, x) => sum + x.amount, 0));
+  const reasonOf = (p: string) => { const r = byPeriod.get(p)?.replace_reason; return r && REPLACE_REASONS.some((x) => x.key === r) ? r : null; };
+
+  const base: BaseMonth[] = [];
+  const used: string[] = [];
+  const toReplace: string[] = [];
+  for (const p of periods) {
+    if (!employedWhole(p)) {
+      // Months before the hire month are simply outside the employment and are not listed; the hire month itself is a partial one.
+      if (monthEnd(`${p}-01`) >= emp.hire_date) base.push({ period: p, status: "partial", amount: amountOf(p), excluded: excludedOf(p), note: "Tam təqvim ayı deyil (işə qəbul ayın 1-dən deyil) — nəzərə alınmır (140.2)" });
+      continue;
+    }
+    if (replaceOn && reasonOf(p)) { toReplace.push(p); continue; }
+    used.push(p);
+  }
+  // The nearest earlier fully worked months take the place of the replaced ones, one each, newest first.
+  const candidates: string[] = [];
+  if (toReplace.length) {
+    for (let i = 1; i <= 36 && candidates.length < toReplace.length; i++) {
+      const p = addMonths(`${periods[0]}-01`, -i).slice(0, 7);
+      if (!employedWhole(p)) break;
+      if (amountOf(p) !== null && !reasonOf(p)) candidates.push(p);
+    }
+    legal.push("Əmək Məcəlləsi, 140-cı maddənin 1-ci hissəsinin ikinci cümləsi (30.12.2025 tarixli 332-VIIQD nömrəli Qanun) — ayların əvəzlənməsi");
+  }
+  toReplace.forEach((p, i) => {
+    const by = candidates[i];
+    const reason = replaceReasonLabel(reasonOf(p));
+    if (by) {
+      base.push({ period: p, status: "replaced", amount: amountOf(p), excluded: excludedOf(p), note: `${reason} — ${monthLabel(by)} ayı ilə əvəz olunub`, replacedBy: by });
+      base.push({ period: by, status: "replacement", amount: amountOf(by), excluded: excludedOf(by), note: `${monthLabel(p)} ayının əvəzinə (yaxın tam işlənmiş ay)`, replaces: p });
+      used.push(by);
+    } else {
+      base.push({ period: p, status: "dropped", amount: amountOf(p), excluded: excludedOf(p), note: `${reason} — əvəz edəcək tam işlənmiş ay tapılmadı, ay ortadan çıxarılıb` });
+      warnings.push(`${monthLabel(p)}: ${reason.toLocaleLowerCase("az")} səbəbindən əvəzlənməli idi, lakin əvvəlki aylarda tam işlənmiş və əmək haqqı qeyd olunmuş ay yoxdur — ay hesablamaya daxil edilmədi.`);
+    }
+  });
+  const missing: string[] = [];
+  for (const p of used) {
+    const amount = amountOf(p);
+    if (amount === null) { missing.push(p); if (!base.some((b) => b.period === p)) base.push({ period: p, status: "missing", amount: null, excluded: 0, note: "Əmək haqqı qeyd olunmayıb — 0 qəbul edilmir, məlumatı daxil edin" }); else { const b = base.find((x) => x.period === p); if (b) b.status = "missing"; } }
+    else if (!base.some((b) => b.period === p)) base.push({ period: p, status: "counted", amount, excluded: excludedOf(p), note: "" });
+  }
+  base.sort((a, b) => a.period.localeCompare(b.period));
+  if (missing.length) warnings.push(`Hesablaşma dövrünün ${missing.map(monthLabel).join(", ")} ay(lar)ı üçün əmək haqqı qeyd olunmayıb. Bu aylar 0 hesab edilmir; nəticə natamamdır — “Personallar → Əmək haqqı” tabında məbləğləri daxil edin.`);
+  // Months the worker spent (partly) on unpaid or social leave that are not marked: the reason decides whether they are replaced.
+  if (params.replaceMonths && date >= LAW_332_IN_FORCE) {
+    for (const p of used) {
+      if (reasonOf(p)) continue;
+      const from = `${p}-01`, to = monthEnd(from);
+      const hit = leaves.find((l) => (l.kind === "unpaid" || l.kind === "social") && l.start_date <= to && l.end_date >= from);
+      if (hit) warnings.push(`${monthLabel(p)}: bu ayda ${hit.kind === "unpaid" ? "ödənişsiz" : "sosial"} məzuniyyət var (${formatDay(hit.start_date)} – ${formatDay(hit.end_date)}). ${hit.kind === "unpaid" ? "İşçinin təşəbbüsü ilə deyilsə" : "Qismən ödənişlidirsə"}, “Əmək haqqı” tabında bu ay üçün əvəzlənmə səbəbini seçin (140.1).`);
+    }
+  }
+  const counted = used.filter((p) => amountOf(p) !== null);
+  const total = Dec.sum(counted.map((p) => Dec.of(amountOf(p) as number)));
+  const monthly = counted.length ? total.div(counted.length) : null;
+  const daily = monthly ? monthly.div(Dec.of(params.avgDivisor)) : null;
+  if (!counted.length) warnings.push(fewerThanFull ? "İşçinin hesablaşma dövründə tam təqvim ayı yoxdur — orta əmək haqqı hesablana bilmir." : "Hesablaşma dövründə əmək haqqı qeyd olunmuş ay yoxdur — orta əmək haqqı hesablana bilmir.");
+  return {
+    rows: counted.map((p) => ({ period: p, amount: amountOf(p) })), months: counted.length, total: total.toNumber(), monthly: monthly ? monthly.toNumber() : 0, daily: daily ? daily.toNumber() : 0,
+    exact: { total, monthly, daily }, basePeriod: { from: periods[0], to: periods[periods.length - 1] }, base, fewerThanFull, missing, complete: !missing.length && counted.length > 0, warnings, legal,
+  };
 }
 
 export function severanceMultiplier(serviceYears: number, params: HrParams) {
@@ -319,7 +446,7 @@ export type Settlement = {
   workedDays: number;
   salaryPart: number;
   balance: LeaveBalance;
-  average: ReturnType<typeof averageEarnings>;
+  average: AverageResult;
   compensationDays: number;
   compensation: number;
   overusedDays: number;
@@ -338,14 +465,16 @@ export function settlement(emp: HrEmployeeCalc, leaves: HrLeaveCalc[], salaries:
   const workedDays = input.workedDays ?? autoWorked;
   const salaryPart = norm.days ? round2(((emp.monthly_salary || 0) * workedDays) / norm.days) : 0;
   const balance = leaveBalance({ ...emp, termination_date: null }, leaves, params, date);
-  const average = averageEarnings(salaries, date, params);
+  // Versiya 3.60: unused leave is compensated by the leave-pay method of 140 (140.4) — the 12 months before the month of dismissal.
+  const average = legalAverage(emp, salaries, date, params, leaves);
+  const daily = average.exact.daily || Dec.zero;
   const compensationDays = Math.max(0, balance.balance);
-  const compensation = round2(compensationDays * average.daily);
+  const compensation = daily.mul(Dec.of(round2(compensationDays))).toNumber();
   const overusedDays = Math.max(0, -balance.balance);
-  const overusedDeduction = input.deductOverused ? round2(overusedDays * average.daily) : 0;
+  const overusedDeduction = input.deductOverused ? daily.mul(Dec.of(round2(overusedDays))).toNumber() : 0;
   const serviceYears = Math.floor(monthsBetween(emp.hire_date, date, false) / 12);
   const multiplier = input.severance ? severanceMultiplier(serviceYears, params) : 0;
-  const severance = round2(multiplier * average.monthly);
-  const total = round2(salaryPart + compensation + severance - overusedDeduction);
+  const severance = (average.exact.monthly || Dec.zero).mul(Dec.of(multiplier)).toNumber();
+  const total = Dec.sum([salaryPart, compensation, severance]).sub(overusedDeduction).toNumber();
   return { date, norm, workedDays, salaryPart, balance, average, compensationDays, compensation, overusedDays, overusedDeduction, serviceYears, severanceMultiplier: multiplier, severance, total };
 }

@@ -2,7 +2,7 @@ import { env } from "@/lib/runtime";
 import { markSchemaCurrent, schemaIsCurrent } from "@/lib/schema-version";
 import { formatPhone } from "@/lib/phone";
 import { createCustomer, findCustomerByVoen, getCustomers } from "@/db/catalog";
-import { CALENDAR_KINDS, LEAVE_KINDS, TERMINATION_REASONS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
+import { CALENDAR_KINDS, LEAVE_KINDS, REPLACE_REASONS, TERMINATION_REASONS, addMonths, isIsoDate, leaveDaysBetween, indexCalendar, monthStart, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, normalizeParams, priorService, suggestedHolidays, todayIso, type CalendarDay, type HrParams } from "@/lib/hr-calc";
 
 // HR register (kadr uçotu): every worker of every firm, kept apart from the app's login users (`employees` / `app_users`).
 // Most workers never sign in; a card may optionally point at a Personal entry (user_employee_id) when that person also uses the app.
@@ -24,7 +24,7 @@ const EXTRA_COLUMNS: [string, string][] = [
 
 let schemaReady = false;
 // Versiya 3.50: raise it with every new table, column or one-time migration below (lib/schema-version.ts).
-const SCHEMA_VERSION = "3.56";
+const SCHEMA_VERSION = "3.60";
 export async function ensureHrSchema() {
   if (schemaReady) return;
   if (await schemaIsCurrent("hr", SCHEMA_VERSION)) { schemaReady = true; return; }
@@ -106,6 +106,9 @@ export async function ensureHrSchema() {
   const jobColumns = (await db().prepare("PRAGMA table_info(hr_prior_jobs)").all<{ name: string }>()).results;
   if (!jobColumns.some((c: { name: string }) => c.name === "termination_reason")) await db().prepare("ALTER TABLE hr_prior_jobs ADD COLUMN termination_reason TEXT").run();
   // A leave given by an order points at it; such a leave is changed or removed only through its order (Kadrlar → Əmrlər).
+  // Versiya 3.60: a month's make-up (what counts towards the average for leave and what does not) and the reason it is replaced (140.1).
+  const salaryColumns = new Set((await db().prepare("PRAGMA table_info(hr_salaries)").all<{ name: string }>()).results.map((c: { name: string }) => c.name));
+  for (const [name, type] of [["parts", "TEXT"], ["replace_reason", "TEXT"]]) if (!salaryColumns.has(name)) await db().prepare(`ALTER TABLE hr_salaries ADD COLUMN ${name} ${type}`).run();
   const leaveColumns = (await db().prepare("PRAGMA table_info(hr_leaves)").all<{ name: string }>()).results;
   if (!leaveColumns.some((c: { name: string }) => c.name === "order_id")) await db().prepare("ALTER TABLE hr_leaves ADD COLUMN order_id INTEGER").run();
   await db().prepare(`CREATE TABLE IF NOT EXISTS hr_family (
@@ -180,7 +183,7 @@ export async function getHrData() {
       LEFT JOIN employees ON employees.id = hr_employees.user_employee_id
       ORDER BY hr_employees.last_name, hr_employees.first_name`).all(),
     db().prepare("SELECT * FROM hr_leaves ORDER BY start_date DESC, id DESC").all(),
-    db().prepare("SELECT hr_employee_id, period, amount FROM hr_salaries ORDER BY period").all(),
+    db().prepare("SELECT hr_employee_id, period, amount, parts, replace_reason FROM hr_salaries ORDER BY period").all(),
     calendarDays(),
     getHrParams(),
     db().prepare("SELECT id, name FROM companies WHERE active = 1 ORDER BY name").all(),
@@ -439,8 +442,14 @@ export async function saveHrSalary(input: Record<string, unknown>) {
   const period = String(input.period || "");
   if (!employeeId || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new Error("İşçi və ay düzgün seçilməyib.");
   const amount = number(input.amount, "Məbləğ");
-  if (amount === null) await db().prepare("DELETE FROM hr_salaries WHERE hr_employee_id = ? AND period = ?").bind(employeeId, period).run();
-  else await db().prepare("INSERT INTO hr_salaries (hr_employee_id, period, amount) VALUES (?, ?, ?) ON CONFLICT(hr_employee_id, period) DO UPDATE SET amount = excluded.amount").bind(employeeId, period, amount).run();
+  // Versiya 3.60: the reason a month is replaced in the average for leave (Əmək Məcəlləsi 140.1); sent only when it is changed.
+  const reason = input.replaceReason === undefined ? undefined : text(input.replaceReason);
+  if (reason && !REPLACE_REASONS.some((r) => r.key === reason)) throw new Error("Əvəzlənmə səbəbi düzgün deyil.");
+  if (amount === null) {
+    if (reason) throw new Error("Əvəzlənmə səbəbi seçiləndə ayın məbləğini də yazın (işlənməyibsə 0).");
+    await db().prepare("DELETE FROM hr_salaries WHERE hr_employee_id = ? AND period = ?").bind(employeeId, period).run();
+  } else if (reason === undefined) await db().prepare("INSERT INTO hr_salaries (hr_employee_id, period, amount) VALUES (?, ?, ?) ON CONFLICT(hr_employee_id, period) DO UPDATE SET amount = excluded.amount").bind(employeeId, period, amount).run();
+  else await db().prepare("INSERT INTO hr_salaries (hr_employee_id, period, amount, replace_reason) VALUES (?, ?, ?, ?) ON CONFLICT(hr_employee_id, period) DO UPDATE SET amount = excluded.amount, replace_reason = excluded.replace_reason").bind(employeeId, period, amount, reason).run();
 }
 
 // Fills the months with no amount yet (within the last `months`, never before the hire month) with the position salary.

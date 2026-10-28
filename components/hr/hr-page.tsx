@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { formatPhone } from "@/lib/phone";
 import { ActionsHeader, ColGroup, SortableTh, useColumnDrag, useEdgeResize, useExcelFilters, useTableColumns, type ExcelColumn } from "@/components/table-kit";
 import {
-  CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, TERMINATION_REASONS, addMonths, averageEarnings, formatDay, indexCalendar, isIsoDate, leaveBalance,
-  leaveDaysBetween, leaveKindLabel, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
-  weekday, workNorm, type CalendarDay, type CalendarKind, type HrParams,
+  CALENDAR_KINDS, EDUCATION_LEVELS, FAMILY_RELATIONS, MARITAL_STATUSES, PAYROLL_SECTORS, REPLACE_REASONS, TERMINATION_REASONS, addMonths, earningParts, formatDay, indexCalendar, isIsoDate, leaveBalance,
+  leaveDaysBetween, leaveKindLabel, legalAverage, monthEnd, monthStart, normalizeParams, priorService, round2, serviceParts, serviceText, settlement, todayIso,
+  weekday, workNorm, type CalendarDay, type CalendarKind, type HrParams, type PayrollSector,
 } from "@/lib/hr-calc";
 import { allPartsRights, partsRightsOf, type PartsRights } from "@/lib/permission-model";
 import { canSeeBalance, canSeeSettlement } from "@/lib/hr-parts";
@@ -35,7 +35,7 @@ type HrEducation = { id: number; hr_employee_id: number; level: string; institut
 type HrPriorJob = { id: number; hr_employee_id: number; customer_id: number; customer_name: string | null; customer_voen: string | null; position: string; start_date: string; end_date: string; termination_reason: string | null };
 type HrCustomer = { id: number; voen: string | null; name: string; country: string | null };
 type HrLeave = { id: number; hr_employee_id: number; kind: string; start_date: string; end_date: string; days: number; order_no: string | null; order_date: string | null; note: string | null; order_id: number | null };
-type HrSalary = { hr_employee_id: number; period: string; amount: number };
+type HrSalary = { hr_employee_id: number; period: string; amount: number; parts?: string | null; replace_reason?: string | null };
 type HrData = {
   employees: HrEmployee[]; leaves: HrLeave[]; salaries: HrSalary[]; calendar: CalendarDay[]; params: HrParams;
   companies: { id: number; name: string }[]; users: { id: number; name: string }[]; structure: { company_id: number; department: string; title: string }[];
@@ -774,25 +774,34 @@ function LeavesTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   </div>;
 }
 
+// Versiya 3.60: each month shows what counts towards the average for leave (Əmək Məcəlləsi 139, NK 137) and what an approved payroll
+// left out, the reason a month is replaced (140.1) and how the month stands in the average at the reference date.
+const BASE_STATUS: Record<string, string> = { counted: "ortaya daxildir", replacement: "əvəzedici ay", replaced: "əvəzlənib", dropped: "çıxarılıb", partial: "tam ay deyil", missing: "məlumat yoxdur" };
 function SalaryTab({ employee, data, call }: { employee: HrEmployee; data: HrData; call: Call }) {
   const params = normalizeParams(data.params);
   const pay = partsOf(data, employee.company_id).salary;
   const salaries = data.salaries.filter((s) => s.hr_employee_id === employee.id);
-  const byPeriod = new Map(salaries.map((s) => [s.period, s.amount]));
+  const byPeriod = new Map(salaries.map((s) => [s.period, s]));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const reference = employee.termination_date || todayIso();
-  const average = averageEarnings(salaries, reference, params);
+  const leaves = data.leaves.filter((l) => l.hr_employee_id === employee.id);
+  const average = legalAverage(employee, salaries, reference, params, leaves);
+  const status = new Map(average.base.map((b) => [b.period, b]));
   const periods: string[] = [];
   for (let i = 1; i <= 24; i++) { const p = addMonths(monthStart(reference), -i + 1).slice(0, 7); if (p < employee.hire_date.slice(0, 7)) break; periods.push(p); }
-  const counted = new Set(average.rows.map((r) => r.period));
+  const save = async (period: string, patch: { amount?: string; replaceReason?: string }) => {
+    setError("");
+    const current = byPeriod.get(period);
+    const amount = patch.amount ?? (current ? String(current.amount) : "");
+    try { await call("POST", { action: "salary", hrEmployeeId: employee.id, period, amount, ...(patch.replaceReason !== undefined ? { replaceReason: patch.replaceReason } : {}) }); setDrafts((d) => { const next = { ...d }; delete next[period]; return next; }); }
+    catch (e) { setError(e instanceof Error ? e.message : "Saxlanmadı."); }
+  };
   const commit = async (period: string) => {
     const value = drafts[period];
-    if (value === undefined || value === String(byPeriod.get(period) ?? "")) return;
-    setError("");
-    try { await call("POST", { action: "salary", hrEmployeeId: employee.id, period, amount: value }); setDrafts((d) => { const next = { ...d }; delete next[period]; return next; }); }
-    catch (e) { setError(e instanceof Error ? e.message : "Saxlanmadı."); }
+    if (value === undefined || value === String(byPeriod.get(period)?.amount ?? "")) return;
+    await save(period, { amount: value });
   };
   const fill = async () => {
     setBusy(true); setError("");
@@ -800,16 +809,30 @@ function SalaryTab({ employee, data, call }: { employee: HrEmployee; data: HrDat
   };
   return <div className="hrtab">
     <div className="hrsummary">
-      <span><small>Vəzifə maaşı</small><b>{employee.monthly_salary ? money(employee.monthly_salary) : "—"}</b></span>
-      <span><small>Orta aylıq ({average.months} ay üzrə)</small><b>{money(average.monthly)}</b></span>
-      <span><small>Orta günlük (÷ {params.avgDivisor})</small><b>{money(average.daily)}</b></span>
-      <span><small>Son {params.avgMonths} ayın cəmi</small><b>{money(average.total)}</b></span>
+      <span><small>Vəzifə maaşı (sonuncu əmək haqqı)</small><b>{employee.monthly_salary ? money(employee.monthly_salary) : "—"}</b></span>
+      <span><small>Orta aylıq ({average.months} ay üzrə)</small><b>{average.months ? money(average.monthly) : "—"}</b></span>
+      <span><small>Orta günlük (÷ {params.avgDivisor})</small><b>{average.months ? money(average.daily) : "—"}</b></span>
+      <span><small>Nəzərə alınan cəmi</small><b>{money(average.total)}</b></span>
     </div>
-    <small className="hrhint">Hər ay üçün işçiyə hesablanmış əmək haqqını yazın (orta əmək haqqına daxil olan ödənişlər). Orta əmək haqqı {formatDay(reference)} tarixindən əvvəlki {params.avgMonths} ay üzrə hesablanır; məbləğ yazılmayan aylar nəzərə alınmır. Dəyişiklik xanadan çıxanda saxlanılır.</small>
+    <small className="hrhint">Hesablaşma dövrü ({formatDay(reference)} tarixinə): {periodLabel(average.basePeriod.from)} – {periodLabel(average.basePeriod.to)} — ayın əvvəlki 12 təqvim ayı (Əmək Məcəlləsi 140.1){average.fewerThanFull ? "; işçi 12 aydan az işlədiyi üçün yalnız tam təqvim ayları götürülür (140.2)" : ""}. Hər ay üçün orta əmək haqqına <b>daxil olan</b> ödənişlərin cəmini yazın (əmək haqqı, sistemli mükafat, əlavə saat, məzuniyyət haqqı; birdəfəlik mükafat, maddi yardım, kompensasiya daxil deyil — NK-nın 137 nömrəli qərarı). Təsdiqlənmiş əməkhaqqı cədvəli bu məbləği özü yazır. Məbləğ yazılmayan ay 0 sayılmır — “məlumat yoxdur” kimi göstərilir. Ay qismən ödənişli sosial məzuniyyət, işçinin təşəbbüsü ilə olmayan ödənişsiz məzuniyyət və ya işçinin təqsiri olmadan boşdayanma səbəbindən tam işlənməyibsə, səbəbi seçin — 16.01.2026-dan bu ay ən yaxın tam işlənmiş ayla əvəz olunur.</small>
     {pay.add && <div className="hractions left"><Button variant="outline" disabled={busy || !employee.monthly_salary} onClick={() => void fill()}>Boş ayları vəzifə maaşı ilə doldur (son {params.avgMonths} ay)</Button></div>}
     {error && <div className="errorbox">{error}</div>}
-    <div className="hrsalarygrid">{periods.map((p) => <label key={p} className={`field${counted.has(p) ? " counted" : ""}`}>{periodLabel(p)}{counted.has(p) && <small>ortaya daxildir</small>}
-      <Input inputMode="decimal" readOnly={byPeriod.has(p) ? !pay.edit && !pay.delete : !pay.add} value={drafts[p] ?? String(byPeriod.get(p) ?? "")} onChange={(e) => setDrafts((d) => ({ ...d, [p]: e.target.value }))} onBlur={() => void commit(p)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></label>)}</div>
+    {average.warnings.map((w) => <small key={w} className="hrhint hrwarn">⚠ {w}</small>)}
+    <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Ay</th><th>Nəzərə alınan (₼)</th><th>Nəzərə alınmayan</th><th>Əvəzlənmə səbəbi (140.1)</th><th>Hesablaşmada</th></tr></thead><tbody>
+      {periods.map((p) => {
+        const row = byPeriod.get(p);
+        const excluded = earningParts(row?.parts).filter((x) => !x.included);
+        const st = status.get(p);
+        const canChange = row ? pay.edit || pay.delete : pay.add;
+        return <tr key={p} className={st && (st.status === "counted" || st.status === "replacement") ? "hrcounted" : ""}>
+          <td>{periodLabel(p)}</td>
+          <td><Input inputMode="decimal" readOnly={!canChange} value={drafts[p] ?? String(row?.amount ?? "")} onChange={(e) => setDrafts((d) => ({ ...d, [p]: e.target.value }))} onBlur={() => void commit(p)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></td>
+          <td title={excluded.map((x) => `${x.label}: ${money(x.amount)}`).join("\n")}>{excluded.length ? money(excluded.reduce((sum, x) => sum + x.amount, 0)) : "—"}</td>
+          <td><select value={row?.replace_reason || ""} disabled={!canChange} onChange={(e) => void save(p, { replaceReason: e.target.value })}><option value="">—</option>{REPLACE_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></td>
+          <td>{st ? <><b>{BASE_STATUS[st.status]}</b>{st.note ? <small className="hrsub"> {st.note}</small> : null}</> : <span className="hrsub">dövrdən kənar</span>}</td>
+        </tr>;
+      })}
+    </tbody></table></div>
   </div>;
 }
 
@@ -863,7 +886,8 @@ function SettlementTab({ employee, data }: { employee: HrEmployee; data: HrData 
         <span><small>Orta günlük</small><b>{money(result.average.daily)}</b></span>
         <span className="hrtotal"><small>Cəmi hesablanıb</small><b>{money(result.total)}</b></span>
       </div>
-      {result.average.months < params.avgMonths && <small className="hrhint hrwarn">Diqqət: orta əmək haqqı {params.avgMonths} ay əvəzinə {result.average.months} ay üzrə hesablanıb — “Əmək haqqı” tabında aylıq məbləğləri yoxlayın.</small>}
+      {result.average.warnings.map((w) => <small key={w} className="hrhint hrwarn">⚠ {w}</small>)}
+      {result.average.fewerThanFull && <small className="hrhint">İşçi 12 təqvim ayından az işləyib — kompensasiya faktiki işlənmiş {result.average.months} tam təqvim ayı üzrə hesablanıb (Əmək Məcəlləsi 140.2 və 140.4).</small>}
       <div className="tasktablewrap"><table className="tasktable hrtable hrcompact"><thead><tr><th>Ödəniş</th><th>Necə hesablanıb</th><th>Məbləğ</th></tr></thead><tbody>
         {lines.map((l) => <tr key={l.label}><td><b>{l.label}</b></td><td>{l.detail}</td><td className="hrnum">{money(l.amount)}</td></tr>)}
         <tr className="hrtotalrow"><td colSpan={2}>Cəmi (vergi və sosial sığorta tutulmalarından əvvəl)</td><td className="hrnum">{money(result.total)}</td></tr>
@@ -935,6 +959,7 @@ function SettingsSection({ data, call }: { data: HrData; call: Call }) {
     baseLeaveDays: String(initial.baseLeaveDays), stageSteps: stepsText(initial.stageSteps, "days"), avgMonths: String(initial.avgMonths), avgDivisor: String(initial.avgDivisor),
     roundHalfMonth: initial.roundHalfMonth, unpaidExtendsWorkYear: initial.unpaidExtendsWorkYear, excludeDayOffFromLeave: initial.excludeDayOffFromLeave,
     severanceSteps: stepsText(initial.severanceSteps, "multiplier"), dailyHours: String(initial.dailyHours),
+    replaceMonths: initial.replaceMonths, payrollSector: initial.payrollSector as PayrollSector,
   }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -948,11 +973,12 @@ function SettingsSection({ data, call }: { data: HrData; call: Call }) {
         baseLeaveDays: Number(form.baseLeaveDays), stageSteps: stage.map(([years, days]) => ({ years, days })), avgMonths: Number(form.avgMonths), avgDivisor: Number(form.avgDivisor.replace(",", ".")),
         roundHalfMonth: form.roundHalfMonth, unpaidExtendsWorkYear: form.unpaidExtendsWorkYear, excludeDayOffFromLeave: form.excludeDayOffFromLeave,
         severanceSteps: sev.map(([years, multiplier]) => ({ years, multiplier })), dailyHours: Number(form.dailyHours.replace(",", ".")),
+        replaceMonths: form.replaceMonths, payrollSector: form.payrollSector,
       } });
       setSaved(true);
     } catch (e) { setError(e instanceof Error ? e.message : "Saxlanmadı."); } finally { setBusy(false); }
   };
-  const check = (key: "roundHalfMonth" | "unpaidExtendsWorkYear" | "excludeDayOffFromLeave", label: string) => <label className="hrcheck"><input type="checkbox" checked={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />{label}</label>;
+  const check = (key: "roundHalfMonth" | "unpaidExtendsWorkYear" | "excludeDayOffFromLeave" | "replaceMonths", label: string) => <label className="hrcheck"><input type="checkbox" checked={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />{label}</label>;
   return <section className="panel pagepanel directorypanel">
     <div className="pageactions directoryhead"><div><span className="sectioneyebrow">KADR UÇOTU</span><h2>Hesablama parametrləri</h2><p>Bütün firmalar üçün ümumi qaydalar. Qanunvericilik dəyişəndə buradan yeniləyin.</p></div></div>
     <div className="hrcard hrpad">
@@ -967,6 +993,8 @@ function SettingsSection({ data, call }: { data: HrData; call: Call }) {
       <fieldset><legend>Orta əmək haqqı və müavinət</legend><div className="hrgrid">
         <label className="field">Orta əmək haqqı neçə ay üzrə<Input inputMode="numeric" value={form.avgMonths} onChange={(e) => setForm({ ...form, avgMonths: e.target.value })} /></label>
         <label className="field">Orta günlük üçün bölən<Input inputMode="decimal" value={form.avgDivisor} onChange={(e) => setForm({ ...form, avgDivisor: e.target.value })} /><small>ayın orta təqvim günü (30,4)</small></label>
+        {check("replaceMonths", "Qismən ödənişli sosial məzuniyyət, işçinin təşəbbüsü ilə olmayan ödənişsiz məzuniyyət və boşdayanma ayları yaxın tam işlənmiş aylarla əvəz olunsun (Əmək Məcəlləsi 140.1, 16.01.2026-dan)")}
+        <label className="field hrwide">Vergi və sığorta dərəcələri (sektor)<select value={form.payrollSector} onChange={(e) => setForm({ ...form, payrollSector: e.target.value as PayrollSector })}>{PAYROLL_SECTORS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select><small>Gəlir vergisi (Vergi Məcəlləsi 101.1 / 101.1-1), DSMF (“Sosial sığorta haqqında” Qanun 14.3 / 14.4) və İTSH (“Tibbi sığorta haqqında” Qanun 15-10.1.2 / 15-10.1.2-1) bu sektora görə və hesablanan ayın tarixinə görə götürülür.</small></label>
         <label className="field">Gündəlik iş saatı (5 günlük həftə)<Input inputMode="decimal" value={form.dailyHours} onChange={(e) => setForm({ ...form, dailyHours: e.target.value })} /></label>
         <label className="field hrwide">İşdən çıxma müavinəti (bu firmada staj il:orta aylığın misli)<Input value={form.severanceSteps} onChange={(e) => setForm({ ...form, severanceSteps: e.target.value })} /><small>məs. “0:1, 1:1.4, 5:1.7, 10:2”. Müavinət yalnız ləğv və ixtisar əsaslarında avtomatik seçilir; hesablaşmada əl ilə də açmaq olar.</small></label>
       </div></fieldset>
