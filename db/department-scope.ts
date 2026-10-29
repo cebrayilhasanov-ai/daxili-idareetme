@@ -5,13 +5,14 @@ import { companyDepartments } from "@/db/requests";
 // HR by department (Versiya 2.65): in Nöqsanlar, Personallar and Əmrlər everyone works — within the rights the admin gave —
 // only with the people of the departments they oversee: their own, and those under them in the firm's structure
 // (Firmalar → Struktur, "reports to"). The director, at the top, oversees the whole firm; the admin everything (scope null).
+// Versiya 3.61: whoever may add cards (Personallar) or orders (Əmrlər) in a firm works with every department of it ("all").
 
 function db() {
   if (!env.DB) throw new Error("Məlumat bazası aktiv deyil.");
   return env.DB;
 }
 
-export type DepartmentScope = Map<number, Set<string>> | null;
+export type DepartmentScope = Map<number, Set<string> | "all"> | null;
 
 export async function departmentScope(user: SessionUser): Promise<DepartmentScope> {
   if (user.role === "admin") return null;
@@ -32,8 +33,19 @@ export function narrowScope(scope: DepartmentScope, firms: number[] | null): Dep
   return new Map([...scope].filter(([companyId]) => firms.includes(companyId)));
 }
 
-export const inScope =(scope: DepartmentScope, companyId: unknown, department: unknown) =>
-  scope === null || Boolean(companyId && department && scope.get(Number(companyId))?.has(String(department).trim()));
+// The whole firm for the firms given (Versiya 3.61) — the department rule stays for the others.
+export function widenScope(scope: DepartmentScope, firms: number[] | null): DepartmentScope {
+  if (scope === null || firms === null) return scope;
+  const wide = new Map(scope);
+  for (const companyId of firms) wide.set(companyId, "all");
+  return wide;
+}
+
+export const inScope = (scope: DepartmentScope, companyId: unknown, department: unknown) => {
+  if (scope === null) return true;
+  const departments = companyId ? scope.get(Number(companyId)) : undefined;
+  return departments === "all" || Boolean(department && departments?.has(String(department).trim()));
+};
 
 export const scopeCompanyIds = (scope: DepartmentScope) => (scope ? [...scope.keys()] : null);
 
@@ -89,6 +101,6 @@ export async function userScopeTest(scope: DepartmentScope) {
   return (employeeId: number, companyId: number | null) => {
     if (scope === null) return true;
     const firms = companyId ? [companyId] : [...scope.keys()];
-    return firms.some((c) => departmentsOf(c, employeeId).some((d) => scope.get(c)?.has(d)));
+    return firms.some((c) => { const own = scope.get(c); return departmentsOf(c, employeeId).some((d) => own === "all" || own?.has(d)); });
   };
 }

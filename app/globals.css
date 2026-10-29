@@ -1276,8 +1276,15 @@ body:has(.chatgroupdialog) [data-slot=dialog-overlay]{z-index:70}.chatgroupdialo
 .paytable td{padding:4px 8px}.paytable td.n{text-align:right;font-variant-numeric:tabular-nums}.paytable .strong{font-weight:700;color:#0f172a}
 .paytable th{white-space:normal;max-width:110px}.paytable .warn{color:#dc2626;font-weight:700}
 .paytable tfoot td{position:sticky;bottom:0;background:#f8fafc;font-weight:700;padding:6px 8px}
-.paytable thead tr:nth-child(2) th{top:31px}.paytable th.group{background:#eef2ff;color:#3730a3;letter-spacing:.04em}
+.paytable thead tr:nth-child(2) th{top:var(--payhead1,31px)}.paytable th.group{background:#eef2ff;color:#3730a3;letter-spacing:.04em}
 .paytable td.t{white-space:normal;min-width:70px;max-width:220px;text-align:left;color:#475569;font-size:11.5px}
+/* Versiya 3.61: № and the name stay in place when the payroll scrolls sideways; department rows and their totals. */
+.paytable .nocol{position:sticky;left:0;z-index:1;background:#fff;box-sizing:border-box;width:40px;min-width:40px;max-width:40px;text-align:center}
+.paytable td.l,.paytable th.l{left:40px}.paytable thead th.nocol{z-index:3;background:#f8fafc}
+.paytable tfoot td{z-index:2}.paytable tfoot td.l,.paytable tfoot td.nocol{z-index:3;background:#f8fafc}
+.paytable tr.deptrow td{position:sticky;left:0;text-align:left;padding:6px 10px;background:#f1f5f9;font-weight:700;color:#0f172a}
+.paytable tr.deptrow span{margin-left:8px;color:#64748b;font-weight:500;font-size:11px}
+.paytable tr.subtotal td{background:#f8fafc;font-weight:700;color:#0f172a;border-bottom:1px solid #e2e8f0}.paytable tr.subtotal td.l,.paytable tr.subtotal td.nocol{background:#f8fafc}
 .paytitle{margin:14px 22px 0;font-size:15px;font-weight:700;color:#0f172a;text-align:center}
 .paysummary{display:flex;flex-wrap:wrap;gap:12px 48px;margin:14px 22px 0}.paysummary dl{margin:0;min-width:300px}.paysummary dl>div{display:flex;justify-content:space-between;gap:24px;padding:3px 0;border-bottom:1px dashed #e2e8f0;font-size:12.5px}
 .paysummary dt{color:#475569}.paysummary dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;color:#0f172a}

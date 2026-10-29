@@ -2,7 +2,7 @@ import { cancelOrder, createLeaveOrder, createOtherOrder, createTerminationOrder
 import { requireUser } from "@/lib/auth";
 import { firmAccess, requireSection, type SectionAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
-import { departmentScope, narrowScope, requireHrEmployeeInScope, requireOrderInScope, scopeHrData } from "@/db/department-scope";
+import { departmentScope, narrowScope, widenScope, requireHrEmployeeInScope, requireOrderInScope, scopeHrData } from "@/db/department-scope";
 
 // HR orders (Əmrlər): the admin and employees given the separate "Əmrlər" permission (closed by default).
 // Rights (Versiya 2.62): Əlavə et — a new order; Dəyişiklik et — correcting an order, its signed copy; Sil — cancelling an order
@@ -10,7 +10,8 @@ import { departmentScope, narrowScope, requireHrEmployeeInScope, requireOrderInS
 // Məzuniyyət, İşdən çıxma, Digər əmrlər — and Parametrlər (the numbering and the legal texts) has Baxış and Dəyişiklik et.
 // The final settlement of a termination order (salaries, average pay) is shown only to those who may see the worker's
 // Əmək haqqı in Personallar.
-// Since Versiya 2.65 only the orders and workers of the departments the user oversees (db/department-scope.ts).
+// Since Versiya 2.65 only the orders and workers of the departments the user oversees (db/department-scope.ts); since
+// Versiya 3.61 in a firm where an order of any tab may be added — every department of it.
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -24,13 +25,14 @@ const GROUPS = ["leave", "termination", "other"];
 
 // Versiya 2.99: the rights are per firm; Versiya 3.20: a tab's right reaches the workers of the firms where it is given.
 async function ordersContext(user: User) {
-  const [scope, access, personnel] = await Promise.all([departmentScope(user), firmAccess(user, "hr.orders"), firmAccess(user, "hr.personnel")]);
+  const [own, access, personnel] = await Promise.all([departmentScope(user), firmAccess(user, "hr.orders"), firmAccess(user, "hr.personnel")]);
+  const scope = widenScope(own, access.admin ? null : [...new Set(GROUPS.flatMap((g) => access.partFirms(g, "add") ?? []))]);
   return {
     access,
     sectionScope: (action: SectionAction) => narrowScope(scope, access.firms(action)),
     partScope: (part: string, action: SectionAction) => narrowScope(scope, access.partFirms(part, action)),
     // Salaries and the settlement: Personallar → Əmək haqqı.
-    payScope: narrowScope(scope, personnel.partFirms("salary", "view")),
+    payScope: narrowScope(widenScope(own, personnel.firms("add")), personnel.partFirms("salary", "view")),
     seesPay: (companyId: number) => personnel.admin || (personnel.firm(companyId).view && personnel.firm(companyId).parts.salary.view),
   };
 }

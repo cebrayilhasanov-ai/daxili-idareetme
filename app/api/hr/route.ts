@@ -3,14 +3,15 @@ import { requireUser } from "@/lib/auth";
 import { firmAccess, requireAction, requireSection, sectionRights, type SectionAction } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { PART_INPUTS, stripHrData } from "@/lib/hr-parts";
-import { departmentScope, inScope, narrowScope, requireCardRowInScope, requireHrEmployeeInScope, scopeHrData } from "@/db/department-scope";
+import { departmentScope, inScope, narrowScope, widenScope, requireCardRowInScope, requireHrEmployeeInScope, scopeHrData } from "@/db/department-scope";
 
 // HR register: the admin, and employees the admin has explicitly given "Personallar" (closed by default).
 // Rights (Versiya 2.62): Əlavə et — a new worker card; Dəyişiklik et — the calendar and the calculation parameters; Sil —
 // deleting a whole worker card. Since Versiya 3.19 everything inside a card has the rights of its part (lib/permission-model.ts
 // SECTION_PARTS): a part that may not be seen is not sent at all (lib/hr-parts.ts), and on saving a card the stored values of
 // the parts that may not be changed are kept whatever the page sends.
-// Since Versiya 2.65 only the cards of the departments the user oversees (db/department-scope.ts) are shown and changed.
+// Since Versiya 2.65 only the cards of the departments the user oversees (db/department-scope.ts) are shown and changed;
+// since Versiya 3.61 in a firm where a new card may be added (Əlavə et) — the cards of every department of it.
 
 function authError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -24,7 +25,8 @@ type User = Awaited<ReturnType<typeof requireUser>>;
 // Versiya 2.99: the rights are per firm — each right reaches the cards of the firms where it is given; a part's right
 // (Versiya 3.19) reaches the cards of the firms where that part's right is given.
 async function hrContext(user: User) {
-  const [scope, access] = await Promise.all([departmentScope(user), firmAccess(user, "hr.personnel")]);
+  const [own, access] = await Promise.all([departmentScope(user), firmAccess(user, "hr.personnel")]);
+  const scope = widenScope(own, access.firms("add"));
   return {
     access,
     sectionScope: (action: SectionAction) => narrowScope(scope, access.firms(action)),
@@ -75,7 +77,8 @@ async function allowedCardInput(ctx: Ctx, body: Record<string, unknown>) {
   // Moving the card to another firm or department: only into a department overseen where İş yeri may be changed.
   if (parts.workplace.edit && (String(input.companyId ?? "") !== String(stored.companyId ?? "") || String(input.department ?? "").trim() !== String(stored.department ?? "").trim())) {
     const scope = ctx.partScope("workplace", "edit");
-    if (!inScope(scope, input.companyId, input.department)) throw new Error(scope && (!input.companyId || !input.department) ? "Firma və şöbəni seçin." : "FORBIDDEN");
+    if (scope && (!input.companyId || !String(input.department ?? "").trim())) throw new Error("Firma və şöbəni seçin.");
+    if (!inScope(scope, input.companyId, input.department)) throw new Error("FORBIDDEN");
   }
   const before = stored.priorJobs as JobInput[];
   if (!jobs.view) input.priorJobs = before;
@@ -127,7 +130,8 @@ export async function POST(request: Request) {
         await requireAction(user, "hr.personnel", "add");
         // A new card is saved only into a department the user oversees — in a firm where the right is given.
         const scope = ctx.sectionScope("add");
-        if (!inScope(scope, body.companyId, body.department)) throw new Error(scope && (!body.companyId || !body.department) ? "Firma və şöbəni seçin." : "FORBIDDEN");
+        if (scope && (!body.companyId || !String(body.department ?? "").trim())) throw new Error("Firma və şöbəni seçin.");
+        if (!inScope(scope, body.companyId, body.department)) throw new Error("FORBIDDEN");
       }
       const input = await allowedCardInput(ctx, body);
       const id = await saveHrEmployee(input);

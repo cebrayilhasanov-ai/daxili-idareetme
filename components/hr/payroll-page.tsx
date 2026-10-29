@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Check, FileSpreadsheet, Printer, RotateCcw, Save, Send, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDay, indexCalendar, normalizeParams, weekday, type CalendarDay, type HrParams } from "@/lib/hr-calc";
@@ -58,26 +58,28 @@ const PAY_GROUPS: { label?: string; columns: PayColumn[] }[] = [
   { columns: [col("department", "Şöbə", "text", 20, (r) => r.department)] },
   { columns: [col("post", "Vəzifəsi", "text", 22, (r) => r.position || "")] },
   { columns: [col("job", "İş yeri", "text", 8, (r) => jobKindLabel(r.jobKind))] },
-  { columns: [col("salary", "Əmək haqqı", "money", 11, (r) => r.pay.salary)] },
+  { columns: [col("salary", "Vəzifə maaşı (ştat üzrə)", "money", 11, (r) => r.pay.salary)] },
   { label: "HESABLANIB", columns: [
     col("hours", "Faktiki iş saatları", "hours", 9, (r) => r.workedHours),
     col("salaryPart", "Hesablanmış əmək haqqı", "money", 11, (r) => r.pay.salaryPart),
     col("overtimePay", "Əlavə saat", "money", 10, (r) => r.pay.overtimePay),
     col("bonus", "Mükafat", "money", 11, (r) => r.inputs.bonus, { input: "bonus" }),
     col("oneOff", "Birdəfəlik mükafat / Maddi yardım", "money", 11, (r) => r.inputs.oneOff, { input: "oneOff" }),
-    col("leave", "Məzuniyyət / Son hesablaşma", "money", 12, (r) => r.pay.leavePay + r.pay.settlementPay),
+    // Versiya 3.61: leave pay and the final settlement in separate columns — they are taxed differently.
+    col("leave", "Məzuniyyət haqqı", "money", 11, (r) => r.pay.leavePay),
+    col("settlement", "Son hesablaşma (kompensasiya, müavinət)", "money", 12, (r) => r.pay.settlementPay),
   ] },
   { columns: [col("gross", "CƏMİ", "money", 11, (r) => r.pay.gross, { strong: true })] },
   { label: "TUTULMUŞDUR", columns: [
     col("tax", "Gəlir vergisi", "money", 10, (r) => r.pay.tax),
     col("dsmf", "Pensiya Fondu", "money", 10, (r) => r.pay.dsmf),
-    col("unemployment", "İ.S.H. 0,5%", "money", 9, (r) => r.pay.unemployment),
+    col("unemployment", "İ.S.H.", "money", 9, (r) => r.pay.unemployment),
     col("medical", "İ.T.S.H.", "money", 9, (r) => r.pay.medical),
     col("withheld", "CƏMİ tutulmuşdur", "money", 11, (r) => r.pay.withheld, { strong: true }),
   ] },
   { label: "İşəgötürən tərəfindən", columns: [
     col("employerDsmf", "Pensiya Fondu", "money", 10, (r) => r.pay.employerDsmf),
-    col("employerUnemployment", "İ.S.H. 0,5%", "money", 9, (r) => r.pay.employerUnemployment),
+    col("employerUnemployment", "İ.S.H.", "money", 9, (r) => r.pay.employerUnemployment),
     col("employerMedical", "İ.T.S.H.", "money", 9, (r) => r.pay.employerMedical),
   ] },
   { columns: [col("payable", "Ödənilməli məbləğ", "money", 11, (r) => r.pay.payable, { strong: true })] },
@@ -86,6 +88,17 @@ const PAY_GROUPS: { label?: string; columns: PayColumn[] }[] = [
   { columns: [col("net", "Qalıq məbləğ", "money", 11, (r) => r.pay.net, { strong: true })] },
 ];
 const PAY_COLUMNS = PAY_GROUPS.flatMap((g) => g.columns);
+const PAY_AT = (key: string) => PAY_COLUMNS.findIndex((c) => c.key === key);
+// Consecutive rows of one department (the rows come sorted by department, as in the tabel).
+function byDepartment(list: PayRow[]) {
+  const out: { department: string; rows: { r: PayRow; n: number }[] }[] = [];
+  list.forEach((r, i) => {
+    const last = out[out.length - 1];
+    if (last && last.department === r.department) last.rows.push({ r, n: i + 1 });
+    else out.push({ department: r.department, rows: [{ r, n: i + 1 }] });
+  });
+  return out;
+}
 const shown = (c: PayColumn, value: unknown) => value === null || value === undefined ? "—" : c.kind === "hours" ? String(value) : Number(value) ? num(Number(value)) : "—";
 // The month's norm hours of a 5-day week — the one most workers have — for the summary under the table.
 function normHoursOf(list: PayRow[]) {
@@ -107,7 +120,7 @@ function printTable(title: string, subtitle: string, head: string, body: string,
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
     @page{size:A4 landscape;margin:10mm}body{font:10px/1.35 Arial,sans-serif;color:#000;margin:0}h1{font-size:14px;text-align:center;margin:0 0 2px}p.sub{text-align:center;margin:0 0 10px}
     table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:2px 3px;text-align:center}td.l,th.l{text-align:left}td.n{text-align:right;white-space:nowrap}th{background:#eee}
-    tr.dept td{background:#f4f4f4;font-weight:bold;text-align:left}tr.total td{font-weight:bold}.off{background:#f0f0f0}.sign{display:flex;justify-content:space-between;margin-top:28px;font-size:11px}
+    tr.dept td{background:#f4f4f4;font-weight:bold;text-align:left}tr.total td{font-weight:bold}tr.sub td{font-weight:bold;background:#fafafa}.off{background:#f0f0f0}.sign{display:flex;justify-content:space-between;margin-top:28px;font-size:11px}
     .sumblock{display:flex;gap:48px;margin-top:16px}.sumblock table{width:auto}.sumblock td{border:0;padding:1px 6px}
   </style></head><body><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(subtitle)}</p><table><thead>${head}</thead><tbody>${body}</tbody></table>
   <div class="sign"><span>Tərtib etdi: ____________________</span><span>Struktur bölmənin rəhbəri: ____________________</span><span>Baş mühasib: ____________________</span></div>${extra}
@@ -187,6 +200,18 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
   const calendar = useMemo(() => indexCalendar(data.calendar), [data.calendar]);
   const days = periodDays(data.period);
   const approved = data.payroll.status === "approved";
+  // Versiya 3.61: the second header row of the payroll sticks right under the first, whatever height the first wraps to.
+  const headRef = useRef<HTMLTableRowElement>(null);
+  const [headTop, setHeadTop] = useState(31);
+  useEffect(() => {
+    const row = headRef.current;
+    if (!row) return;
+    const fit = () => setHeadTop(row.getBoundingClientRect().height);
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(row);
+    return () => watch.disconnect();
+  }, [tab]);
   const sheetOf = (name: string) => data.departments.find((d) => d.department === name);
   const canEdit = (name: string) => {
     const s = sheetOf(name)?.status || "draft";
@@ -290,8 +315,12 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
     const list = payrollRows();
     const groupsRow = PAY_GROUPS.map((g) => g.label ? `<th colspan="${g.columns.length}">${h(g.label)}</th>` : `<th rowspan="2"${g.columns[0].kind === "text" ? ' class="l"' : ""}>${h(g.columns[0].label)}</th>`).join("");
     const labelsRow = PAY_GROUPS.filter((g) => g.label).flatMap((g) => g.columns).map((c) => `<th>${h(c.label)}</th>`).join("");
-    const body = list.map((r, i) => `<tr>${PAY_COLUMNS.map((c) => c.key === "no" ? `<td>${i + 1}</td>` : c.kind === "text" ? `<td class="l">${h(String(c.value(r) ?? ""))}</td>` : `<td class="n">${shown(c, c.value(r))}</td>`).join("")}</tr>`).join("")
-      + `<tr class="total">${PAY_COLUMNS.map((c, i) => i === 2 ? "<td class=\"l\">Cəmi</td>" : c.total ? `<td class="n">${shown(c, sum(list, (r) => Number(c.value(r)) || 0))}</td>` : "<td></td>").join("")}</tr>`;
+    const totalRow = (rows: PayRow[], label: string, cls: string) => `<tr class="${cls}">${PAY_COLUMNS.map((c, i) => i === PAY_AT("name") ? `<td class="l">${h(label)}</td>` : c.total ? `<td class="n">${shown(c, sum(rows, (r) => Number(c.value(r)) || 0))}</td>` : "<td></td>").join("")}</tr>`;
+    const depts = byDepartment(list);
+    const body = depts.map((d) => `<tr class="dept"><td colspan="${PAY_COLUMNS.length}">${h(deptName(d.department))}</td></tr>`
+      + d.rows.map(({ r, n }) => `<tr>${PAY_COLUMNS.map((c) => c.key === "no" ? `<td>${n}</td>` : c.kind === "text" ? `<td class="l">${h(String(c.value(r) ?? ""))}</td>` : `<td class="n">${shown(c, c.value(r))}</td>`).join("")}</tr>`).join("")
+      + (depts.length > 1 ? totalRow(d.rows.map((x) => x.r), `Cəmi: ${deptName(d.department)}`, "sub") : "")).join("")
+      + totalRow(list, "Cəmi", "total");
     const s = payrollSummary(list);
     const line = ([label, value]: [string, number]) => `<tr><td class="l">${h(label)}</td><td class="n">${num(value)}</td></tr>`;
     const summary = `<div class="sumblock"><table>${s.left.map(line).join("")}</table><table><tr><td class="l">Ayın iş saatları</td><td class="n">${s.normHours ?? "—"}</td></tr>${s.right.map(line).join("")}</table></div>`;
@@ -311,18 +340,27 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
       [{ value: payTitle, fontWeight: "bold", fontSize: 13, columnSpan: PAY_COLUMNS.length, align: "center" }],
       ...(approved ? [] : [[{ value: "Təsdiqlənməyib (qaralama)", textColor: "#B91C1C" }]]),
       [null], groupsRow, labelsRow,
-      ...list.map((r, i) => PAY_COLUMNS.map((c): XCell => c.key === "no" ? { value: i + 1, type: Number, borderStyle: "thin", alignVertical: "top" } : cell(c, c.value(r)))),
-      PAY_COLUMNS.map((c, i): XCell => i === 2 ? { value: "Cəmi", fontWeight: "bold", borderStyle: "thin" } : c.total ? { ...cell(c, sum(list, (r) => Number(c.value(r)) || 0)), fontWeight: "bold" } : { borderStyle: "thin" }),
       [null],
     ];
+    const totalRow = (rows: PayRow[], label: string, fill?: string): XCell[] => PAY_COLUMNS.map((c, i): XCell => ({
+      ...(i === PAY_AT("name") ? { value: label, borderStyle: "thin" } : c.total ? cell(c, sum(rows, (r) => Number(c.value(r)) || 0)) : { borderStyle: "thin" }),
+      fontWeight: "bold", ...(fill ? { backgroundColor: fill } : {}) }));
+    const depts = byDepartment(list);
+    out.splice(out.length - 1, 0, ...depts.flatMap((d) => [
+      [{ value: deptName(d.department), fontWeight: "bold", backgroundColor: "#F1F5F9", columnSpan: PAY_COLUMNS.length } as XCell],
+      ...d.rows.map(({ r, n }) => PAY_COLUMNS.map((c): XCell => c.key === "no" ? { value: n, type: Number, borderStyle: "thin", alignVertical: "top" } : cell(c, c.value(r)))),
+      ...(depts.length > 1 ? [totalRow(d.rows.map((x) => x.r), `Cəmi: ${deptName(d.department)}`, "#F8FAFC")] : []),
+    ]), totalRow(list, "Cəmi"));
     // The summary under the table, as in the firm's Excel: the fund and the worker's deductions on the left, the employer's on the right.
+    // Versiya 3.61: the amounts go into money columns (found by key), not into a narrow hours column.
     const s = payrollSummary(list);
     const right: [string, number | null, string][] = [["Ayın iş saatları", s.normHours, "0.##"], ...s.right.map(([l, v]): [string, number, string] => [l, v, "#,##0.00"])];
+    const leftLabel = PAY_AT("department"), leftValue = PAY_AT("salaryPart"), rightLabel = PAY_AT("overtimePay"), rightValue = PAY_AT("gross");
     for (let i = 0; i < Math.max(s.left.length, right.length); i++) {
       const l = s.left[i], r = right[i];
       const row: (XCell | null)[] = Array.from({ length: PAY_COLUMNS.length }, () => null);
-      if (l) { row[3] = { value: l[0], columnSpan: 4 }; row[7] = { value: l[1], type: Number, format: "#,##0.00", fontWeight: "bold" }; }
-      if (r) { row[9] = { value: r[0], columnSpan: 6 }; row[15] = r[1] === null ? { value: "—" } : { value: r[1], type: Number, format: r[2], fontWeight: "bold" }; }
+      if (l) { row[leftLabel] = { value: l[0], columnSpan: leftValue - leftLabel }; row[leftValue] = { value: l[1], type: Number, format: "#,##0.00", fontWeight: "bold" }; }
+      if (r) { row[rightLabel] = { value: r[0], columnSpan: rightValue - rightLabel }; row[rightValue] = r[1] === null ? { value: "—" } : { value: r[1], type: Number, format: r[2], fontWeight: "bold" }; }
       out.push(row);
     }
     await saveWorkbook([{ data: out, sheet: "Əməkhaqqı", columns: PAY_COLUMNS.map((c) => ({ width: c.width })), stickyRowsCount: approved ? 4 : 5 }], `Əməkhaqqı_${safeName(firmName)}_${data.period}.xlsx`);
@@ -372,7 +410,12 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
 
 
   // The payroll: an approved month as it was approved; otherwise worked out live from the tabel and the inputs on the page.
+  // Versiya 3.61: in the tabel's order — by department, then as listed in it — so a worker has the same № in both tabs.
   function payrollRows(): PayRow[] {
+    const place = new Map(data.departments.map((d, i) => [d.department, i]));
+    return unsortedRows().map((r, i) => ({ r, i })).sort((a, b) => (place.get(a.r.department) ?? place.size) - (place.get(b.r.department) ?? place.size) || a.i - b.i).map((x) => x.r);
+  }
+  function unsortedRows(): PayRow[] {
     if (approved && data.payroll.snapshot) return data.payroll.snapshot.map((s) => ({ id: s.hr_employee_id, name: s.name, fin: s.fin ?? null, jobKind: s.jobKind ?? "main", position: s.position, department: s.department,
       workedHours: s.workedHours ?? null, normHours: s.normHours ?? null, overtime: s.overtime, inputs: { ...EMPTY_INPUTS, ...s.inputs }, leavePay: s.leaveDetails || [], settlement: s.settlementDetails || [],
       // Months approved before Versiya 3.56 have no payable / settlement figures of their own.
@@ -400,11 +443,13 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
       : <>{r.inputs[key] ? num(r.inputs[key]) : "—"}</>;
     const titleOf = (c: PayColumn, r: PayRow) => c.key === "overtimePay" && r.overtime ? `${r.overtime} saat × ${num(r.pay.hourly)} × ${OVERTIME_MULTIPLIER}`
       : c.key === "salaryPart" && r.workedHours !== null ? `${num(r.pay.salary)} / ${r.normHours} saat × ${r.workedHours} saat`
-      : c.key === "leave" ? [...r.leavePay.map((l) => `Məzuniyyət, əmr № ${l.order_no || "—"}${l.start ? ` (${formatDay(l.start)} – ${formatDay(l.end)})` : ""}: bu ay ${l.days} gün — ${num(l.amount)}${l.applied === "floor" ? " (111-ci maddə: sonuncu əmək haqqı üzrə" + (l.difference ? `, fərq ödənişi ${num(l.difference)} daxil` : "") + ")" : ` (orta günlük ${num(l.daily)}, ${l.averageMonths} ay)`}${l.total !== undefined && l.total !== l.amount ? `; bütün məzuniyyət ${num(l.total)}` : ""}${l.warnings?.length ? `\n⚠ ${l.warnings.join("\n⚠ ")}` : ""}`),
-        ...r.settlement.flatMap((s) => s.lines.map((l) => `Son hesablaşma, əmr № ${s.order_no || "—"}: ${l.label} — ${num(l.amount)}`))].join("\n")
+      : c.key === "leave" ? r.leavePay.map((l) => `Məzuniyyət, əmr № ${l.order_no || "—"}${l.start ? ` (${formatDay(l.start)} – ${formatDay(l.end)})` : ""}: bu ay ${l.days} gün — ${num(l.amount)}${l.applied === "floor" ? " (111-ci maddə: sonuncu əmək haqqı üzrə" + (l.difference ? `, fərq ödənişi ${num(l.difference)} daxil` : "") + ")" : ` (orta günlük ${num(l.daily)}, ${l.averageMonths} ay)`}${l.total !== undefined && l.total !== l.amount ? `; bütün məzuniyyət ${num(l.total)}` : ""}${l.warnings?.length ? `\n⚠ ${l.warnings.join("\n⚠ ")}` : ""}`).join("\n")
+      : c.key === "settlement" ? r.settlement.flatMap((s) => s.lines.map((l) => `Son hesablaşma, əmr № ${s.order_no || "—"}: ${l.label} — ${num(l.amount)}`)).join("\n")
       : c.key === "tax" && r.jobKind === "additional" ? "Əlavə iş yeri — 200 ₼ güzəşt tətbiq olunmur"
       : c.key === "tax" && r.pay.exempt ? `İşdən çıxma müavinəti ${num(r.pay.exempt)} gəlir vergisindən və DSMF-dən azaddır (Vergi Məcəlləsi 102.1.4, "Sosial sığorta haqqında" Qanun 15)` : "";
     const summary = payrollSummary(list);
+    const depts = byDepartment(list);
+    const totalCells = (rows: PayRow[], label: string) => PAY_COLUMNS.map((c, i) => <td key={c.key} className={c.key === "no" ? "nocol" : i === PAY_AT("name") ? "l" : "n"}>{i === PAY_AT("name") ? label : c.total ? shown(c, sum(rows, (r) => Number(c.value(r)) || 0)) : ""}</td>);
     return <>
       {approved ? <div className="hrnote">✓ Təsdiqlənib{data.payroll.approved_by ? `: ${data.payroll.approved_by}` : ""}{data.payroll.approved_at ? `, ${formatDay(data.payroll.approved_at)}` : ""}. Hesablanmış məbləğlər işçi kartlarının “Əmək haqqı” bölməsinə yazılıb.</div>
         : open.length > 0 ? <div className="hralert">⚠ Təsdiq üçün bütün şöbələrin tabeli qəbul edilməlidir. Qəbul edilməyib: {open.map((d) => deptName(d.department)).join(", ")}.</div> : null}
@@ -415,20 +460,24 @@ function MonthView({ data, access, tab, busy, send, edits, setEdits, inputEdits,
           : <Button disabled={busy || dirty > 0 || open.length > 0} onClick={() => { if (window.confirm(`${periodLabel(data.period)} əməkhaqqı cədvəli təsdiqlənsin?`)) void send({ action: "approve" }); }}><Check />Təsdiqlə</Button>)}
       </div>
       <h3 className="paytitle">{payTitle}</h3>
-      <div className="tabelscroll"><table className="paytable">
+      <div className="tabelscroll"><table className="paytable" style={{ "--payhead1": `${headTop}px` } as React.CSSProperties}>
         <thead>
-          <tr>{PAY_GROUPS.map((g) => g.label ? <th key={g.label} colSpan={g.columns.length} className="group">{g.label}</th> : <th key={g.columns[0].key} rowSpan={2} className={`${g.columns[0].key === "name" ? "l" : ""}${g.columns[0].strong ? " strong" : ""}`}>{g.columns[0].label}</th>)}</tr>
+          <tr ref={headRef}>{PAY_GROUPS.map((g) => g.label ? <th key={g.label} colSpan={g.columns.length} className="group">{g.label}</th> : <th key={g.columns[0].key} rowSpan={2} className={`${g.columns[0].key === "name" ? "l" : g.columns[0].key === "no" ? "nocol" : ""}${g.columns[0].strong ? " strong" : ""}`}>{g.columns[0].label}</th>)}</tr>
           <tr>{PAY_GROUPS.filter((g) => g.label).flatMap((g) => g.columns).map((c) => <th key={c.key} className={c.strong ? "strong" : ""}>{c.label}</th>)}</tr>
         </thead>
-        <tbody>{list.map((r, i) => <tr key={r.id}>{PAY_COLUMNS.map((c) => {
-          if (c.key === "no") return <td key={c.key}>{i + 1}</td>;
+        <tbody>{depts.map((d) => <Fragment key={d.department}>
+          <tr className="deptrow"><td colSpan={PAY_COLUMNS.length}>{deptName(d.department)} <span>{d.rows.length} işçi</span></td></tr>
+          {d.rows.map(({ r, n }) => <tr key={r.id}>{PAY_COLUMNS.map((c) => {
+          if (c.key === "no") return <td key={c.key} className="nocol">{n}</td>;
           if (c.key === "name") return <td key={c.key} className="l"><b>{r.name}</b></td>;
           if (c.input) return <td key={c.key} className="n">{inputCell(r, c.input)}</td>;
           if (c.key === "salary" && !r.pay.salary) return <td key={c.key} className="n"><span className="warn" title="Kartda vəzifə maaşı yoxdur">—</span></td>;
           if (c.key === "leave" && r.leavePay.some((l) => l.complete === false)) return <td key={c.key} className="n" title={titleOf(c, r)}><span className="warn">⚠ {shown(c, c.value(r))}</span></td>;
           return <td key={c.key} className={`${c.kind === "text" ? "t" : "n"}${c.strong ? " strong" : ""}`} title={titleOf(c, r)}>{c.kind === "text" ? String(c.value(r) ?? "") : shown(c, c.value(r))}</td>;
-        })}</tr>)}</tbody>
-        <tfoot><tr>{PAY_COLUMNS.map((c, i) => <td key={c.key} className={i === 2 ? "l" : "n"}>{i === 2 ? `Cəmi (${list.length} işçi)` : c.total ? shown(c, sum(list, (r) => Number(c.value(r)) || 0)) : ""}</td>)}</tr></tfoot>
+        })}</tr>)}
+          {depts.length > 1 && <tr className="subtotal">{totalCells(d.rows.map((x) => x.r), `Cəmi: ${deptName(d.department)}`)}</tr>}
+        </Fragment>)}</tbody>
+        <tfoot><tr>{totalCells(list, `Cəmi (${list.length} işçi)`)}</tr></tfoot>
       </table></div>
       <div className="paysummary">
         <dl>{summary.left.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{num(value)}</dd></div>)}</dl>
